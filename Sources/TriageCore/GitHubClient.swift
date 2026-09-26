@@ -156,7 +156,7 @@ public struct GitHubClient: Sendable {
                 } } } } } }
                 reviewThreads(last: 50) { totalCount nodes {
                   isResolved isOutdated path line
-                  comments(first: 1) { totalCount nodes { author { login __typename } body url createdAt } }
+                  comments(first: 30) { totalCount nodes { author { login __typename } body url createdAt } }
                 } }
                 comments(last: 20) { nodes { author { login __typename } body url createdAt } }
               }
@@ -286,7 +286,8 @@ struct PRNode: Decodable {
             guard let first = t.comments.nodes.first else { return nil }
             return ReviewThreadInfo(
                 isResolved: t.isResolved, isOutdated: t.isOutdated, path: t.path, line: t.line,
-                firstComment: first.model, commentCount: t.comments.totalCount)
+                firstComment: first.model, commentCount: t.comments.totalCount,
+                replies: t.comments.nodes.dropFirst().map(\.model))
         }
         return PullRequest(
             repo: repo, number: number, title: title, url: url, author: author?.login ?? "ghost",

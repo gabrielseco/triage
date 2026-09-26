@@ -66,10 +66,12 @@ public struct ReviewThreadInfo: Hashable, Sendable {
     public var line: Int?
     public var firstComment: CommentInfo
     public var commentCount: Int
+    /// The thread's comments in order, first included (the query fetches up to 30).
+    public var comments: [CommentInfo]
 
     public init(
         isResolved: Bool, isOutdated: Bool = false, path: String? = nil, line: Int? = nil,
-        firstComment: CommentInfo, commentCount: Int = 1
+        firstComment: CommentInfo, commentCount: Int = 1, replies: [CommentInfo] = []
     ) {
         self.isResolved = isResolved
         self.isOutdated = isOutdated
@@ -77,6 +79,7 @@ public struct ReviewThreadInfo: Hashable, Sendable {
         self.line = line
         self.firstComment = firstComment
         self.commentCount = commentCount
+        self.comments = [firstComment] + replies
     }
 }
 
