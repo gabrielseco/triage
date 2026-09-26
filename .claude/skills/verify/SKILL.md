@@ -26,10 +26,11 @@ say so and stop.
 
 ## Step 2: Build the PR into a throwaway bundle
 
-From the PR's worktree (never the main checkout):
+From the PR's worktree (never the main checkout). Shell variables don't survive between Bash calls, so every
+snippet below starts by setting `V` itself. Write the real scratchpad path in place of `<scratchpad>`.
 
 ```bash
-SCRATCH=<your session scratchpad dir>; V="$SCRATCH/verify/Triage.app"   # never ~/Applications
+V=<scratchpad>/verify/Triage.app   # never ~/Applications
 TRIAGE_APP="$V" scripts/bundle.sh
 ```
 
@@ -41,8 +42,9 @@ signed ad hoc, macOS may show a Keychain prompt. If a dialog appears in a screen
 Only one instance per bundle id can run, and `open` would just focus the installed one:
 
 ```bash
+V=<scratchpad>/verify/Triage.app
 INSTALLED="$HOME/Applications/Triage.app/Contents/MacOS/Triage"
-was_running=$(pgrep -qf "$INSTALLED" && echo 1 || true)
+pgrep -qf "$INSTALLED" && touch "$(dirname "$V")/was-running"   # read back in Step 5
 pkill -f "$INSTALLED" || true
 open "$V"
 ```
@@ -52,7 +54,7 @@ up to ~30s) instead of a fixed sleep.
 
 ## Step 4: Drive and capture
 
-- Screenshot: `scripts/snap.sh "$SCRATCH/verify/<step>.png"`, then `Read` it. For a retina capture, first run
+- Screenshot: `scripts/snap.sh <scratchpad>/verify/<step>.png`, then `Read` it. For a retina capture, first run
   `sips -Z 1600 <png>` on a copy so it's cheap to read. Look at it. Don't assume the step worked.
 - List what's on screen: `swift scripts/ax.swift`. Each line is a role and a label: sidebar filters and repos,
   list rows by their text, and detail buttons (`Explain & propose fix`, `Fix in iTerm`, `Copy prompt`, `Snooze`,
@@ -60,7 +62,7 @@ up to ~30s) instead of a fixed sleep.
 - Press one: `swift scripts/ax.swift press "CI failing"`. The label is an exact match, or else a prefix. Rows get
   selected and buttons pressed. Wait ~1.5s before the screenshot, because SwiftUI animates the change.
 - Without Accessibility, tell the user what to click, wait, then screenshot.
-- Recording for the PR (optional, e.g. an animation): `scripts/snap.sh "$SCRATCH/verify/flow.mov" 10`. You can't
+- Recording for the PR (optional, e.g. an animation): `scripts/snap.sh <scratchpad>/verify/flow.mov 10`. You can't
   watch it, so it's for the user and isn't evidence.
 
 **Side effects: this is the user's real account.** Never click Close PR, anything that posts to GitHub, or
@@ -70,9 +72,14 @@ only change local state. If you use them, undo them before finishing.
 ## Step 5: Restore, always, even if a step failed
 
 ```bash
+V=<scratchpad>/verify/Triage.app
+[[ "$V" == */verify/Triage.app ]] || exit 1        # an empty V would make the pkill below match the installed app
 pkill -f "$V/Contents/MacOS/Triage" || true
-rm -rf "$V"                                       # so a notification click can't launch the PR build later
-[[ -n "$was_running" ]] && open "$HOME/Applications/Triage.app"
+rm -rf "$V"                                        # so a notification click can't launch the PR build later
+if [[ -e "$(dirname "$V")/was-running" ]]; then
+  rm "$(dirname "$V")/was-running"
+  sleep 1 && open "$HOME/Applications/Triage.app"
+fi
 ```
 
 ## Step 6: Report
