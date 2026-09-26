@@ -100,6 +100,20 @@ public struct GitHubClient: Sendable {
         return String(decoding: data, as: UTF8.self)
     }
 
+    // MARK: - Mutations
+
+    /// Closes the pull request without merging it (it can be reopened on GitHub).
+    public func closePullRequest(_ repo: RepoRef, number: Int) async throws {
+        _ = try await send(try closeRequest(repo, number: number))
+    }
+
+    func closeRequest(_ repo: RepoRef, number: Int) throws -> URLRequest {
+        var req = request(api.appendingPathComponent("repos/\(repo.fullName)/pulls/\(number)"))
+        req.httpMethod = "PATCH"
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["state": "closed"])
+        return req
+    }
+
     // MARK: - Plumbing
 
     func request(_ url: URL) -> URLRequest {

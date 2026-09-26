@@ -48,6 +48,8 @@ final class AppStore {
     var harnessCommand: String { didSet { defaults.set(harnessCommand, forKey: "harnessCommand") } }
     /// Per item: what the last Fix in / Copy did, shown under the buttons.
     var actionStatus: [String: String] = [:]
+    /// PRs closed from Triage, hidden until a refresh confirms they're gone from GitHub's open list.
+    var closedPRIDs: Set<String> = []
     private var autoRefreshStarted = false
     /// Key read from the key source, held in memory only so it's fetched once per app session.
     var cachedOnePasswordKey: String?
@@ -87,6 +89,7 @@ final class AppStore {
         return
             items
             .filter { !dismissed.contains($0.id) && (snoozed[$0.id] ?? .distantPast) < now }
+            .filter { !closedPRIDs.contains($0.pr.id) }
             .filter { !onlyMine || viewer == nil || $0.pr.author == viewer }
             .sorted { ($0.severity, $0.pr.updatedAt) > ($1.severity, $1.pr.updatedAt) }
     }
@@ -207,6 +210,7 @@ final class AppStore {
         // Forget dismissals/snoozes for items that no longer exist (new push = new ids).
         let live = Set(newItems.map(\.id))
         dismissed = dismissed.intersection(live)
+        closedPRIDs.formIntersection(fetched.map(\.id))
         snoozed = snoozed.filter { live.contains($0.key) && $0.value > Date() }
         if !live.contains(selection ?? "") { selection = visibleItems.first?.id }
     }

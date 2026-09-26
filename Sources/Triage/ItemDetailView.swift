@@ -5,6 +5,7 @@ struct ItemDetailView: View {
     @Environment(AppStore.self) private var store
     @Environment(\.openURL) private var openURL
     let item: AttentionItem
+    @State private var confirmClose = false
 
     var body: some View {
         ScrollView {
@@ -86,6 +87,20 @@ struct ItemDetailView: View {
                 Label("Dismiss", systemImage: "checkmark")
             }
             .keyboardShortcut(.delete, modifiers: [])
+            Button(role: .destructive) {
+                confirmClose = true
+            } label: {
+                Label("Close PR", systemImage: "xmark.circle")
+            }
+            .help("Close #\(item.pr.number) on GitHub without merging")
+            .confirmationDialog(
+                "Close \(item.pr.repo.fullName) #\(item.pr.number)?", isPresented: $confirmClose,
+                titleVisibility: .visible
+            ) {
+                Button("Close PR", role: .destructive) { Task { await store.closePullRequest(item) } }
+            } message: {
+                Text("\(item.pr.title)\n\nIt's closed on GitHub without merging. You can reopen it there.")
+            }
             Button {
                 openURL(item.pr.url)
             } label: {
