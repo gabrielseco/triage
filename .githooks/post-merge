@@ -25,8 +25,12 @@ notify() { osascript -e "display notification \"$1\" with title \"Triage rebuild
   if pgrep -qf "$APP_BIN"; then
     osascript -e 'quit app id "dev.rogal.triage"' || true
     for _ in {1..20}; do pgrep -qf "$APP_BIN" || break; sleep 0.5; done
-    open "$HOME/Applications/Triage.app"
-    notify "Rebuilt and restarted at $(git -C "$ROOT" rev-parse --short HEAD)"
+    if pgrep -qf "$APP_BIN"; then  # didn't quit (e.g. a folder picker is open): `open` would just refocus it
+      notify "Rebuilt at $(git -C "$ROOT" rev-parse --short HEAD); quit Triage to load it"
+    else
+      open "$HOME/Applications/Triage.app"
+      notify "Rebuilt and restarted at $(git -C "$ROOT" rev-parse --short HEAD)"
+    fi
   else
     notify "Rebuilt at $(git -C "$ROOT" rev-parse --short HEAD)"
   fi
