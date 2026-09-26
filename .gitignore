@@ -3,3 +3,5 @@
 *.xcodeproj/
 xcuserdata/
 .DS_Store
+# Claude Code worktrees (CLAUDE.md: every change happens in one)
+.claude/worktrees/
