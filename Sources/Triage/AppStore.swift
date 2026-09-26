@@ -61,6 +61,8 @@ final class AppStore {
     var isRefreshing = false
     var lastRefresh: Date?
     var errors: [String] = []
+    /// Data the last refresh had to leave out (query caps, low rate limit). Unlike errors, doesn't block digests.
+    var warnings: [String] = []
     var explanations: [String: ExplainState] = [:]
     var filter: SidebarFilter = .all
     var selection: String?
@@ -177,23 +179,8 @@ final class AppStore {
         let gh = GitHubClient(token: token)
         if viewer == nil { viewer = try? await gh.viewerLogin() }
 
-        var fetched: [PullRequest] = []
-        var errs: [String] = []
-        await withTaskGroup(of: Result<[PullRequest], Error>.self) { group in
-            for repo in repos {
-                group.addTask {
-                    do { return .success(try await gh.openPullRequests(repo)) } catch {
-                        return .failure(RepoError(repo: repo.fullName, underlying: error))
-                    }
-                }
-            }
-            for await r in group {
-                switch r {
-                case .success(let p): fetched += p
-                case .failure(let e): errs.append(e.localizedDescription)
-                }
-            }
-        }
+        let (merged, errs) = await fetchAll(repos, gh: gh)
+        let fetched = merged.pullRequests
 
         var newItems: [AttentionItem] = []
         var newStats: [String: PRStats] = [:]
@@ -206,6 +193,7 @@ final class AppStore {
         items = newItems
         stats = newStats
         errors = errs
+        warnings = merged.allWarnings
         lastRefresh = Date()
         // Forget dismissals/snoozes for items that no longer exist (new push = new ids).
         let live = Set(newItems.map(\.id))
@@ -213,6 +201,28 @@ final class AppStore {
         closedPRIDs.formIntersection(fetched.map(\.id))
         snoozed = snoozed.filter { live.contains($0.key) && $0.value > Date() }
         if !live.contains(selection ?? "") { selection = visibleItems.first?.id }
+    }
+
+    /// All repos in parallel. One repo failing doesn't lose the others.
+    private func fetchAll(_ repos: [RepoRef], gh: GitHubClient) async -> (RepoSnapshot, errors: [String]) {
+        var snapshots: [RepoSnapshot] = []
+        var errs: [String] = []
+        await withTaskGroup(of: Result<RepoSnapshot, Error>.self) { group in
+            for repo in repos {
+                group.addTask {
+                    do { return .success(try await gh.openPullRequests(repo)) } catch {
+                        return .failure(RepoError(repo: repo.fullName, underlying: error))
+                    }
+                }
+            }
+            for await r in group {
+                switch r {
+                case .success(let snap): snapshots.append(snap)
+                case .failure(let e): errs.append(e.localizedDescription)
+                }
+            }
+        }
+        return (RepoSnapshot.merging(snapshots), errs)
     }
 
     func startAutoRefresh() {
