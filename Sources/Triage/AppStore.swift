@@ -91,9 +91,12 @@ final class AppStore {
             .sorted { ($0.severity, $0.pr.updatedAt) > ($1.severity, $1.pr.updatedAt) }
     }
 
+    /// What Everything and the badges show: active items minus passive ones (waiting on review or CI).
+    var inboxItems: [AttentionItem] { activeItems.filter { !$0.kind.isPassive } }
+
     var visibleItems: [AttentionItem] {
         switch filter {
-        case .all: activeItems
+        case .all: inboxItems
         case .kind(let k): activeItems.filter { $0.kind == k }
         case .repo(let r): activeItems.filter { $0.pr.repo.fullName == r }
         case .lastDigest: activeItems.filter { lastDigestItemIDs.contains($0.id) }
@@ -121,7 +124,7 @@ final class AppStore {
     }
 
     func count(_ k: AttentionKind) -> Int { activeItems.filter { $0.kind == k }.count }
-    func count(repo: String) -> Int { activeItems.filter { $0.pr.repo.fullName == repo }.count }
+    func count(repo: String) -> Int { inboxItems.filter { $0.pr.repo.fullName == repo }.count }
 
     var selectedItem: AttentionItem? { items.first { $0.id == selection } }
 
