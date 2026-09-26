@@ -193,8 +193,7 @@ final class AppStore {
         items = newItems
         stats = newStats
         errors = errs
-        // Every repo reports the same account-wide rate limit; show it once.
-        warnings = merged.warnings.reduce(into: []) { if !$0.contains($1) { $0.append($1) } }
+        warnings = merged.allWarnings
         lastRefresh = Date()
         // Forget dismissals/snoozes for items that no longer exist (new push = new ids).
         let live = Set(newItems.map(\.id))
@@ -206,9 +205,8 @@ final class AppStore {
 
     /// All repos in parallel. One repo failing doesn't lose the others.
     private func fetchAll(_ repos: [RepoRef], gh: GitHubClient) async -> (RepoSnapshot, errors: [String]) {
-        var fetched: [PullRequest] = []
+        var snapshots: [RepoSnapshot] = []
         var errs: [String] = []
-        var warns: [String] = []
         await withTaskGroup(of: Result<RepoSnapshot, Error>.self) { group in
             for repo in repos {
                 group.addTask {
@@ -219,14 +217,12 @@ final class AppStore {
             }
             for await r in group {
                 switch r {
-                case .success(let snap):
-                    fetched += snap.pullRequests
-                    warns += snap.warnings
+                case .success(let snap): snapshots.append(snap)
                 case .failure(let e): errs.append(e.localizedDescription)
                 }
             }
         }
-        return (RepoSnapshot(pullRequests: fetched, warnings: warns), errs)
+        return (RepoSnapshot.merging(snapshots), errs)
     }
 
     func startAutoRefresh() {

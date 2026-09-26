@@ -57,15 +57,9 @@ public struct GitHubClient: Sendable {
             warnings.append("\(repo.fullName): showing the \(prs.count) most recently updated of \(total) open PRs")
         }
         warnings += prs.flatMap { $0.truncationWarnings(repo: repo) }
-        if let rl = d.rateLimit, rl.remaining < Self.lowRateLimit {
-            let reset = rl.resetAt.formatted(date: .omitted, time: .shortened)
-            warnings.append("GitHub API: \(rl.remaining) points left until \(reset)")
-        }
-        return RepoSnapshot(pullRequests: prs.map { $0.toModel(repo: repo) }, warnings: warnings)
+        let rateLimit = d.rateLimit.map { RepoSnapshot.RateLimit(remaining: $0.remaining, resetAt: $0.resetAt) }
+        return RepoSnapshot(pullRequests: prs.map { $0.toModel(repo: repo) }, warnings: warnings, rateLimit: rateLimit)
     }
-
-    /// Remaining GraphQL points (of 5,000/hour) below which a refresh warns.
-    static let lowRateLimit = 500
 
     func graphql<T: Decodable>(_ query: String, variables: [String: String]) async throws -> T {
         var req = request(api.appendingPathComponent("graphql"))

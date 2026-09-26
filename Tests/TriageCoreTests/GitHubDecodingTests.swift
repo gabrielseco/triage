@@ -119,3 +119,24 @@ private func decodePR() throws -> PullRequest {
     let kinds = Set(Classifier.classify(try decodePR()).items.map(\.kind))
     #expect(kinds == [.ciFailure, .mergeConflict, .reviewThreads, .botFinding])
 }
+
+@Test func decodesTheRateLimitAsData() throws {
+    let snapshotLimit = try #require(try decode(truncated).rateLimit)
+    #expect(snapshotLimit.remaining == 4000)
+}
+
+@Test func mergedReposWarnAboutTheRateLimitOnceWithTheLowestCount() {
+    let reset = Date(timeIntervalSince1970: 0)
+    let snapshots = [480, 448, 464].map {
+        RepoSnapshot(pullRequests: [], warnings: ["r\($0): capped"], rateLimit: .init(remaining: $0, resetAt: reset))
+    }
+    let warnings = RepoSnapshot.merging(snapshots).allWarnings
+    #expect(warnings.filter { $0.hasPrefix("GitHub API:") }.count == 1)
+    #expect(warnings.last?.hasPrefix("GitHub API: 448 points left") == true)
+    #expect(warnings.count == 4)  // the per-repo warnings are all kept
+}
+
+@Test func plentyOfRateLimitLeftIsNotAWarning() {
+    let snapshot = RepoSnapshot(pullRequests: [], rateLimit: .init(remaining: 4000, resetAt: Date()))
+    #expect(RepoSnapshot.merging([snapshot, RepoSnapshot(pullRequests: [])]).allWarnings.isEmpty)
+}
