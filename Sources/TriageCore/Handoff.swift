@@ -81,11 +81,11 @@ public enum Handoff {
     }
 
     /// Finds a local clone of `repo` by looking for `<root>/<name>` whose origin points at it.
-    public static func findCheckout(_ repo: RepoRef, roots: [String]) -> String? {
+    public static func findCheckout(_ repo: RepoRef, roots: [String]) async -> String? {
         for root in roots {
             let path = (root as NSString).appendingPathComponent(repo.name)
             guard FileManager.default.fileExists(atPath: (path as NSString).appendingPathComponent(".git")),
-                let origin = git(["-C", path, "remote", "get-url", "origin"]),
+                let origin = await git(["-C", path, "remote", "get-url", "origin"]),
                 originMatches(origin, repo)
             else { continue }
             return path
@@ -98,17 +98,8 @@ public enum Handoff {
         return o.hasSuffix(":" + repo.fullName.lowercased()) || o.hasSuffix("/" + repo.fullName.lowercased())
     }
 
-    static func git(_ args: [String]) -> String? {
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-        p.arguments = args
-        let out = Pipe()
-        p.standardOutput = out
-        p.standardError = Pipe()
-        guard (try? p.run()) != nil else { return nil }
-        p.waitUntilExit()
-        guard p.terminationStatus == 0 else { return nil }
-        return String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+    static func git(_ args: [String]) async -> String? {
+        guard let out = try? await Subprocess.run("/usr/bin/git", args), out.status == 0 else { return nil }
+        return out.trimmedStdout
     }
 }

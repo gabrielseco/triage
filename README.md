@@ -29,6 +29,11 @@ scripts/check.sh --fix   # auto-format first
 - **SwiftLint** (`brew install swiftlint`), configured in `.swiftlint.yml`, strict: code-smell rules such as
   force unwraps, function/type length, naming, and `print`. Tests relax force unwrapping (`Tests/.swiftlint.yml`).
 - **CI**: `.github/workflows/ci.yml` runs `scripts/check.sh` on every push and PR (macOS runner).
+- **Coverage**: `scripts/coverage.sh` reports TriageCore line coverage per file and fails below 60%
+  (CI also posts the table to the run summary). The SwiftUI app target isn't unit-tested.
+- **Auto-rebuild**: `git config core.hooksPath .githooks` (once per clone) enables a `post-merge` hook. After a
+  `git pull` on `main` that changes the app, it rebuilds `~/Applications/Triage.app` in the background and
+  restarts it if it's running. A notification reports the result, and the log is `~/Library/Logs/Triage/rebuild.log`.
 
 ## How it works
 

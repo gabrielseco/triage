@@ -21,7 +21,8 @@ checklist.
   the branch) — hunks alone hide the isolation context (is the enclosing type `@MainActor`? is this
   inside a `Task.detached`?) and the persistence context (is the property `didSet`-saved?).
 - `gh pr checks <number>` for CI. CI is `scripts/check.sh` (swift-format → SwiftLint strict → Swift 6
-  build with warnings-as-errors → tests). If it failed, report why first. If CI hasn't run and the
+  build with warnings-as-errors → tests + `TriageCore` coverage gate via `scripts/coverage.sh`). If it
+  failed, report why first. If CI hasn't run and the
   branch is checked out locally, run `scripts/check.sh` yourself — don't review what the compiler
   would already reject.
 
@@ -56,12 +57,10 @@ Check against this repo's actual invariants:
   - **Blocking the main actor.** `Process.waitUntilExit()`, `readDataToEndOfFile()`, `Thread.sleep`,
     synchronous file I/O over large files, or `NSAppleScript.executeAndReturnError` called from
     `@MainActor` code (`AppStore`, views, `AppDelegate`) freezes the UI. The house pattern is
-    `OnePassword.run`: wrap the process in `Task.detached { … }.value`. Note `GitHubAuth.resolveToken()`
-    and `Handoff.git` are synchronous today — a PR that calls them from new main-actor paths, or in a
-    loop, should move them off-main rather than add more callers.
+    `TriageCore/Subprocess.run` (detached, async); flag a new raw `Process` or `NSAppleScript` instead of it.
   - **Pipe deadlocks.** A `Process` whose stdout/stderr can exceed the pipe buffer (~64 KB) and is read
-    only *after* `waitUntilExit()` will hang. Read before waiting (as `OnePassword.run` does), and don't
-    leave a `Pipe()` on stderr that's never drained if the tool can be chatty.
+    only *after* `waitUntilExit()` will hang. `Subprocess` drains both streams concurrently; code that
+    bypasses it has to do the same.
   - **Escape hatches.** Flag new `@unchecked Sendable`, `nonisolated(unsafe)`, `@preconcurrency import`,
     or `MainActor.assumeIsolated` without a comment proving why it's safe.
   - **Unstructured tasks.** A bare `Task { }` inherits the actor; `Task.detached` doesn't. Check the
@@ -194,16 +193,15 @@ Use the `ReportFindings` tool with verified findings ranked most-severe first (e
 is clean; don't manufacture issues). Each finding needs a concrete failure scenario (inputs/state →
 wrong output, hang, crash, or leaked secret), not just a description of the deviation.
 
-## Step 6 — Post as PR comments, only with explicit approval
+## Step 6 — Post the review on the PR
 
-Ask: "Want me to post these as inline comments on the PR? Include nitpicks?"
+Always post; don't ask first. The review belongs on the PR, where the author and later readers see it.
 
-By default, post blocking and medium-severity findings only; nitpicks are opt-in.
-
-If yes:
-
-- `gh pr review <number> --comment --body "..."` for a summary, or `gh api` for inline comments
-  anchored to file:line.
+- **Findings:** one review with an inline comment per finding, anchored to its file:line, via
+  `gh api repos/<owner>/<repo>/pulls/<number>/reviews --input <json>` with `"event": "COMMENT"`,
+  the head `commit_id`, and `comments[]` of `{path, line, side: "RIGHT", body}`. Nitpicks included.
+- **Clean:** a short `gh pr review <number> --comment --body "..."` saying it was reviewed, with no findings.
+- Always `COMMENT`, never `APPROVE`/`REQUEST_CHANGES` (GitHub rejects both on your own PRs).
 - Format with [conventional comments](https://conventionalcomments.org/): `issue (blocking):` for
   correctness, concurrency, security or data-loss risks, `suggestion:` otherwise, `nitpick:` for
   style, `praise:` when something is done well.

@@ -64,7 +64,7 @@ struct Sidebar: View {
         @Bindable var store = store
         List(selection: Binding(get: { store.filter }, set: { store.filter = $0 ?? .all })) {
             Section("Inbox") {
-                row("Everything", "tray.2", store.activeItems.count).tag(SidebarFilter.all)
+                row("Everything", "tray.2", store.inboxItems.count).tag(SidebarFilter.all)
                 if let at = store.lastDigestAt, !store.lastDigestItemIDs.isEmpty {
                     row(
                         "New at \(at.formatted(date: .omitted, time: .shortened))", "bell.badge",
