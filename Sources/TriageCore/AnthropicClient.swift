@@ -49,9 +49,16 @@ public struct AnthropicClient: Sendable {
 
         let (data, resp) = try await URLSession.shared.data(for: req)
         let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        return try Self.parse(data: data, statusCode: code)
+    }
 
+    /// Turns a Messages API response into the answer text, or a typed error. Pure, so it's unit-tested.
+    static func parse(data: Data, statusCode code: Int) throws -> String {
         struct Response: Decodable {
-            struct Block: Decodable { let type: String; let text: String? }
+            struct Block: Decodable {
+                let type: String
+                let text: String?
+            }
             struct StopDetails: Decodable { let explanation: String? }
             let content: [Block]
             let stopReason: String?
