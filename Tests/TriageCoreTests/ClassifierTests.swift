@@ -48,7 +48,7 @@ private func comment(_ author: String, bot: Bool, _ body: String = "hi", url: St
             comment("codecov[bot]", bot: true, "Coverage 80%"),
             comment("vercel", bot: true, "Preview deployed"),
         ]))
-    #expect(items.isEmpty)
+    #expect(items.map(\.kind) == [.awaitingReview])  // no bot finding: the PR is just waiting
     #expect(stats.noiseComments == 2)
 }
 
@@ -106,6 +106,18 @@ private func comment(_ author: String, bot: Bool, _ body: String = "hi", url: St
     #expect(Classifier.classify(pr(checks: green, review: .approved)).items.map(\.kind) == [.readyToMerge])
     #expect(Classifier.classify(pr(checks: green, review: .approved, draft: true)).items.isEmpty)
     #expect(Classifier.classify(pr(checks: [], review: .approved)).items.isEmpty)
+}
+
+@Test func quietPRsWaitForReviewUnlessApprovedOrDraft() {
+    let green = [CheckInfo(name: "ci", state: .success), CheckInfo(name: "e2e", state: .pending)]
+    let waiting = Classifier.classify(pr(checks: green)).items
+    #expect(waiting.map(\.kind) == [.awaitingReview])
+    #expect(waiting[0].severity == .info)
+    #expect(waiting[0].headline == "Waiting for review · 1 checks running")
+    #expect(Classifier.classify(pr(checks: green, review: .reviewRequired)).items.map(\.kind) == [.awaitingReview])
+    #expect(Classifier.classify(pr(checks: green, draft: true)).items.isEmpty)
+    // Something wrong wins: the PR isn't just waiting.
+    #expect(Classifier.classify(pr(checks: green, mergeable: .conflicting)).items.map(\.kind) == [.mergeConflict])
 }
 
 @Test func repoRefParsesUrlsAndShorthand() {

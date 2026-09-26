@@ -93,7 +93,7 @@ final class AppStore {
 
     var visibleItems: [AttentionItem] {
         switch filter {
-        case .all: activeItems
+        case .all: activeItems.filter { !$0.kind.isPassive }
         case .kind(let k): activeItems.filter { $0.kind == k }
         case .repo(let r): activeItems.filter { $0.pr.repo.fullName == r }
         case .lastDigest: activeItems.filter { lastDigestItemIDs.contains($0.id) }
@@ -121,7 +121,9 @@ final class AppStore {
     }
 
     func count(_ k: AttentionKind) -> Int { activeItems.filter { $0.kind == k }.count }
-    func count(repo: String) -> Int { activeItems.filter { $0.pr.repo.fullName == repo }.count }
+    func count(repo: String) -> Int {
+        activeItems.filter { $0.pr.repo.fullName == repo && !$0.kind.isPassive }.count
+    }
 
     var selectedItem: AttentionItem? { items.first { $0.id == selection } }
 

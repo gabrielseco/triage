@@ -23,7 +23,7 @@ public enum Classifier {
         var items = [ciFailure(pr), mergeConflict(pr), changesRequested(pr), reviewThreads(pr, open: open)]
             .compactMap { $0 }
         items += botFindings(pr, open: open, noise: &stats.noiseComments)
-        if items.isEmpty, let ready = readyToMerge(pr) { items.append(ready) }
+        if items.isEmpty, let quiet = readyToMerge(pr) ?? awaitingReview(pr) { items.append(quiet) }
         return (items, stats)
     }
 
@@ -138,6 +138,27 @@ public enum Classifier {
             pr: pr,
             headline: "Approved and green — ready to merge",
             evidence: [Evidence(title: "All \(pr.checks.count) checks passing", url: pr.url)]
+        )
+    }
+
+    /// Open, not a draft, nothing wrong, not approved yet: the ball is with the reviewers. Like readyToMerge,
+    /// only offered when nothing else is open on the PR. Includes repos that don't require reviews, where
+    /// GitHub reports no review decision at all.
+    static func awaitingReview(_ pr: PullRequest) -> AttentionItem? {
+        guard !pr.isDraft, pr.reviewDecision != .approved else { return nil }
+        let running = pr.checks.filter { $0.state == .pending }.count
+        return AttentionItem(
+            id: "\(pr.id)|waiting|\(pr.headSha)",
+            kind: .awaitingReview,
+            severity: .info,
+            pr: pr,
+            headline: running > 0 ? "Waiting for review · \(running) checks running" : "Waiting for review",
+            evidence: [
+                Evidence(
+                    title: pr.reviewDecision == .reviewRequired
+                        ? "A review is required before merging" : "No review yet",
+                    url: pr.url)
+            ]
         )
     }
 
