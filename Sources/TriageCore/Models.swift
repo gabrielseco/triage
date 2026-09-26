@@ -258,10 +258,11 @@ public struct RepoSnapshot: Sendable {
     }
 
     /// Several repos' snapshots as one. They share one rate limit, so the lowest reading (the latest) is kept.
+    /// Warnings are sorted: repos finish in any order, and the sidebar shouldn't reshuffle every refresh.
     public static func merging(_ snapshots: [RepoSnapshot]) -> RepoSnapshot {
         RepoSnapshot(
             pullRequests: snapshots.flatMap(\.pullRequests),
-            warnings: snapshots.flatMap(\.warnings),
+            warnings: snapshots.flatMap(\.warnings).sorted(),
             rateLimit: snapshots.compactMap(\.rateLimit).min { $0.remaining < $1.remaining })
     }
 

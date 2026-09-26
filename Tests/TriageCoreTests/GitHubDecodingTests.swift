@@ -35,8 +35,8 @@ private func decode(_ data: Data) throws -> RepoData {
     #expect(d.repository?.pullRequests.totalCount == 42)
     #expect(
         pr.truncationWarnings(repo: repo) == [
-            "r#7: read the first 1 of 130 checks",
-            "r#7: read the newest 0 of 80 review threads",
+            "o/r#7: read the first 1 of 130 checks",
+            "o/r#7: read the newest 0 of 80 review threads",
         ])
     #expect(pr.toModel(repo: repo).checks.map(\.state) == [.failure])
 }
@@ -133,7 +133,7 @@ private func decodePR() throws -> PullRequest {
     let warnings = RepoSnapshot.merging(snapshots).allWarnings
     #expect(warnings.filter { $0.hasPrefix("GitHub API:") }.count == 1)
     #expect(warnings.last?.hasPrefix("GitHub API: 448 points left") == true)
-    #expect(warnings.count == 4)  // the per-repo warnings are all kept
+    #expect(warnings.dropLast() == ["r448: capped", "r464: capped", "r480: capped"])  // all kept, in a stable order
 }
 
 @Test func plentyOfRateLimitLeftIsNotAWarning() {

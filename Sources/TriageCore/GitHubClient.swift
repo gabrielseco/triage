@@ -271,11 +271,11 @@ struct PRNode: Decodable {
     func truncationWarnings(repo: RepoRef) -> [String] {
         var w: [String] = []
         if let checks = commits.nodes.last?.commit.statusCheckRollup?.contexts, checks.totalCount > checks.nodes.count {
-            w.append("\(repo.name)#\(number): read the first \(checks.nodes.count) of \(checks.totalCount) checks")
+            w.append("\(repo.fullName)#\(number): read the first \(checks.nodes.count) of \(checks.totalCount) checks")
         }
         if reviewThreads.totalCount > reviewThreads.nodes.count {
             let (read, total) = (reviewThreads.nodes.count, reviewThreads.totalCount)
-            w.append("\(repo.name)#\(number): read the newest \(read) of \(total) review threads")
+            w.append("\(repo.fullName)#\(number): read the newest \(read) of \(total) review threads")
         }
         return w
     }
