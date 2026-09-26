@@ -19,7 +19,7 @@ swiftlint lint --quiet
 echo "→ build (Swift 6 strict concurrency, warnings as errors)"
 swift build -Xswiftc -warnings-as-errors
 
-echo "→ test"
-swift test -Xswiftc -warnings-as-errors
+echo "→ test + coverage (TriageCore, minimum in scripts/coverage.sh)"
+scripts/coverage.sh
 
 echo "✓ all checks passed"
