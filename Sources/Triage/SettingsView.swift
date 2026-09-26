@@ -5,6 +5,7 @@ struct SettingsView: View {
     @Environment(AppStore.self) private var store
     @State private var key = ""
     @State private var saved = false
+    @State private var saveError: String?
     @State private var loginItem = LoginItem.isEnabled
     @State private var loginError: String?
     @State private var testResult: String?
@@ -45,12 +46,21 @@ struct SettingsView: View {
                 }
                 if store.keySource != .onePassword {
                     SecureField("…or paste a key (saved to Keychain)", text: $key)
-                    Button(saved ? "Saved to Keychain" : "Save key") {
-                        Keychain.set(key, for: "anthropic")
-                        saved = true
-                        key = ""
+                    HStack {
+                        Button(saved ? "Saved to Keychain" : "Save key") {
+                            do {
+                                try Keychain.set(key, for: "anthropic")
+                                saved = true
+                                saveError = nil
+                                key = ""
+                            } catch {
+                                saved = false
+                                saveError = error.localizedDescription
+                            }
+                        }
+                        .disabled(key.isEmpty)
+                        if let saveError { Text(saveError).font(.caption).foregroundStyle(.red) }
                     }
-                    .disabled(key.isEmpty)
                 }
                 TextField("Model", text: $store.model)
             } header: {
