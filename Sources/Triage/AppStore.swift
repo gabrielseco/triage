@@ -65,7 +65,10 @@ final class AppStore {
     /// Data the last refresh had to leave out (query caps, low rate limit). Unlike errors, doesn't block digests.
     var warnings: [String] = []
     var explanations: [String: ExplainState] = [:]
-    var filter: SidebarFilter = .all
+    var filter: SidebarFilter = .all {
+        // The selected item may not be in the new list; move to its first item so the detail matches.
+        didSet { if selectedItem == nil { selection = visibleItems.first?.id } }
+    }
     var selection: String?
 
     init() {
@@ -132,7 +135,9 @@ final class AppStore {
     func count(_ k: AttentionKind) -> Int { activeItems.filter { $0.kind == k }.count }
     func count(repo: String) -> Int { inboxItems.filter { $0.pr.repo.fullName == repo }.count }
 
-    var selectedItem: AttentionItem? { items.first { $0.id == selection } }
+    /// Only an item the list is showing, so the detail never shows one hidden by the filter, a dismissal or
+    /// "Only mine".
+    var selectedItem: AttentionItem? { visibleItems.first { $0.id == selection } }
 
     // MARK: - Actions
 
