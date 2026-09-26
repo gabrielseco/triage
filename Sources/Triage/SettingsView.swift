@@ -9,6 +9,18 @@ struct SettingsView: View {
     @State private var loginError: String?
     @State private var testResult: String?
 
+    static let keySourceHelp = """
+        Key source is a 1Password secret reference (item → field menu → Copy Secret Reference) \
+        or a key helper script that prints the key, like Claude Code's apiKeyHelper. It wins over \
+        the other options; the key is read once per session and kept in memory only.
+        """
+
+    static let harnessHelp = """
+        Runs in a worktree next to your checkout (e.g. ~/remote/remote-flows-pr-1392), in an \
+        interactive zsh so .zshrc functions work. {prompt_file} is the prompt. Examples: \
+        cursor-agent "$(cat {prompt_file})" · gemini "$(cat {prompt_file})"
+        """
+
     var body: some View {
         @Bindable var store = store
         Form {
@@ -23,7 +35,7 @@ struct SettingsView: View {
                         testResult = "Reading key…"
                         Task {
                             do {
-                                _ = try await store.resolveAPIKey();
+                                _ = try await store.resolveAPIKey()
                                 testResult = "✓ Key read from \(store.keySource.rawValue)"
                             } catch { testResult = error.localizedDescription }
                         }
@@ -44,10 +56,8 @@ struct SettingsView: View {
             } header: {
                 Text("Claude")
             } footer: {
-                Text(
-                    "Using: \(store.keySource.rawValue). Key source is a 1Password secret reference (item → field menu → Copy Secret Reference) or a key helper script that prints the key, like Claude Code's apiKeyHelper. It wins over the other options; the key is read once per session and kept in memory only."
-                )
-                .font(.caption).foregroundStyle(.secondary)
+                Text("Using: \(store.keySource.rawValue). " + Self.keySourceHelp)
+                    .font(.caption).foregroundStyle(.secondary)
             }
             Section {
                 TextField("Harness command", text: $store.harnessCommand)
@@ -56,10 +66,8 @@ struct SettingsView: View {
             } header: {
                 Text("Fix in iTerm")
             } footer: {
-                Text(
-                    "Runs in a worktree next to your checkout (e.g. ~/remote/remote-flows-pr-1392), in an interactive zsh so .zshrc functions work. {prompt_file} is the prompt. Examples: cursor-agent \"$(cat {prompt_file})\" · gemini \"$(cat {prompt_file})\""
-                )
-                .font(.caption).foregroundStyle(.secondary)
+                Text(Self.harnessHelp)
+                    .font(.caption).foregroundStyle(.secondary)
             }
             Section("Digest notifications") {
                 TextField(

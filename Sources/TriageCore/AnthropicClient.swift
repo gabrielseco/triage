@@ -62,7 +62,10 @@ public struct AnthropicClient: Sendable {
                 case stopDetails = "stop_details"
             }
         }
-        struct ErrorBody: Decodable { struct E: Decodable { let message: String }; let error: E }
+        struct ErrorBody: Decodable {
+            struct APIError: Decodable { let message: String }
+            let error: APIError
+        }
 
         guard (200..<300).contains(code) else {
             let msg =

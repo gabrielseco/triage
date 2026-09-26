@@ -16,7 +16,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Toolchain
-        run: swift --version
+        run: |
+          swift --version
+          command -v swiftlint || brew install swiftlint
+          swiftlint version
       - name: Cache SwiftPM build
         uses: actions/cache@v4
         with:

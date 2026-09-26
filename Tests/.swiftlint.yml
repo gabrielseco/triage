@@ -1,0 +1,3 @@
+# Tests may force-unwrap: a nil there should crash the test, which is a failure anyway.
+disabled_rules:
+  - force_unwrapping

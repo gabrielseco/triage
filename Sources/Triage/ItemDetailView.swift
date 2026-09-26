@@ -33,10 +33,9 @@ struct ItemDetailView: View {
             }
             Text(item.headline).font(.title2.weight(.semibold)).textSelection(.enabled)
             Link(String("\(item.pr.repo.fullName) #\(item.pr.number) — \(item.pr.title)"), destination: item.pr.url)
-            Text(
-                "by \(item.pr.author) · \(item.pr.headRef) · updated \(item.pr.updatedAt.formatted(.relative(presentation: .named)))"
-            )
-            .font(.caption).foregroundStyle(.secondary)
+            let updated = item.pr.updatedAt.formatted(.relative(presentation: .named))
+            Text("by \(item.pr.author) · \(item.pr.headRef) · updated \(updated)")
+                .font(.caption).foregroundStyle(.secondary)
         }
     }
 
@@ -57,9 +56,7 @@ struct ItemDetailView: View {
                 } label: {
                     Label("Fix in iTerm", systemImage: "terminal")
                 }
-                .help(
-                    "Opens iTerm in a worktree for this PR and starts your harness (\(store.harnessCommand)) with the prompt"
-                )
+                .help("Opens iTerm in a worktree for this PR and runs \(store.harnessCommand) with the prompt")
                 .keyboardShortcut("f")
 
                 Menu {
@@ -108,7 +105,7 @@ struct ItemDetailView: View {
         switch store.explanations[item.id] {
         case .loading:
             HStack {
-                ProgressView().controlSize(.small);
+                ProgressView().controlSize(.small)
                 Text("Gathering logs and diff, asking Claude…").foregroundStyle(.secondary)
             }
         case .done(let text):

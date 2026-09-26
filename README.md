@@ -20,12 +20,14 @@ Auth: `GITHUB_TOKEN` or the `gh` CLI token; `ANTHROPIC_API_KEY` or a key saved i
 ## Development
 
 ```bash
-scripts/check.sh         # what CI runs: swift-format lint → Swift 6 build → tests, warnings are errors
+scripts/check.sh         # what CI runs: swift-format + SwiftLint → Swift 6 build → tests, warnings are errors
 scripts/check.sh --fix   # auto-format first
 ```
 
 - **Swift 6 language mode**: strict concurrency checking, so data races are compile errors.
-- **swift-format** (ships with the toolchain), configured in `.swift-format`: 4 spaces, 120 columns.
+- **swift-format** (ships with the toolchain), configured in `.swift-format`: 4 spaces, 120 columns. Owns layout.
+- **SwiftLint** (`brew install swiftlint`), configured in `.swiftlint.yml`, strict: code-smell rules such as
+  force unwraps, function/type length, naming, and `print`. Tests relax force unwrapping (`Tests/.swiftlint.yml`).
 - **CI**: `.github/workflows/ci.yml` runs `scripts/check.sh` on every push and PR (macOS runner).
 
 ## How it works

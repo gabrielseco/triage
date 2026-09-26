@@ -46,9 +46,12 @@ public struct GitHubClient: Sendable {
     // MARK: - GraphQL
 
     public func viewerLogin() async throws -> String {
-        struct D: Decodable { struct V: Decodable { let login: String }; let viewer: V }
-        let d: D = try await graphql("query { viewer { login } }", variables: [:])
-        return d.viewer.login
+        struct ViewerData: Decodable {
+            struct Viewer: Decodable { let login: String }
+            let viewer: Viewer
+        }
+        let data: ViewerData = try await graphql("query { viewer { login } }", variables: [:])
+        return data.viewer.login
     }
 
     public func openPullRequests(_ repo: RepoRef) async throws -> [PullRequest] {
@@ -82,11 +85,17 @@ public struct GitHubClient: Sendable {
 
     /// Title/summary/text a check run published (works for third-party checks too).
     public func checkRunOutput(_ repo: RepoRef, id: Int) async -> String? {
-        struct R: Decodable {
-            struct O: Decodable { let title: String?; let summary: String?; let text: String? }; let output: O
+        struct CheckRun: Decodable {
+            struct Output: Decodable {
+                let title: String?
+                let summary: String?
+                let text: String?
+            }
+            let output: Output
         }
         let url = api.appendingPathComponent("repos/\(repo.fullName)/check-runs/\(id)")
-        guard let data = try? await send(request(url)), let r = try? JSONDecoder().decode(R.self, from: data) else {
+        guard let data = try? await send(request(url)), let r = try? JSONDecoder().decode(CheckRun.self, from: data)
+        else {
             return nil
         }
         let parts = [r.output.title, r.output.summary, r.output.text].compactMap { $0 }.filter { !$0.isEmpty }
@@ -145,9 +154,9 @@ public struct GitHubClient: Sendable {
 // MARK: - GraphQL decoding
 
 struct GQLResponse<T: Decodable>: Decodable {
-    struct E: Decodable { let message: String }
+    struct GQLError: Decodable { let message: String }
     let data: T?
-    let errors: [E]?
+    let errors: [GQLError]?
 }
 
 struct Conn<T: Decodable>: Decodable { let nodes: [T] }

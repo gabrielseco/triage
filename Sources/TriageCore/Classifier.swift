@@ -17,115 +17,128 @@ public enum Classifier {
     }
 
     public static func classify(_ pr: PullRequest) -> (items: [AttentionItem], stats: PRStats) {
-        var items: [AttentionItem] = []
-        var stats = PRStats()
-
-        // CI
-        let failed = pr.checks.filter { $0.state == .failure }
-        stats.pendingChecks = pr.checks.filter { $0.state == .pending }.count
-        if !failed.isEmpty {
-            let names = failed.map(\.name)
-            items.append(
-                AttentionItem(
-                    id: "\(pr.id)|ci|\(pr.headSha)",
-                    kind: .ciFailure,
-                    severity: pr.isDraft ? .medium : .high,
-                    pr: pr,
-                    headline: failed.count == 1
-                        ? "\(names[0]) is failing"
-                        : "\(failed.count) checks failing: \(names.prefix(3).joined(separator: ", "))\(failed.count > 3 ? "…" : "")",
-                    evidence: failed.map {
-                        Evidence(title: $0.name, detail: $0.summary, url: $0.url, checkRunID: $0.checkRunID)
-                    }
-                ))
-        }
-
-        if pr.mergeable == .conflicting {
-            items.append(
-                AttentionItem(
-                    id: "\(pr.id)|conflict|\(pr.headSha)",
-                    kind: .mergeConflict,
-                    severity: .high,
-                    pr: pr,
-                    headline: "Conflicts with the base branch",
-                    evidence: [Evidence(title: "Branch \(pr.headRef) needs a rebase or merge", url: pr.url)]
-                ))
-        }
-
-        if pr.reviewDecision == .changesRequested {
-            items.append(
-                AttentionItem(
-                    id: "\(pr.id)|changes|\(pr.headSha)",
-                    kind: .changesRequested,
-                    severity: .high,
-                    pr: pr,
-                    headline: "A reviewer requested changes",
-                    evidence: [Evidence(title: "Review decision: changes requested", url: pr.url)]
-                ))
-        }
-
-        // Review threads: human vs bot
+        var stats = PRStats(pendingChecks: pr.checks.filter { $0.state == .pending }.count)
         let open = pr.threads.filter { !$0.isResolved && !$0.isOutdated }
-        let humanThreads = open.filter { !$0.firstComment.isBot }
-        if !humanThreads.isEmpty {
-            let latest = humanThreads.max { $0.firstComment.createdAt < $1.firstComment.createdAt }!
-            items.append(
-                AttentionItem(
-                    id: "\(pr.id)|threads|\(latest.firstComment.url?.absoluteString ?? "\(humanThreads.count)")",
-                    kind: .reviewThreads,
-                    severity: .medium,
-                    pr: pr,
-                    headline: humanThreads.count == 1
-                        ? "\(latest.firstComment.author) left an unresolved comment"
-                        : "\(humanThreads.count) unresolved review threads",
-                    evidence: humanThreads.map(threadEvidence)
-                ))
-        }
 
-        // Bot findings: comments + review threads from bots that aren't noise, grouped per bot.
-        var byBot: [String: [(date: Date, evidence: Evidence, body: String, url: URL?)]] = [:]
+        var items = [ciFailure(pr), mergeConflict(pr), changesRequested(pr), reviewThreads(pr, open: open)]
+            .compactMap { $0 }
+        items += botFindings(pr, open: open, noise: &stats.noiseComments)
+        if items.isEmpty, let ready = readyToMerge(pr) { items.append(ready) }
+        return (items, stats)
+    }
+
+    // MARK: - Rules (one item per rule per PR)
+
+    static func ciFailure(_ pr: PullRequest) -> AttentionItem? {
+        let failed = pr.checks.filter { $0.state == .failure }
+        guard !failed.isEmpty else { return nil }
+        let names = failed.map(\.name)
+        let more = failed.count > 3 ? "…" : ""
+        return AttentionItem(
+            id: "\(pr.id)|ci|\(pr.headSha)",
+            kind: .ciFailure,
+            severity: pr.isDraft ? .medium : .high,
+            pr: pr,
+            headline: failed.count == 1
+                ? "\(names[0]) is failing"
+                : "\(failed.count) checks failing: \(names.prefix(3).joined(separator: ", "))\(more)",
+            evidence: failed.map {
+                Evidence(title: $0.name, detail: $0.summary, url: $0.url, checkRunID: $0.checkRunID)
+            }
+        )
+    }
+
+    static func mergeConflict(_ pr: PullRequest) -> AttentionItem? {
+        guard pr.mergeable == .conflicting else { return nil }
+        return AttentionItem(
+            id: "\(pr.id)|conflict|\(pr.headSha)",
+            kind: .mergeConflict,
+            severity: .high,
+            pr: pr,
+            headline: "Conflicts with the base branch",
+            evidence: [Evidence(title: "Branch \(pr.headRef) needs a rebase or merge", url: pr.url)]
+        )
+    }
+
+    static func changesRequested(_ pr: PullRequest) -> AttentionItem? {
+        guard pr.reviewDecision == .changesRequested else { return nil }
+        return AttentionItem(
+            id: "\(pr.id)|changes|\(pr.headSha)",
+            kind: .changesRequested,
+            severity: .high,
+            pr: pr,
+            headline: "A reviewer requested changes",
+            evidence: [Evidence(title: "Review decision: changes requested", url: pr.url)]
+        )
+    }
+
+    /// All open threads started by humans collapse into one item.
+    static func reviewThreads(_ pr: PullRequest, open: [ReviewThreadInfo]) -> AttentionItem? {
+        let human = open.filter { !$0.firstComment.isBot }
+        guard let latest = human.max(by: { $0.firstComment.createdAt < $1.firstComment.createdAt }) else {
+            return nil
+        }
+        return AttentionItem(
+            id: "\(pr.id)|threads|\(latest.firstComment.url?.absoluteString ?? "\(human.count)")",
+            kind: .reviewThreads,
+            severity: .medium,
+            pr: pr,
+            headline: human.count == 1
+                ? "\(latest.firstComment.author) left an unresolved comment"
+                : "\(human.count) unresolved review threads",
+            evidence: human.map(threadEvidence)
+        )
+    }
+
+    struct BotEntry {
+        let date: Date
+        let evidence: Evidence
+        let body: String
+        let url: URL?
+    }
+
+    /// Comments + open threads from bots that aren't noise, one item per bot. Noise is counted instead.
+    static func botFindings(_ pr: PullRequest, open: [ReviewThreadInfo], noise: inout Int) -> [AttentionItem] {
+        var byBot: [String: [BotEntry]] = [:]
+        func add(_ author: String, _ entry: BotEntry) {
+            let login = normalizedLogin(author)
+            if noiseBots.contains(login) { noise += 1 } else { byBot[login, default: []].append(entry) }
+        }
         for c in pr.comments where c.isBot {
-            let login = normalizedLogin(c.author)
-            if noiseBots.contains(login) { stats.noiseComments += 1; continue }
-            byBot[login, default: []].append(
-                (c.createdAt, Evidence(title: "Comment by \(c.author)", detail: c.body, url: c.url), c.body, c.url))
+            let evidence = Evidence(title: "Comment by \(c.author)", detail: c.body, url: c.url)
+            add(c.author, BotEntry(date: c.createdAt, evidence: evidence, body: c.body, url: c.url))
         }
         for t in open where t.firstComment.isBot {
-            let login = normalizedLogin(t.firstComment.author)
-            if noiseBots.contains(login) { stats.noiseComments += 1; continue }
-            byBot[login, default: []].append(
-                (t.firstComment.createdAt, threadEvidence(t), t.firstComment.body, t.firstComment.url))
+            let c = t.firstComment
+            add(c.author, BotEntry(date: c.createdAt, evidence: threadEvidence(t), body: c.body, url: c.url))
         }
-        for (login, entries) in byBot.sorted(by: { $0.key < $1.key }) {
+        return byBot.sorted { $0.key < $1.key }.map { login, entries in
             let sorted = entries.sorted { $0.date > $1.date }
-            items.append(
-                AttentionItem(
-                    id: "\(pr.id)|bot|\(login)|\(sorted[0].url?.absoluteString ?? "\(sorted.count)")",
-                    kind: .botFinding,
-                    severity: sorted.map { botSeverity($0.body) }.max() ?? .low,
-                    pr: pr,
-                    headline: sorted.count == 1
-                        ? "\(login): \(findingTitle(sorted[0].body) ?? "flagged something")"
-                        : "\(login) left \(sorted.count) findings",
-                    evidence: sorted.map(\.evidence)
-                ))
+            return AttentionItem(
+                id: "\(pr.id)|bot|\(login)|\(sorted[0].url?.absoluteString ?? "\(sorted.count)")",
+                kind: .botFinding,
+                severity: sorted.map { botSeverity($0.body) }.max() ?? .low,
+                pr: pr,
+                headline: sorted.count == 1
+                    ? "\(login): \(findingTitle(sorted[0].body) ?? "flagged something")"
+                    : "\(login) left \(sorted.count) findings",
+                evidence: sorted.map(\.evidence)
+            )
         }
+    }
 
-        // Ready to merge: approved, green, mergeable, nothing else open.
+    /// Approved, green, mergeable, not a draft. Only offered when nothing else is open on the PR.
+    static func readyToMerge(_ pr: PullRequest) -> AttentionItem? {
         let allGreen = !pr.checks.isEmpty && pr.checks.allSatisfy { $0.state == .success || $0.state == .neutral }
-        if items.isEmpty, !pr.isDraft, pr.reviewDecision == .approved, pr.mergeable == .mergeable, allGreen {
-            items.append(
-                AttentionItem(
-                    id: "\(pr.id)|ready|\(pr.headSha)",
-                    kind: .readyToMerge,
-                    severity: .info,
-                    pr: pr,
-                    headline: "Approved and green — ready to merge",
-                    evidence: [Evidence(title: "All \(pr.checks.count) checks passing", url: pr.url)]
-                ))
-        }
-
-        return (items, stats)
+        guard !pr.isDraft, pr.reviewDecision == .approved, pr.mergeable == .mergeable, allGreen else { return nil }
+        return AttentionItem(
+            id: "\(pr.id)|ready|\(pr.headSha)",
+            kind: .readyToMerge,
+            severity: .info,
+            pr: pr,
+            headline: "Approved and green — ready to merge",
+            evidence: [Evidence(title: "All \(pr.checks.count) checks passing", url: pr.url)]
+        )
     }
 
     /// Review bots (Cursor Bugbot, CodeRabbit, …) often label findings "High Severity" etc.; trust
