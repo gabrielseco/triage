@@ -99,7 +99,7 @@ struct ItemDetailView: View {
             ) {
                 Button("Close PR", role: .destructive) { Task { await store.closePullRequest(item) } }
             } message: {
-                Text("\(item.pr.title)\n\nIt's closed on GitHub without merging. You can reopen it there.")
+                Text(closeMessage)
             }
             Button {
                 openURL(item.pr.url)
@@ -108,6 +108,12 @@ struct ItemDetailView: View {
             }
             .keyboardShortcut("o")
         }
+    }
+
+    /// Leads with the author when it's someone else's PR, so a teammate's work isn't closed by mistake.
+    private var closeMessage: String {
+        let owner = item.pr.author == store.viewer ? "" : "This is \(item.pr.author)'s PR.\n\n"
+        return "\(owner)\(item.pr.title)\n\nIt's closed on GitHub without merging. You can reopen it there."
     }
 
     @ViewBuilder private var status: some View {
