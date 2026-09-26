@@ -113,11 +113,32 @@ private func comment(_ author: String, bot: Bool, _ body: String = "hi", url: St
     let waiting = Classifier.classify(pr(checks: green)).items
     #expect(waiting.map(\.kind) == [.awaitingReview])
     #expect(waiting[0].severity == .info)
-    #expect(waiting[0].headline == "Waiting for review · 1 checks running")
+    #expect(waiting[0].headline == "Waiting for review · 1 check running")
+    let two = green + [CheckInfo(name: "lint", state: .pending)]
+    #expect(Classifier.classify(pr(checks: two)).items[0].headline == "Waiting for review · 2 checks running")
     #expect(Classifier.classify(pr(checks: green, review: .reviewRequired)).items.map(\.kind) == [.awaitingReview])
     #expect(Classifier.classify(pr(checks: green, draft: true)).items.isEmpty)
     // Something wrong wins: the PR isn't just waiting.
     #expect(Classifier.classify(pr(checks: green, mergeable: .conflicting)).items.map(\.kind) == [.mergeConflict])
+}
+
+@Test func approvedPRsWaitOnCIUntilReady() {
+    let running = [CheckInfo(name: "ci", state: .success), CheckInfo(name: "e2e", state: .pending)]
+    let items = Classifier.classify(pr(checks: running, review: .approved)).items
+    #expect(items.map(\.kind) == [.awaitingChecks])
+    #expect(items[0].severity == .info)
+    #expect(items[0].headline == "Approved · 1 check running")
+    #expect(items[0].evidence.map(\.title) == ["e2e is running"])
+
+    let green = [CheckInfo(name: "ci", state: .success)]
+    let unknown = Classifier.classify(pr(checks: green, mergeable: .unknown, review: .approved)).items
+    #expect(unknown.map(\.kind) == [.awaitingChecks])
+    #expect(unknown[0].headline == "Approved · GitHub is still checking mergeability")
+
+    #expect(Classifier.classify(pr(checks: green, review: .approved)).items.map(\.kind) == [.readyToMerge])
+    #expect(Classifier.classify(pr(checks: running, review: .approved, draft: true)).items.isEmpty)
+    let failing = running + [CheckInfo(name: "lint", state: .failure)]
+    #expect(Classifier.classify(pr(checks: failing, review: .approved)).items.map(\.kind) == [.ciFailure])
 }
 
 @Test func repoRefParsesUrlsAndShorthand() {

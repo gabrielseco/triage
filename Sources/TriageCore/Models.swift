@@ -133,7 +133,8 @@ public struct PullRequest: Identifiable, Hashable, Sendable {
 }
 
 public enum AttentionKind: String, CaseIterable, Sendable, Codable {
-    case ciFailure, mergeConflict, changesRequested, reviewThreads, botFinding, readyToMerge, awaitingReview
+    case ciFailure, mergeConflict, changesRequested, reviewThreads, botFinding, readyToMerge, awaitingChecks,
+        awaitingReview
 
     public var title: String {
         switch self {
@@ -143,6 +144,7 @@ public enum AttentionKind: String, CaseIterable, Sendable, Codable {
         case .reviewThreads: "Unresolved review"
         case .botFinding: "Bot finding"
         case .readyToMerge: "Ready to merge"
+        case .awaitingChecks: "Waiting on CI"
         case .awaitingReview: "Waiting for review"
         }
     }
@@ -155,6 +157,7 @@ public enum AttentionKind: String, CaseIterable, Sendable, Codable {
         case .reviewThreads: "text.bubble.fill"
         case .botFinding: "cpu"
         case .readyToMerge: "checkmark.seal.fill"
+        case .awaitingChecks: "clock.arrow.circlepath"
         case .awaitingReview: "hourglass"
         }
     }
@@ -163,13 +166,18 @@ public enum AttentionKind: String, CaseIterable, Sendable, Codable {
     public var isFixable: Bool {
         switch self {
         case .ciFailure, .mergeConflict, .changesRequested, .reviewThreads, .botFinding: true
-        case .readyToMerge, .awaitingReview: false
+        case .readyToMerge, .awaitingChecks, .awaitingReview: false
         }
     }
 
     /// Nothing for you to do yet: listed under its own filter and its repo, but kept out of Everything,
     /// the badge counts and digests, so a repo full of other people's open PRs doesn't bury what needs you.
-    public var isPassive: Bool { self == .awaitingReview }
+    public var isPassive: Bool {
+        switch self {
+        case .awaitingChecks, .awaitingReview: true
+        case .ciFailure, .mergeConflict, .changesRequested, .reviewThreads, .botFinding, .readyToMerge: false
+        }
+    }
 }
 
 public enum Severity: Int, Comparable, Sendable, CaseIterable {

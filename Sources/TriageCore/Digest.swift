@@ -13,7 +13,7 @@ public struct Digest: Sendable {
 }
 
 public enum DigestBuilder {
-    /// What digests report on: passive items (waiting for review) would make every opened PR "new".
+    /// What digests report on: passive items (waiting on review or CI) would make every opened PR "new".
     public static func tracked(_ items: [AttentionItem]) -> [AttentionItem] { items.filter { !$0.kind.isPassive } }
 
     public static func build(

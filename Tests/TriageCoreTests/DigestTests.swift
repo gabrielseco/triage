@@ -65,9 +65,9 @@ private func item(_ n: Int, _ kind: AttentionKind = .ciFailure, _ sev: Severity 
     #expect(d.body.components(separatedBy: "\n").count == 5)
 }
 
-@Test func waitingForReviewNeverMakesADigest() {
-    let waiting = item(3, .awaitingReview, .info)
-    let d = DigestBuilder.build(current: [item(1), waiting], previousIDs: [item(1).id], since: nil, calendar: cal)
+@Test func waitingItemsNeverMakeADigest() {
+    let waiting = [item(3, .awaitingReview, .info), item(4, .awaitingChecks, .info)]
+    let d = DigestBuilder.build(current: [item(1)] + waiting, previousIDs: [item(1).id], since: nil, calendar: cal)
     #expect(d.newItems.isEmpty)
     #expect(d.openCount == 1)
     #expect(d.trackedIDs == [item(1).id])
