@@ -55,12 +55,17 @@ extension AppStore {
             let k = try await KeyReference.read(onePasswordRef)
             cachedOnePasswordKey = k
             return k
-        case .environment, .keychain, .none:
-            // keySource picked the first source that has a value; read it the same way.
-            guard let k = ProcessInfo.processInfo.environment["ANTHROPIC_API_KEY"] ?? Keychain.get("anthropic"),
-                !k.isEmpty
-            else { throw AnthropicError.noKey }
+        case .environment:
+            guard let k = ProcessInfo.processInfo.environment["ANTHROPIC_API_KEY"], !k.isEmpty else {
+                throw AnthropicError.noKey
+            }
             return k
+        case .keychain:
+            // Read from the source keySource picked: an empty ANTHROPIC_API_KEY must not shadow the Keychain.
+            guard let k = Keychain.get("anthropic"), !k.isEmpty else { throw AnthropicError.noKey }
+            return k
+        case .none:
+            throw AnthropicError.noKey
         }
     }
 
