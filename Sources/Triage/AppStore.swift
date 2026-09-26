@@ -147,6 +147,10 @@ final class AppStore {
         repos.removeAll { $0 == r }
         items.removeAll { $0.pr.repo == r }
         prs.removeAll { $0.repo == r }
+        // Warnings and errors are strings led by the repo ("owner/name: …", "owner/name#7: …").
+        let isAbout = { (line: String) in line.hasPrefix("\(r.fullName):") || line.hasPrefix("\(r.fullName)#") }
+        warnings.removeAll(where: isAbout)
+        errors.removeAll(where: isAbout)
     }
 
     func dismiss(_ item: AttentionItem) {
@@ -192,10 +196,15 @@ final class AppStore {
         let gh = GitHubClient(token: token)
         if viewer == nil { viewer = try? await gh.viewerLogin() }
 
-        let (merged, errs) = await fetchAll(repos, gh: gh)
-        // A repo removed while fetching must not have its PRs brought back.
+        // A repo removed while fetching must not bring back its PRs, warnings or errors.
         let watched = Set(repos)
-        let fetched = merged.pullRequests.filter { watched.contains($0.repo) }
+        let results = await fetchAll(repos, gh: gh).filter { watched.contains($0.repo) }
+        let merged = RepoSnapshot.merging(results.compactMap { try? $0.result.get() })
+        let errs = results.compactMap { r -> String? in
+            guard case .failure(let e) = r.result else { return nil }
+            return e.localizedDescription
+        }
+        let fetched = merged.pullRequests
 
         var newItems: [AttentionItem] = []
         var newStats: [String: PRStats] = [:]
@@ -219,25 +228,20 @@ final class AppStore {
     }
 
     /// All repos in parallel. One repo failing doesn't lose the others.
-    private func fetchAll(_ repos: [RepoRef], gh: GitHubClient) async -> (RepoSnapshot, errors: [String]) {
-        var snapshots: [RepoSnapshot] = []
-        var errs: [String] = []
-        await withTaskGroup(of: Result<RepoSnapshot, Error>.self) { group in
+    private func fetchAll(_ repos: [RepoRef], gh: GitHubClient) async -> [RepoResult] {
+        await withTaskGroup(of: RepoResult.self) { group in
             for repo in repos {
                 group.addTask {
-                    do { return .success(try await gh.openPullRequests(repo)) } catch {
-                        return .failure(RepoError(repo: repo.fullName, underlying: error))
+                    do { return RepoResult(repo: repo, result: .success(try await gh.openPullRequests(repo))) } catch {
+                        return RepoResult(
+                            repo: repo, result: .failure(RepoError(repo: repo.fullName, underlying: error)))
                     }
                 }
             }
-            for await r in group {
-                switch r {
-                case .success(let snap): snapshots.append(snap)
-                case .failure(let e): errs.append(e.localizedDescription)
-                }
-            }
+            var results: [RepoResult] = []
+            for await r in group { results.append(r) }
+            return results
         }
-        return (RepoSnapshot.merging(snapshots), errs)
     }
 
     func startAutoRefresh() {
@@ -266,6 +270,12 @@ final class AppStore {
     private static func load<T: Decodable>(_ key: String) -> T? {
         UserDefaults.standard.data(forKey: key).flatMap { try? JSONDecoder().decode(T.self, from: $0) }
     }
+}
+
+/// One repo's fetch, tagged so results for a repo removed mid-fetch can be dropped.
+struct RepoResult: Sendable {
+    let repo: RepoRef
+    let result: Result<RepoSnapshot, Error>
 }
 
 struct RepoError: LocalizedError {
