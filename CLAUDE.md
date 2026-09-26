@@ -15,7 +15,7 @@ scripts/bundle.sh        # build ~/Applications/Triage.app (needed for notificat
 
 Do this without being asked:
 
-1. **Worktree.** Work in a git worktree branched from `origin/main`, never in the main checkout.
+1. **Worktree.** Work in a git worktree under `.claude/worktrees/` (gitignored), branched from `origin/main`, never in the main checkout.
 2. **One PR per fix or feature.** Don't bundle unrelated changes.
 3. **Check before pushing.** `scripts/check.sh --fix` must pass. Add Swift Testing tests in `TriageCoreTests` for `TriageCore` changes.
 4. **Open the PR** with `.github/pull_request_template.md` (Summary, Why, collapsed What changed, Screenshots,
