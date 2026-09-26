@@ -46,30 +46,16 @@ public enum OnePassword {
 
     /// Runs a command that prints a secret on stdout.
     static func run(_ executable: String, _ arguments: [String]) async throws -> String {
-        // `op` blocks while the Touch ID prompt is up; keep it off the main thread.
-        try await Task.detached {
-            let p = Process()
-            p.executableURL = URL(fileURLWithPath: executable)
-            p.arguments = arguments
-            let out = Pipe(), err = Pipe()
-            p.standardOutput = out
-            p.standardError = err
-            try p.run()
-            let data = out.fileHandleForReading.readDataToEndOfFile()
-            let errData = err.fileHandleForReading.readDataToEndOfFile()
-            p.waitUntilExit()
-            guard p.terminationStatus == 0 else {
-                let msg = String(decoding: errData, as: UTF8.self)
-                    .replacingOccurrences(of: #"^\[ERROR\] [0-9/: ]+"#, with: "", options: .regularExpression)
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                throw OnePasswordError.failed(
-                    msg.isEmpty
-                        ? "\(URL(fileURLWithPath: executable).lastPathComponent) exited with \(p.terminationStatus)"
-                        : msg)
-            }
-            let secret = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !secret.isEmpty else { throw OnePasswordError.failed("no key was returned") }
-            return secret
-        }.value
+        // `op` blocks while the Touch ID prompt is up; Subprocess keeps that off the main thread.
+        let out = try await Subprocess.run(executable, arguments)
+        guard out.status == 0 else {
+            let msg = out.stderr
+                .replacingOccurrences(of: #"^\[ERROR\] [0-9/: ]+"#, with: "", options: .regularExpression)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            throw OnePasswordError.failed(
+                msg.isEmpty ? "\(URL(fileURLWithPath: executable).lastPathComponent) exited with \(out.status)" : msg)
+        }
+        guard !out.trimmedStdout.isEmpty else { throw OnePasswordError.failed("no key was returned") }
+        return out.trimmedStdout
     }
 }
