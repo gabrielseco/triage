@@ -95,15 +95,27 @@ public enum Keychain {
         return String(data: d, encoding: .utf8)
     }
 
-    public static func set(_ value: String?, for account: String) {
+    /// Replaces the stored value; nil or empty removes it. Throws if the Keychain refused.
+    public static func set(_ value: String?, for account: String) throws {
         let base: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
             kSecAttrAccount as String: account,
         ]
-        SecItemDelete(base as CFDictionary)
+        let deleted = SecItemDelete(base as CFDictionary)
+        guard deleted == errSecSuccess || deleted == errSecItemNotFound else { throw KeychainError(status: deleted) }
         guard let value, !value.isEmpty else { return }
         var add = base
         add[kSecValueData as String] = Data(value.utf8)
-        SecItemAdd(add as CFDictionary, nil)
+        let added = SecItemAdd(add as CFDictionary, nil)
+        guard added == errSecSuccess else { throw KeychainError(status: added) }
+    }
+}
+
+public struct KeychainError: LocalizedError {
+    public let status: OSStatus
+
+    public var errorDescription: String? {
+        let reason = SecCopyErrorMessageString(status, nil) as String? ?? "OSStatus \(status)"
+        return "Couldn't save to the Keychain: \(reason)"
     }
 }
