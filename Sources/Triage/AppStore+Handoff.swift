@@ -10,9 +10,9 @@ extension AppStore {
         .map { ($0 as NSString).expandingTildeInPath }
 
     /// Remembered path, else auto-detected (`<root>/<repo name>` whose origin is this repo) and remembered.
-    func checkoutPath(for repo: RepoRef) -> String? {
+    func checkoutPath(for repo: RepoRef) async -> String? {
         if let p = checkoutPaths[repo.fullName], FileManager.default.fileExists(atPath: p) { return p }
-        guard let found = Handoff.findCheckout(repo, roots: Self.checkoutRoots) else { return nil }
+        guard let found = await Handoff.findCheckout(repo, roots: Self.checkoutRoots) else { return nil }
         checkoutPaths[repo.fullName] = found
         return found
     }
@@ -32,7 +32,7 @@ extension AppStore {
 
     func fixInTerminal(_ item: AttentionItem) async {
         let repo = item.pr.repo
-        guard let checkout = checkoutPath(for: repo) ?? chooseCheckout(for: repo) else {
+        guard let checkout = await checkoutPath(for: repo) ?? chooseCheckout(for: repo) else {
             actionStatus[item.id] =
                 "No local checkout of \(repo.fullName) — right-click the repo in the sidebar to set one."
             return
@@ -55,7 +55,7 @@ extension AppStore {
                 promptFile: promptURL.path, harnessCommand: harnessCommand)
             try Handoff.script(plan).write(to: scriptURL, atomically: true, encoding: .utf8)
             try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: scriptURL.path)
-            try ITerm.open(runningScript: scriptURL.path)
+            try await ITerm.open(runningScript: scriptURL.path)
             actionStatus[item.id] = "Opened iTerm in \((plan.worktree as NSString).abbreviatingWithTildeInPath)"
         } catch {
             actionStatus[item.id] = "Couldn't hand off: \(error.localizedDescription)"

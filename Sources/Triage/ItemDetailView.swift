@@ -5,6 +5,7 @@ struct ItemDetailView: View {
     @Environment(AppStore.self) private var store
     @Environment(\.openURL) private var openURL
     let item: AttentionItem
+    @State private var confirmClose = false
 
     var body: some View {
         ScrollView {
@@ -86,6 +87,20 @@ struct ItemDetailView: View {
                 Label("Dismiss", systemImage: "checkmark")
             }
             .keyboardShortcut(.delete, modifiers: [])
+            Button(role: .destructive) {
+                confirmClose = true
+            } label: {
+                Label("Close PR", systemImage: "xmark.circle")
+            }
+            .help("Close #\(item.pr.number) on GitHub without merging")
+            .confirmationDialog(
+                "Close \(item.pr.repo.fullName) #\(item.pr.number)?", isPresented: $confirmClose,
+                titleVisibility: .visible
+            ) {
+                Button("Close PR", role: .destructive) { Task { await store.closePullRequest(item) } }
+            } message: {
+                Text(closeMessage)
+            }
             Button {
                 openURL(item.pr.url)
             } label: {
@@ -93,6 +108,12 @@ struct ItemDetailView: View {
             }
             .keyboardShortcut("o")
         }
+    }
+
+    /// Leads with the author when it's someone else's PR, so a teammate's work isn't closed by mistake.
+    private var closeMessage: String {
+        let owner = item.pr.author == store.viewer ? "" : "This is \(item.pr.author)'s PR.\n\n"
+        return "\(owner)\(item.pr.title)\n\nIt's closed on GitHub without merging. You can reopen it there."
     }
 
     @ViewBuilder private var status: some View {

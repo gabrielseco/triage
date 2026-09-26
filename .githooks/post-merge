@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# After a pull/merge on main that touched the app, rebuild ~/Applications/Triage.app and restart it if it's
+# running, so the installed app always matches main. Runs in the background so `git pull` returns at once;
+# the result is a macOS notification, details in ~/Library/Logs/Triage/rebuild.log.
+# Enable once per clone: git config core.hooksPath .githooks
+set -euo pipefail
+
+[[ "$(git rev-parse --abbrev-ref HEAD)" == main ]] || exit 0  # feature branches and worktrees: skip
+git diff --quiet ORIG_HEAD HEAD -- Sources Resources Package.swift scripts/bundle.sh && exit 0
+
+ROOT="$(git rev-parse --show-toplevel)"
+APP_BIN="$HOME/Applications/Triage.app/Contents/MacOS/Triage"
+LOG="$HOME/Library/Logs/Triage/rebuild.log"
+mkdir -p "$(dirname "$LOG")"
+echo "→ Triage changed on main: rebuilding in the background (log: ${LOG/#$HOME/~})"
+
+notify() { osascript -e "display notification \"$1\" with title \"Triage rebuild\"" >/dev/null 2>&1 || true; }
+
+(
+  echo "=== $(date '+%F %T') $(git -C "$ROOT" rev-parse --short HEAD)"
+  if ! "$ROOT/scripts/bundle.sh"; then
+    notify "Build failed, see ~/Library/Logs/Triage/rebuild.log"
+    exit 1
+  fi
+  if pgrep -qf "$APP_BIN"; then
+    osascript -e 'quit app id "dev.rogal.triage"' || true
+    for _ in {1..20}; do pgrep -qf "$APP_BIN" || break; sleep 0.5; done
+    if pgrep -qf "$APP_BIN"; then  # didn't quit (e.g. a folder picker is open): `open` would just refocus it
+      notify "Rebuilt at $(git -C "$ROOT" rev-parse --short HEAD); quit Triage to load it"
+    else
+      open "$HOME/Applications/Triage.app"
+      notify "Rebuilt and restarted at $(git -C "$ROOT" rev-parse --short HEAD)"
+    fi
+  else
+    notify "Rebuilt at $(git -C "$ROOT" rev-parse --short HEAD)"
+  fi
+) </dev/null >>"$LOG" 2>&1 &

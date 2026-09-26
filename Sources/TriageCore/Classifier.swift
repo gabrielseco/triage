@@ -23,7 +23,9 @@ public enum Classifier {
         var items = [ciFailure(pr), mergeConflict(pr), changesRequested(pr), reviewThreads(pr, open: open)]
             .compactMap { $0 }
         items += botFindings(pr, open: open, noise: &stats.noiseComments)
-        if items.isEmpty, let ready = readyToMerge(pr) { items.append(ready) }
+        if items.isEmpty, let quiet = readyToMerge(pr) ?? awaitingChecks(pr) ?? awaitingReview(pr) {
+            items.append(quiet)
+        }
         return (items, stats)
     }
 
@@ -139,6 +141,53 @@ public enum Classifier {
             headline: "Approved and green — ready to merge",
             evidence: [Evidence(title: "All \(pr.checks.count) checks passing", url: pr.url)]
         )
+    }
+
+    /// Open, not a draft, nothing wrong, not approved yet: the ball is with the reviewers. Like readyToMerge,
+    /// only offered when nothing else is open on the PR. Includes repos that don't require reviews, where
+    /// GitHub reports no review decision at all.
+    static func awaitingReview(_ pr: PullRequest) -> AttentionItem? {
+        guard !pr.isDraft, pr.reviewDecision != .approved else { return nil }
+        let running = checksRunning(pr)
+        return AttentionItem(
+            id: "\(pr.id)|waiting|\(pr.headSha)",
+            kind: .awaitingReview,
+            severity: .info,
+            pr: pr,
+            headline: running.map { "Waiting for review · \($0)" } ?? "Waiting for review",
+            evidence: [
+                Evidence(
+                    title: pr.reviewDecision == .reviewRequired
+                        ? "A review is required before merging" : "No review yet",
+                    url: pr.url)
+            ]
+        )
+    }
+
+    /// Approved, nothing failing, but not ready yet: checks still running, or GitHub hasn't worked out
+    /// mergeability (common right after a push or a base-branch change). Otherwise an approved PR would
+    /// vanish between "waiting for review" and "ready to merge".
+    static func awaitingChecks(_ pr: PullRequest) -> AttentionItem? {
+        let running = checksRunning(pr)
+        guard !pr.isDraft, pr.reviewDecision == .approved, running != nil || pr.mergeable == .unknown else {
+            return nil
+        }
+        return AttentionItem(
+            id: "\(pr.id)|checks|\(pr.headSha)",
+            kind: .awaitingChecks,
+            severity: .info,
+            pr: pr,
+            headline: "Approved · \(running ?? "GitHub is still checking mergeability")",
+            evidence: pr.checks.filter { $0.state == .pending }.map {
+                Evidence(title: "\($0.name) is running", url: $0.url)
+            }
+        )
+    }
+
+    /// "1 check running" / "3 checks running", or nil when nothing is pending.
+    static func checksRunning(_ pr: PullRequest) -> String? {
+        let n = pr.checks.filter { $0.state == .pending }.count
+        return n == 0 ? nil : "\(n) check\(n == 1 ? "" : "s") running"
     }
 
     /// Review bots (Cursor Bugbot, CodeRabbit, …) often label findings "High Severity" etc.; trust
