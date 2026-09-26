@@ -24,6 +24,9 @@ Do this without being asked:
    short "no findings" comment. Fix the findings on the branch, push, and run `/pr-review` again.
 6. **Merge only when the user asks**, and then only with CI green and no blocking findings, using a merge commit
    (`gh pr merge --merge`). After merging, say what other open PRs now need a rebase.
+7. **After merging, update the main checkout.** Run `git pull` on `main` in the main checkout (not a worktree). The
+   `post-merge` hook (`.githooks/`, enabled with `git config core.hooksPath .githooks`) rebuilds and restarts
+   `~/Applications/Triage.app` when the app changed. Report the notification or `~/Library/Logs/Triage/rebuild.log`.
 
 ## Conventions
 
