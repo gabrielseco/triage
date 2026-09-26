@@ -56,7 +56,8 @@ public enum Handoff {
 
             cd "$CHECKOUT" || fail "checkout not found: $CHECKOUT"
             if [ ! -d "$WT" ]; then
-              existing=$(git worktree list --porcelain | awk -v b="branch refs/heads/$BRANCH" '/^worktree /{p=substr($0,10)} $0==b{print p}')
+              existing=$(git worktree list --porcelain |
+                awk -v b="branch refs/heads/$BRANCH" '/^worktree /{p=substr($0,10)} $0==b{print p}')
               if [ -n "$existing" ]; then
                 echo "→ $BRANCH is already checked out at $existing, using that"
                 WT="$existing"
@@ -65,7 +66,8 @@ public enum Handoff {
                 git worktree add --quiet "$WT" "$BRANCH" || fail "couldn't create the worktree"
               else
                 echo "→ $BRANCH isn't on origin (fork?), checking out with gh"
-                git worktree add --quiet --detach "$WT" && (cd "$WT" && gh pr checkout \(p.prNumber)) || fail "couldn't check out PR #\(p.prNumber)"
+                git worktree add --quiet --detach "$WT" && (cd "$WT" && gh pr checkout \(p.prNumber)) ||
+                  fail "couldn't check out PR #\(p.prNumber)"
               fi
             fi
 

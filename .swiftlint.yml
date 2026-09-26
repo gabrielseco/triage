@@ -1,0 +1,45 @@
+# SwiftLint runs alongside swift-format: swift-format owns layout, SwiftLint owns code-smell rules.
+included:
+  - Sources
+  - Tests
+  - Package.swift
+
+strict: true   # warnings fail the lint
+
+disabled_rules:
+  - trailing_comma                    # swift-format adds trailing commas in multi-line literals
+  - optional_data_string_conversion   # lossy String(decoding:as:) is intended for logs/diffs with odd bytes
+
+opt_in_rules:
+  - empty_count
+  - first_where
+  - contains_over_filter_count
+  - contains_over_first_not_nil
+  - sorted_first_last
+  - redundant_nil_coalescing
+  - toggle_bool
+  - unneeded_parentheses_in_closure_argument
+  - implicit_return
+  - force_unwrapping
+
+line_length:
+  warning: 120
+  ignores_comments: true
+  ignores_urls: true
+
+identifier_name:
+  min_length: 1            # short closure/loop names (p, e, t) are idiomatic here
+  excluded: [id]
+
+nesting:
+  type_level: 3            # Decodable structs mirror the GraphQL query's nesting
+
+force_unwrapping:
+  severity: warning
+
+custom_rules:
+  no_print:
+    name: "No print"
+    regex: '^\s*print\('
+    message: "Use the UI or os.Logger, not print()"
+    included: "Sources/.*\\.swift"
