@@ -17,21 +17,12 @@ public enum GitHubError: LocalizedError {
 public enum GitHubAuth {
     /// GITHUB_TOKEN env var, else the `gh` CLI's token. The Phoenix backend will replace this with
     /// a per-user GitHub App installation token.
-    public static func resolveToken() -> String? {
+    public static func resolveToken() async -> String? {
         if let t = ProcessInfo.processInfo.environment["GITHUB_TOKEN"], !t.isEmpty { return t }
         for gh in ["/opt/homebrew/bin/gh", "/usr/local/bin/gh", "/usr/bin/gh"]
         where FileManager.default.isExecutableFile(atPath: gh) {
-            let p = Process()
-            p.executableURL = URL(fileURLWithPath: gh)
-            p.arguments = ["auth", "token"]
-            let out = Pipe()
-            p.standardOutput = out
-            p.standardError = Pipe()
-            do { try p.run() } catch { continue }
-            p.waitUntilExit()
-            let token = String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            if p.terminationStatus == 0, !token.isEmpty { return token }
+            guard let out = try? await Subprocess.run(gh, ["auth", "token"]) else { continue }
+            if out.status == 0, !out.trimmedStdout.isEmpty { return out.trimmedStdout }
         }
         return nil
     }

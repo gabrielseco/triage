@@ -8,7 +8,7 @@ extension AppStore {
 
     func buildPrompt(for item: AttentionItem, mode: PromptMode) async -> String {
         var ctx = PromptContext()
-        if let token = GitHubAuth.resolveToken() {
+        if let token = await GitHubAuth.resolveToken() {
             let gh = GitHubClient(token: token)
             let repo = item.pr.repo
             if item.kind == .ciFailure {

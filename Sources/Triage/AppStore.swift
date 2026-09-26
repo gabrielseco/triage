@@ -162,12 +162,12 @@ final class AppStore {
 
     func refresh() async {
         guard !isRefreshing else { return }
-        guard let token = GitHubAuth.resolveToken() else {
+        isRefreshing = true
+        defer { isRefreshing = false }
+        guard let token = await GitHubAuth.resolveToken() else {
             errors = [GitHubError.noToken.localizedDescription]
             return
         }
-        isRefreshing = true
-        defer { isRefreshing = false }
         let gh = GitHubClient(token: token)
         if viewer == nil { viewer = try? await gh.viewerLogin() }
 
