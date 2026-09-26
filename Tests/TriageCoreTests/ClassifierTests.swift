@@ -160,15 +160,22 @@ private func comment(_ author: String, bot: Bool, _ body: String = "hi", url: St
 }
 
 private func thread(
-    _ n: Int, resolved: Bool = false, outdated: Bool = false, comments: Int = 1, bot: Bool = false
+    _ n: Int, resolved: Bool = false, outdated: Bool = false, replies: [String] = [], bot: Bool = false
 ) -> ReviewThreadInfo {
-    var c = comment(bot ? "bugbot" : "alice", bot: bot, url: "https://github.com/acme/web/pull/1020#r\(n)")
-    c.createdAt = Date(timeIntervalSince1970: TimeInterval(n))
-    return ReviewThreadInfo(isResolved: resolved, isOutdated: outdated, firstComment: c, commentCount: comments)
+    func at(_ author: String, _ i: Int, bot: Bool = false) -> CommentInfo {
+        var c = comment(author, bot: bot, url: "https://github.com/acme/web/pull/1020#r\(n)-\(i)")
+        // Replies come after every thread's first comment, as they do on GitHub.
+        c.createdAt = Date(timeIntervalSince1970: TimeInterval((i == 0 ? 0 : 10_000) + n * 100 + i))
+        return c
+    }
+    return ReviewThreadInfo(
+        isResolved: resolved, isOutdated: outdated, firstComment: at(bot ? "bugbot" : "alice", 0, bot: bot),
+        commentCount: 1 + replies.count,
+        replies: replies.enumerated().map { at($1, $0 + 1, bot: $1.hasSuffix("[bot]")) })
 }
 
 private func threadsID(_ threads: [ReviewThreadInfo]) -> String? {
-    Classifier.classify(pr(threads: threads)).items.first { $0.kind == .reviewThreads }?.id
+    Classifier.classify(pr(threads: threads), viewer: "me").items.first { $0.kind == .reviewThreads }?.id
 }
 
 @Test func resolvingOrOutdatingAThreadKeepsADismissalSticky() {
@@ -180,7 +187,14 @@ private func threadsID(_ threads: [ReviewThreadInfo]) -> String? {
 
 @Test func newConversationChangesTheReviewThreadsItem() {
     let before = threadsID([thread(1), thread(2)])
-    #expect(threadsID([thread(1), thread(2, comments: 2)]) != before)  // a reply
+    #expect(threadsID([thread(1, replies: ["alice"]), thread(2)]) != before)  // a reply, even in an older thread
     #expect(threadsID([thread(1), thread(2), thread(3)]) != before)  // a new thread
     #expect(threadsID([thread(1), thread(2), thread(3, bot: true)]) == before)  // bots have their own item
+}
+
+@Test func theViewersOwnRepliesDontBringTheItemBack() {
+    let before = threadsID([thread(1), thread(2)])
+    #expect(threadsID([thread(1, replies: ["me"]), thread(2, replies: ["me", "me"])]) == before)
+    #expect(threadsID([thread(1), thread(2, replies: ["cursor[bot]"])]) == before)
+    #expect(threadsID([thread(1, replies: ["me", "alice"]), thread(2)]) != before)  // the reviewer answered back
 }

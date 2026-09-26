@@ -198,7 +198,7 @@ final class AppStore {
         var newItems: [AttentionItem] = []
         var newStats: [String: PRStats] = [:]
         for pr in fetched {
-            let (i, s) = Classifier.classify(pr)
+            let (i, s) = Classifier.classify(pr, viewer: viewer)
             newItems += i
             newStats[pr.id] = s
         }

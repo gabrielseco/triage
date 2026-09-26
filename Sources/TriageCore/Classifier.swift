@@ -16,12 +16,15 @@ public enum Classifier {
         login.lowercased().replacingOccurrences(of: "[bot]", with: "")
     }
 
-    public static func classify(_ pr: PullRequest) -> (items: [AttentionItem], stats: PRStats) {
+    /// `viewer` is the signed-in login: their own review comments don't count as something new.
+    public static func classify(_ pr: PullRequest, viewer: String? = nil) -> (items: [AttentionItem], stats: PRStats) {
         var stats = PRStats(pendingChecks: pr.checks.filter { $0.state == .pending }.count)
         let open = pr.threads.filter { !$0.isResolved && !$0.isOutdated }
 
-        var items = [ciFailure(pr), mergeConflict(pr), changesRequested(pr), reviewThreads(pr, open: open)]
-            .compactMap { $0 }
+        var items = [
+            ciFailure(pr), mergeConflict(pr), changesRequested(pr), reviewThreads(pr, open: open, viewer: viewer),
+        ]
+        .compactMap { $0 }
         items += botFindings(pr, open: open, noise: &stats.noiseComments)
         if items.isEmpty, let quiet = readyToMerge(pr) ?? awaitingChecks(pr) ?? awaitingReview(pr) {
             items.append(quiet)
@@ -75,11 +78,11 @@ public enum Classifier {
     }
 
     /// All open threads started by humans collapse into one item.
-    static func reviewThreads(_ pr: PullRequest, open: [ReviewThreadInfo]) -> AttentionItem? {
+    static func reviewThreads(_ pr: PullRequest, open: [ReviewThreadInfo], viewer: String?) -> AttentionItem? {
         let human = open.filter { !$0.firstComment.isBot }
         guard let first = human.first else { return nil }
         return AttentionItem(
-            id: reviewThreadsID(pr),
+            id: reviewThreadsID(pr, viewer: viewer),
             kind: .reviewThreads,
             severity: .medium,
             pr: pr,
@@ -90,14 +93,15 @@ public enum Classifier {
         )
     }
 
-    /// Changes when a reviewer says something new (a new thread or a reply), not when a thread is resolved
-    /// or goes outdated, so a dismissed item only comes back for new conversation. Built from every human
-    /// thread, resolved ones included, since the set of open ones shrinks as they're resolved.
-    static func reviewThreadsID(_ pr: PullRequest) -> String {
-        let human = pr.threads.filter { !$0.firstComment.isBot }
-        let newest = human.max { $0.firstComment.createdAt < $1.firstComment.createdAt }
-        let comments = human.reduce(0) { $0 + $1.commentCount }
-        return "\(pr.id)|threads|\(newest?.firstComment.url?.absoluteString ?? "")|\(comments)"
+    /// Changes when someone other than the viewer says something new (a new thread or a reply), not when a
+    /// thread is resolved or goes outdated, or when the viewer replies, so a dismissed item only comes back
+    /// for new conversation. Built from every human thread, resolved ones included, since the set of open
+    /// ones shrinks as they're resolved.
+    static func reviewThreadsID(_ pr: PullRequest, viewer: String?) -> String {
+        let others = pr.threads.filter { !$0.firstComment.isBot }.flatMap(\.comments)
+            .filter { !$0.isBot && $0.author != viewer }
+        let newest = others.max { $0.createdAt < $1.createdAt }
+        return "\(pr.id)|threads|\(newest?.url?.absoluteString ?? "")"
     }
 
     struct BotEntry {
