@@ -49,6 +49,7 @@ final class AppStore {
     /// Per item: what the last Fix in / Copy did, shown under the buttons.
     var actionStatus: [String: String] = [:]
     private var autoRefreshStarted = false
+    private var refreshAgain = false
     /// Key read from the key source, held in memory only so it's fetched once per app session.
     var cachedOnePasswordKey: String?
 
@@ -160,14 +161,26 @@ final class AppStore {
         selection = list.first { $0.id != item.id && $0.pr.id == item.pr.id }?.id ?? list.first?.id
     }
 
+    /// Refreshes, or if one is already running, makes it go round once more when done so a repo added
+    /// mid-fetch doesn't wait for the next tick.
     func refresh() async {
-        guard !isRefreshing else { return }
-        guard let token = GitHubAuth.resolveToken() else {
-            errors = [GitHubError.noToken.localizedDescription]
+        guard !isRefreshing else {
+            refreshAgain = true
             return
         }
         isRefreshing = true
         defer { isRefreshing = false }
+        repeat {
+            refreshAgain = false
+            await refreshOnce()
+        } while refreshAgain
+    }
+
+    private func refreshOnce() async {
+        guard let token = GitHubAuth.resolveToken() else {
+            errors = [GitHubError.noToken.localizedDescription]
+            return
+        }
         let gh = GitHubClient(token: token)
         if viewer == nil { viewer = try? await gh.viewerLogin() }
 
@@ -188,6 +201,10 @@ final class AppStore {
                 }
             }
         }
+
+        // A repo removed while fetching must not have its PRs brought back.
+        let watched = Set(repos)
+        fetched.removeAll { !watched.contains($0.repo) }
 
         var newItems: [AttentionItem] = []
         var newStats: [String: PRStats] = [:]
