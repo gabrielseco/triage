@@ -102,6 +102,11 @@ struct Sidebar: View {
                     ForEach(store.errors, id: \.self) { Text($0).font(.caption).foregroundStyle(.red) }
                 }
             }
+            if !store.warnings.isEmpty {
+                Section("Partial data") {
+                    ForEach(store.warnings, id: \.self) { Text($0).font(.caption).foregroundStyle(.orange) }
+                }
+            }
             if !store.dismissed.isEmpty || !store.snoozed.isEmpty {
                 Button("Show \(store.dismissed.count + store.snoozed.count) hidden") { store.restoreHidden() }
                     .buttonStyle(.link)

@@ -54,13 +54,27 @@ public struct GitHubClient: Sendable {
         return data.viewer.login
     }
 
-    public func openPullRequests(_ repo: RepoRef) async throws -> [PullRequest] {
+    public func openPullRequests(_ repo: RepoRef) async throws -> RepoSnapshot {
         let d: RepoData = try await graphql(Self.prQuery, variables: ["owner": repo.owner, "name": repo.name])
         guard let r = d.repository else {
             throw GitHubError.graphql("repository \(repo.fullName) not found or not accessible")
         }
-        return r.pullRequests.nodes.map { $0.toModel(repo: repo) }
+        let prs = r.pullRequests.nodes
+        var warnings: [String] = []
+        if r.pullRequests.totalCount > prs.count {
+            let total = r.pullRequests.totalCount
+            warnings.append("\(repo.fullName): showing the \(prs.count) most recently updated of \(total) open PRs")
+        }
+        warnings += prs.flatMap { $0.truncationWarnings(repo: repo) }
+        if let rl = d.rateLimit, rl.remaining < Self.lowRateLimit {
+            let reset = rl.resetAt.formatted(date: .omitted, time: .shortened)
+            warnings.append("GitHub API: \(rl.remaining) points left until \(reset)")
+        }
+        return RepoSnapshot(pullRequests: prs.map { $0.toModel(repo: repo) }, warnings: warnings)
     }
+
+    /// Remaining GraphQL points (of 5,000/hour) below which a refresh warns.
+    static let lowRateLimit = 500
 
     func graphql<T: Decodable>(_ query: String, variables: [String: String]) async throws -> T {
         var req = request(api.appendingPathComponent("graphql"))
@@ -129,17 +143,19 @@ public struct GitHubClient: Sendable {
 
     static let prQuery = """
         query($owner: String!, $name: String!) {
+          rateLimit { remaining resetAt }
           repository(owner: $owner, name: $name) {
             pullRequests(states: OPEN, first: 30, orderBy: {field: UPDATED_AT, direction: DESC}) {
+              totalCount
               nodes {
                 number title url isDraft updatedAt mergeable reviewDecision headRefName
                 author { login __typename avatarUrl(size: 64) }
-                commits(last: 1) { nodes { commit { oid statusCheckRollup { contexts(first: 60) { nodes {
+                commits(last: 1) { nodes { commit { oid statusCheckRollup { contexts(first: 100) { totalCount nodes {
                   __typename
                   ... on CheckRun { name conclusion status detailsUrl databaseId title }
                   ... on StatusContext { context state targetUrl description }
                 } } } } } }
-                reviewThreads(first: 50) { nodes {
+                reviewThreads(last: 50) { totalCount nodes {
                   isResolved isOutdated path line
                   comments(first: 1) { totalCount nodes { author { login __typename } body url createdAt } }
                 } }
@@ -160,6 +176,11 @@ struct GQLResponse<T: Decodable>: Decodable {
 }
 
 struct Conn<T: Decodable>: Decodable { let nodes: [T] }
+/// A connection that also reports its size, so a capped `first:`/`last:` can say what it left out.
+struct CountedConn<T: Decodable>: Decodable {
+    let totalCount: Int
+    let nodes: [T]
+}
 
 struct ActorNode: Decodable {
     let login: String
@@ -217,14 +238,19 @@ struct ContextNode: Decodable {
 }
 
 struct RepoData: Decodable {
-    struct Repo: Decodable { let pullRequests: Conn<PRNode> }
+    struct Repo: Decodable { let pullRequests: CountedConn<PRNode> }
+    struct RateLimit: Decodable {
+        let remaining: Int
+        let resetAt: Date
+    }
+    let rateLimit: RateLimit?
     let repository: Repo?
 }
 
 struct PRNode: Decodable {
     struct CommitNode: Decodable {
         struct Commit: Decodable {
-            struct Rollup: Decodable { let contexts: Conn<ContextNode> }
+            struct Rollup: Decodable { let contexts: CountedConn<ContextNode> }
             let oid: String
             let statusCheckRollup: Rollup?
         }
@@ -240,8 +266,20 @@ struct PRNode: Decodable {
     let mergeable: String, reviewDecision: String?, headRefName: String
     let author: ActorNode?
     let commits: Conn<CommitNode>
-    let reviewThreads: Conn<ThreadNode>
+    let reviewThreads: CountedConn<ThreadNode>
     let comments: Conn<CommentNode>
+
+    func truncationWarnings(repo: RepoRef) -> [String] {
+        var w: [String] = []
+        if let checks = commits.nodes.last?.commit.statusCheckRollup?.contexts, checks.totalCount > checks.nodes.count {
+            w.append("\(repo.name)#\(number): read the first \(checks.nodes.count) of \(checks.totalCount) checks")
+        }
+        if reviewThreads.totalCount > reviewThreads.nodes.count {
+            let (read, total) = (reviewThreads.nodes.count, reviewThreads.totalCount)
+            w.append("\(repo.name)#\(number): read the newest \(read) of \(total) review threads")
+        }
+        return w
+    }
 
     func toModel(repo: RepoRef) -> PullRequest {
         let head = commits.nodes.last?.commit

@@ -215,3 +215,15 @@ public struct PRStats: Sendable, Hashable {
         self.pendingChecks = pendingChecks
     }
 }
+
+/// One repo's open PRs, plus anything the query had to leave out.
+public struct RepoSnapshot: Sendable {
+    public var pullRequests: [PullRequest]
+    /// Caps hit (PRs, checks, review threads) or a low rate limit; shown, but not treated as errors.
+    public var warnings: [String]
+
+    public init(pullRequests: [PullRequest], warnings: [String] = []) {
+        self.pullRequests = pullRequests
+        self.warnings = warnings
+    }
+}
