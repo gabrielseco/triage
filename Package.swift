@@ -9,5 +9,5 @@ let package = Package(
         .executableTarget(name: "Triage", dependencies: ["TriageCore"]),
         .testTarget(name: "TriageCoreTests", dependencies: ["TriageCore"]),
     ],
-    swiftLanguageModes: [.v5]
+    swiftLanguageModes: [.v6]
 )

@@ -11,10 +11,13 @@ public struct Digest: Sendable {
 }
 
 public enum DigestBuilder {
-    public static func build(current: [AttentionItem], previousIDs: Set<String>, since: Date?,
-                             calendar: Calendar = .current) -> Digest {
+    public static func build(
+        current: [AttentionItem], previousIDs: Set<String>, since: Date?,
+        calendar: Calendar = .current
+    ) -> Digest {
         let currentIDs = Set(current.map(\.id))
-        let new = current
+        let new =
+            current
             .filter { !previousIDs.contains($0.id) }
             .sorted { ($0.severity, $0.pr.updatedAt) > ($1.severity, $1.pr.updatedAt) }
         let cleared = previousIDs.subtracting(currentIDs).count
@@ -28,14 +31,17 @@ public enum DigestBuilder {
         if cleared > 0 { tally.append("\(cleared) cleared") }
         lines.append(tally.joined(separator: " · "))
 
-        return Digest(newItems: new, clearedCount: cleared, openCount: current.count,
-                      title: title, body: lines.joined(separator: "\n"))
+        return Digest(
+            newItems: new, clearedCount: cleared, openCount: current.count,
+            title: title, body: lines.joined(separator: "\n"))
     }
 
     /// The most recent scheduled digest time at or before `now`, e.g. hours [12, 18] at 14:05 → today 12:00;
     /// at 09:00 → yesterday 18:00 (or Friday 18:00 on a Monday when weekdaysOnly).
-    public static func latestSlot(atOrBefore now: Date, hours: [Int], weekdaysOnly: Bool,
-                                  calendar: Calendar = .current) -> Date? {
+    public static func latestSlot(
+        atOrBefore now: Date, hours: [Int], weekdaysOnly: Bool,
+        calendar: Calendar = .current
+    ) -> Date? {
         for offset in 0...7 {
             guard let day = calendar.date(byAdding: .day, value: -offset, to: now) else { continue }
             if weekdaysOnly, calendar.isDateInWeekend(day) { continue }

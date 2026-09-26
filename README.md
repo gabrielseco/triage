@@ -17,6 +17,17 @@ A missed slot (asleep / app closed) goes out on the next refresh after it.
 
 Auth: `GITHUB_TOKEN` or the `gh` CLI token; `ANTHROPIC_API_KEY` or a key saved in Settings (Keychain).
 
+## Development
+
+```bash
+scripts/check.sh         # what CI runs: swift-format lint → Swift 6 build → tests, warnings are errors
+scripts/check.sh --fix   # auto-format first
+```
+
+- **Swift 6 language mode**: strict concurrency checking, so data races are compile errors.
+- **swift-format** (ships with the toolchain), configured in `.swift-format`: 4 spaces, 120 columns.
+- **CI**: `.github/workflows/ci.yml` runs `scripts/check.sh` on every push and PR (macOS runner).
+
 ## How it works
 
 Full walkthrough (with Swift ↔ React/TS/Elixir mappings): [docs/HOW_IT_WORKS.md](docs/HOW_IT_WORKS.md)

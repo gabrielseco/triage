@@ -16,13 +16,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
 
     /// Show banners even when Triage is the frontmost app.
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
-                                            withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
         completionHandler([.banner, .list, .sound])
     }
 
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
-                                            withCompletionHandler completionHandler: @escaping () -> Void) {
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
         Task { @MainActor in
             store.filter = .lastDigest
             store.selection = store.visibleItems.first?.id
@@ -46,7 +50,8 @@ enum Notifier {
         content.title = title
         content.body = body
         content.sound = .default
-        let req = UNNotificationRequest(identifier: "digest-\(Date().timeIntervalSince1970)", content: content, trigger: nil)
+        let req = UNNotificationRequest(
+            identifier: "digest-\(Date().timeIntervalSince1970)", content: content, trigger: nil)
         do { try await UNUserNotificationCenter.current().add(req); return true } catch { return false }
     }
 }
@@ -69,16 +74,17 @@ enum ITerm {
     static func open(runningScript path: String) throws {
         let escaped = path.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
         let source = """
-        tell application "iTerm"
-          activate
-          create window with default profile command "\(escaped)"
-        end tell
-        """
+            tell application "iTerm"
+              activate
+              create window with default profile command "\(escaped)"
+            end tell
+            """
         var error: NSDictionary?
         NSAppleScript(source: source)?.executeAndReturnError(&error)
         if let error {
             let msg = error[NSAppleScript.errorMessage] as? String ?? "AppleScript error"
-            throw ScriptError(message: "\(msg) — allow Triage under System Settings → Privacy & Security → Automation → iTerm.")
+            throw ScriptError(
+                message: "\(msg) — allow Triage under System Settings → Privacy & Security → Automation → iTerm.")
         }
     }
 }

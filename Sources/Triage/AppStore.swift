@@ -82,7 +82,8 @@ final class AppStore {
     /// Everything that currently needs a look, most severe first.
     var activeItems: [AttentionItem] {
         let now = Date()
-        return items
+        return
+            items
             .filter { !dismissed.contains($0.id) && (snoozed[$0.id] ?? .distantPast) < now }
             .filter { !onlyMine || viewer == nil || $0.pr.author == viewer }
             .sorted { ($0.severity, $0.pr.updatedAt) > ($1.severity, $1.pr.updatedAt) }
@@ -91,8 +92,8 @@ final class AppStore {
     var visibleItems: [AttentionItem] {
         switch filter {
         case .all: activeItems
-        case let .kind(k): activeItems.filter { $0.kind == k }
-        case let .repo(r): activeItems.filter { $0.pr.repo.fullName == r }
+        case .kind(let k): activeItems.filter { $0.kind == k }
+        case .repo(let r): activeItems.filter { $0.pr.repo.fullName == r }
         case .lastDigest: activeItems.filter { lastDigestItemIDs.contains($0.id) }
         }
     }
@@ -173,14 +174,15 @@ final class AppStore {
         await withTaskGroup(of: Result<[PullRequest], Error>.self) { group in
             for repo in repos {
                 group.addTask {
-                    do { return .success(try await gh.openPullRequests(repo)) }
-                    catch { return .failure(RepoError(repo: repo.fullName, underlying: error)) }
+                    do { return .success(try await gh.openPullRequests(repo)) } catch {
+                        return .failure(RepoError(repo: repo.fullName, underlying: error))
+                    }
                 }
             }
             for await r in group {
                 switch r {
-                case let .success(p): fetched += p
-                case let .failure(e): errs.append(e.localizedDescription)
+                case .success(let p): fetched += p
+                case .failure(let e): errs.append(e.localizedDescription)
                 }
             }
         }
@@ -226,15 +228,17 @@ final class AppStore {
     /// Called after every refresh. Sends at most one digest per scheduled slot; if the Mac was asleep
     /// or the app closed at 12:00, the 12:00 digest goes out on the next refresh after that.
     func sendDigestIfDue(now: Date = Date()) async {
-        guard lastRefresh != nil, errors.count < max(repos.count, 1) else { return } // don't digest stale data
+        guard lastRefresh != nil, errors.count < max(repos.count, 1) else { return }  // don't digest stale data
         guard digestBaseline != nil else {
             // First run: everything open now is the baseline, so the first digest isn't "13 new".
             digestBaseline = Set(activeItems.map(\.id))
             lastDigestAt = now
             return
         }
-        guard let slot = DigestBuilder.latestSlot(atOrBefore: now, hours: digestHours, weekdaysOnly: digestWeekdaysOnly),
-              (lastDigestAt ?? .distantPast) < slot else { return }
+        guard
+            let slot = DigestBuilder.latestSlot(atOrBefore: now, hours: digestHours, weekdaysOnly: digestWeekdaysOnly),
+            (lastDigestAt ?? .distantPast) < slot
+        else { return }
         await sendDigest(force: false, now: now)
     }
 
@@ -258,8 +262,11 @@ final class AppStore {
             if item.kind == .ciFailure {
                 for e in item.evidence.prefix(3) {
                     guard let id = e.checkRunID else { continue }
-                    if let log = await gh.jobLog(repo, jobID: id) { ctx.checkOutputs.append((e.title, log)) }
-                    else if let out = await gh.checkRunOutput(repo, id: id) { ctx.checkOutputs.append((e.title, out)) }
+                    if let log = await gh.jobLog(repo, jobID: id) {
+                        ctx.checkOutputs.append((e.title, log))
+                    } else if let out = await gh.checkRunOutput(repo, id: id) {
+                        ctx.checkOutputs.append((e.title, out))
+                    }
                 }
             }
             ctx.diff = await gh.diff(repo, number: item.pr.number)
@@ -304,22 +311,26 @@ final class AppStore {
     func fixInTerminal(_ item: AttentionItem) async {
         let repo = item.pr.repo
         guard let checkout = checkoutPath(for: repo) ?? chooseCheckout(for: repo) else {
-            actionStatus[item.id] = "No local checkout of \(repo.fullName) — right-click the repo in the sidebar to set one."
+            actionStatus[item.id] =
+                "No local checkout of \(repo.fullName) — right-click the repo in the sidebar to set one."
             return
         }
         actionStatus[item.id] = "Fetching logs and diff…"
         let prompt = await buildPrompt(for: item, mode: .handoff)
         do {
             // Caches, not Application Support: iTerm's `command` splits on spaces.
-            let dir = try FileManager.default.url(for: .cachesDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-                .appendingPathComponent("dev.rogal.triage/handoffs", isDirectory: true)
+            let dir = try FileManager.default.url(
+                for: .cachesDirectory, in: .userDomainMask, appropriateFor: nil, create: true
+            )
+            .appendingPathComponent("dev.rogal.triage/handoffs", isDirectory: true)
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             let base = "\(repo.owner)-\(repo.name)-\(item.pr.number)-\(item.kind.rawValue)"
             let promptURL = dir.appendingPathComponent("\(base).md")
             let scriptURL = dir.appendingPathComponent("\(base).command")
             try prompt.write(to: promptURL, atomically: true, encoding: .utf8)
-            let plan = HandoffPlan(repo: repo, prNumber: item.pr.number, branch: item.pr.headRef, checkout: checkout,
-                                   promptFile: promptURL.path, harnessCommand: harnessCommand)
+            let plan = HandoffPlan(
+                repo: repo, prNumber: item.pr.number, branch: item.pr.headRef, checkout: checkout,
+                promptFile: promptURL.path, harnessCommand: harnessCommand)
             try Handoff.script(plan).write(to: scriptURL, atomically: true, encoding: .utf8)
             try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: scriptURL.path)
             try ITerm.open(runningScript: scriptURL.path)
@@ -330,7 +341,8 @@ final class AppStore {
     }
 
     enum KeySource: String {
-        case onePassword = "1Password / key helper", environment = "ANTHROPIC_API_KEY", keychain = "Keychain", none = "not set"
+        case onePassword = "1Password / key helper", environment = "ANTHROPIC_API_KEY", keychain = "Keychain", none =
+            "not set"
     }
 
     /// Which key Explain will use. A configured 1Password reference wins: it's the explicit choice made in

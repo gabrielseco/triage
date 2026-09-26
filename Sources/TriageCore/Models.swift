@@ -67,8 +67,10 @@ public struct ReviewThreadInfo: Hashable, Sendable {
     public var firstComment: CommentInfo
     public var commentCount: Int
 
-    public init(isResolved: Bool, isOutdated: Bool = false, path: String? = nil, line: Int? = nil,
-                firstComment: CommentInfo, commentCount: Int = 1) {
+    public init(
+        isResolved: Bool, isOutdated: Bool = false, path: String? = nil, line: Int? = nil,
+        firstComment: CommentInfo, commentCount: Int = 1
+    ) {
         self.isResolved = isResolved
         self.isOutdated = isOutdated
         self.path = path
@@ -105,10 +107,13 @@ public struct PullRequest: Identifiable, Hashable, Sendable {
 
     public var id: String { "\(repo.fullName)#\(number)" }
 
-    public init(repo: RepoRef, number: Int, title: String, url: URL, author: String, authorAvatar: URL? = nil, isDraft: Bool = false,
-                updatedAt: Date = .now, headSha: String, headRef: String = "branch",
-                mergeable: Mergeable = .mergeable, reviewDecision: ReviewDecision = .none,
-                checks: [CheckInfo] = [], threads: [ReviewThreadInfo] = [], comments: [CommentInfo] = []) {
+    public init(
+        repo: RepoRef, number: Int, title: String, url: URL, author: String, authorAvatar: URL? = nil,
+        isDraft: Bool = false,
+        updatedAt: Date = .now, headSha: String, headRef: String = "branch",
+        mergeable: Mergeable = .mergeable, reviewDecision: ReviewDecision = .none,
+        checks: [CheckInfo] = [], threads: [ReviewThreadInfo] = [], comments: [CommentInfo] = []
+    ) {
         self.repo = repo
         self.number = number
         self.title = title

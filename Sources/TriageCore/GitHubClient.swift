@@ -8,8 +8,8 @@ public enum GitHubError: LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .noToken: "No GitHub token. Set GITHUB_TOKEN or run `gh auth login`."
-        case let .http(code, body): "GitHub HTTP \(code): \(body.prefix(300))"
-        case let .graphql(msg): "GitHub GraphQL: \(msg)"
+        case .http(let code, let body): "GitHub HTTP \(code): \(body.prefix(300))"
+        case .graphql(let msg): "GitHub GraphQL: \(msg)"
         }
     }
 }
@@ -19,7 +19,8 @@ public enum GitHubAuth {
     /// a per-user GitHub App installation token.
     public static func resolveToken() -> String? {
         if let t = ProcessInfo.processInfo.environment["GITHUB_TOKEN"], !t.isEmpty { return t }
-        for gh in ["/opt/homebrew/bin/gh", "/usr/local/bin/gh", "/usr/bin/gh"] where FileManager.default.isExecutableFile(atPath: gh) {
+        for gh in ["/opt/homebrew/bin/gh", "/usr/local/bin/gh", "/usr/bin/gh"]
+        where FileManager.default.isExecutableFile(atPath: gh) {
             let p = Process()
             p.executableURL = URL(fileURLWithPath: gh)
             p.arguments = ["auth", "token"]
@@ -52,7 +53,9 @@ public struct GitHubClient: Sendable {
 
     public func openPullRequests(_ repo: RepoRef) async throws -> [PullRequest] {
         let d: RepoData = try await graphql(Self.prQuery, variables: ["owner": repo.owner, "name": repo.name])
-        guard let r = d.repository else { throw GitHubError.graphql("repository \(repo.fullName) not found or not accessible") }
+        guard let r = d.repository else {
+            throw GitHubError.graphql("repository \(repo.fullName) not found or not accessible")
+        }
         return r.pullRequests.nodes.map { $0.toModel(repo: repo) }
     }
 
@@ -79,9 +82,13 @@ public struct GitHubClient: Sendable {
 
     /// Title/summary/text a check run published (works for third-party checks too).
     public func checkRunOutput(_ repo: RepoRef, id: Int) async -> String? {
-        struct R: Decodable { struct O: Decodable { let title: String?; let summary: String?; let text: String? }; let output: O }
+        struct R: Decodable {
+            struct O: Decodable { let title: String?; let summary: String?; let text: String? }; let output: O
+        }
         let url = api.appendingPathComponent("repos/\(repo.fullName)/check-runs/\(id)")
-        guard let data = try? await send(request(url)), let r = try? JSONDecoder().decode(R.self, from: data) else { return nil }
+        guard let data = try? await send(request(url)), let r = try? JSONDecoder().decode(R.self, from: data) else {
+            return nil
+        }
         let parts = [r.output.title, r.output.summary, r.output.text].compactMap { $0 }.filter { !$0.isEmpty }
         return parts.isEmpty ? nil : parts.joined(separator: "\n\n")
     }
@@ -112,27 +119,27 @@ public struct GitHubClient: Sendable {
     }
 
     static let prQuery = """
-    query($owner: String!, $name: String!) {
-      repository(owner: $owner, name: $name) {
-        pullRequests(states: OPEN, first: 30, orderBy: {field: UPDATED_AT, direction: DESC}) {
-          nodes {
-            number title url isDraft updatedAt mergeable reviewDecision headRefName
-            author { login __typename avatarUrl(size: 64) }
-            commits(last: 1) { nodes { commit { oid statusCheckRollup { contexts(first: 60) { nodes {
-              __typename
-              ... on CheckRun { name conclusion status detailsUrl databaseId title }
-              ... on StatusContext { context state targetUrl description }
-            } } } } } }
-            reviewThreads(first: 50) { nodes {
-              isResolved isOutdated path line
-              comments(first: 1) { totalCount nodes { author { login __typename } body url createdAt } }
-            } }
-            comments(last: 20) { nodes { author { login __typename } body url createdAt } }
+        query($owner: String!, $name: String!) {
+          repository(owner: $owner, name: $name) {
+            pullRequests(states: OPEN, first: 30, orderBy: {field: UPDATED_AT, direction: DESC}) {
+              nodes {
+                number title url isDraft updatedAt mergeable reviewDecision headRefName
+                author { login __typename avatarUrl(size: 64) }
+                commits(last: 1) { nodes { commit { oid statusCheckRollup { contexts(first: 60) { nodes {
+                  __typename
+                  ... on CheckRun { name conclusion status detailsUrl databaseId title }
+                  ... on StatusContext { context state targetUrl description }
+                } } } } } }
+                reviewThreads(first: 50) { nodes {
+                  isResolved isOutdated path line
+                  comments(first: 1) { totalCount nodes { author { login __typename } body url createdAt } }
+                } }
+                comments(last: 20) { nodes { author { login __typename } body url createdAt } }
+              }
+            }
           }
         }
-      }
-    }
-    """
+        """
 }
 
 // MARK: - GraphQL decoding
@@ -148,7 +155,7 @@ struct Conn<T: Decodable>: Decodable { let nodes: [T] }
 struct ActorNode: Decodable {
     let login: String
     let typename: String?
-    let avatarUrl: URL? // only requested for PR authors
+    let avatarUrl: URL?  // only requested for PR authors
     enum CodingKeys: String, CodingKey { case login, typename = "__typename", avatarUrl }
     var isBot: Bool { typename == "Bot" || login.hasSuffix("[bot]") }
 }
@@ -160,7 +167,8 @@ struct CommentNode: Decodable {
     let createdAt: Date
 
     var model: CommentInfo {
-        CommentInfo(author: author?.login ?? "ghost", isBot: author?.isBot ?? false, body: body, url: url, createdAt: createdAt)
+        CommentInfo(
+            author: author?.login ?? "ghost", isBot: author?.isBot ?? false, body: body, url: url, createdAt: createdAt)
     }
 }
 
@@ -177,22 +185,24 @@ struct ContextNode: Decodable {
     var model: CheckInfo {
         if typename == "CheckRun" {
             let s: CheckState
-            if status != "COMPLETED" { s = .pending }
-            else {
+            if status != "COMPLETED" {
+                s = .pending
+            } else {
                 switch conclusion {
                 case "SUCCESS": s = .success
                 case "FAILURE", "TIMED_OUT", "ACTION_REQUIRED", "STARTUP_FAILURE": s = .failure
-                default: s = .neutral // SKIPPED, NEUTRAL, CANCELLED, STALE
+                default: s = .neutral  // SKIPPED, NEUTRAL, CANCELLED, STALE
                 }
             }
             return CheckInfo(name: name ?? "check", state: s, url: detailsUrl, checkRunID: databaseId, summary: title)
         }
-        let s: CheckState = switch state {
-        case "SUCCESS": .success
-        case "FAILURE", "ERROR": .failure
-        case "PENDING", "EXPECTED": .pending
-        default: .neutral
-        }
+        let s: CheckState =
+            switch state {
+            case "SUCCESS": .success
+            case "FAILURE", "ERROR": .failure
+            case "PENDING", "EXPECTED": .pending
+            default: .neutral
+            }
         return CheckInfo(name: context ?? "status", state: s, url: targetUrl, summary: description)
     }
 }
@@ -228,11 +238,13 @@ struct PRNode: Decodable {
         let head = commits.nodes.last?.commit
         let threads: [ReviewThreadInfo] = reviewThreads.nodes.compactMap { t in
             guard let first = t.comments.nodes.first else { return nil }
-            return ReviewThreadInfo(isResolved: t.isResolved, isOutdated: t.isOutdated, path: t.path, line: t.line,
-                                    firstComment: first.model, commentCount: t.comments.totalCount)
+            return ReviewThreadInfo(
+                isResolved: t.isResolved, isOutdated: t.isOutdated, path: t.path, line: t.line,
+                firstComment: first.model, commentCount: t.comments.totalCount)
         }
         return PullRequest(
-            repo: repo, number: number, title: title, url: url, author: author?.login ?? "ghost", authorAvatar: author?.avatarUrl,
+            repo: repo, number: number, title: title, url: url, author: author?.login ?? "ghost",
+            authorAvatar: author?.avatarUrl,
             isDraft: isDraft, updatedAt: updatedAt, headSha: head?.oid ?? "", headRef: headRefName,
             mergeable: Mergeable(rawValue: mergeable) ?? .unknown,
             reviewDecision: reviewDecision.flatMap(ReviewDecision.init(rawValue:)) ?? .none,

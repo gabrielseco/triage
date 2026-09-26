@@ -9,7 +9,7 @@ public enum OnePasswordError: LocalizedError {
         switch self {
         case .cliMissing: "1Password CLI (`op`) not found. Install it with `brew install 1password-cli`."
         case .badReference: "The 1Password reference should look like op://Vault/Item/field."
-        case let .failed(msg): "API key: \(msg)"
+        case .failed(let msg): "API key: \(msg)"
         }
     }
 }
@@ -23,7 +23,8 @@ public enum KeyReference {
         if ref.hasPrefix("op://") { return try await OnePassword.read(ref) }
         let path = (ref as NSString).expandingTildeInPath
         guard !ref.isEmpty, FileManager.default.isExecutableFile(atPath: path) else {
-            throw OnePasswordError.failed("\(ref.isEmpty ? "no reference" : ref) is neither an op:// reference nor an executable key helper")
+            throw OnePasswordError.failed(
+                "\(ref.isEmpty ? "no reference" : ref) is neither an op:// reference nor an executable key helper")
         }
         return try await OnePassword.run(path, [])
     }
@@ -61,7 +62,10 @@ public enum OnePassword {
                 let msg = String(decoding: errData, as: UTF8.self)
                     .replacingOccurrences(of: #"^\[ERROR\] [0-9/: ]+"#, with: "", options: .regularExpression)
                     .trimmingCharacters(in: .whitespacesAndNewlines)
-                throw OnePasswordError.failed(msg.isEmpty ? "\(URL(fileURLWithPath: executable).lastPathComponent) exited with \(p.terminationStatus)" : msg)
+                throw OnePasswordError.failed(
+                    msg.isEmpty
+                        ? "\(URL(fileURLWithPath: executable).lastPathComponent) exited with \(p.terminationStatus)"
+                        : msg)
             }
             let secret = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
             guard !secret.isEmpty else { throw OnePasswordError.failed("no key was returned") }

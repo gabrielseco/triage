@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import TriageCore
 
 /// Runs the generated handoff script against throwaway git repos (a bare "origin" + a clone), with the
@@ -13,18 +14,19 @@ import Testing
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         let origin = root.appendingPathComponent("origin.git").path
         checkout = root.appendingPathComponent("repo").path
-        try sh("""
-        git init -q --bare -b main '\(origin)'
-        git clone -q '\(origin)' '\(checkout)' 2>/dev/null
-        cd '\(checkout)'
-        git -c user.email=t@t -c user.name=t commit -q --allow-empty -m init
-        git push -q origin main
-        git checkout -q -b feature/fix-ci
-        git -c user.email=t@t -c user.name=t commit -q --allow-empty -m wip
-        git push -q origin feature/fix-ci
-        git checkout -q main
-        git branch -q -D feature/fix-ci
-        """)
+        try sh(
+            """
+            git init -q --bare -b main '\(origin)'
+            git clone -q '\(origin)' '\(checkout)' 2>/dev/null
+            cd '\(checkout)'
+            git -c user.email=t@t -c user.name=t commit -q --allow-empty -m init
+            git push -q origin main
+            git checkout -q -b feature/fix-ci
+            git -c user.email=t@t -c user.name=t commit -q --allow-empty -m wip
+            git push -q origin feature/fix-ci
+            git checkout -q main
+            git branch -q -D feature/fix-ci
+            """)
     }
 
     @discardableResult
@@ -45,8 +47,9 @@ import Testing
     func runHandoff(branch: String) throws -> String {
         let promptFile = root.appendingPathComponent("prompt.md")
         try "PROMPT-BODY".write(to: promptFile, atomically: true, encoding: .utf8)
-        let plan = HandoffPlan(repo: RepoRef(owner: "acme", name: "repo"), prNumber: 42, branch: branch,
-                               checkout: checkout, promptFile: promptFile.path, harnessCommand: "cat {prompt_file}")
+        let plan = HandoffPlan(
+            repo: RepoRef(owner: "acme", name: "repo"), prNumber: 42, branch: branch,
+            checkout: checkout, promptFile: promptFile.path, harnessCommand: "cat {prompt_file}")
         let script = Handoff.script(plan)
             .replacingOccurrences(of: "#!/bin/zsh -il\n", with: "")
             .replacingOccurrences(of: "exec zsh -il", with: "exit 0")
@@ -60,7 +63,9 @@ import Testing
         let wt = Handoff.worktreePath(checkout: checkout, pr: 42)
         #expect(out.contains("creating worktree"), "\(out)")
         #expect(out.contains("PROMPT-BODY"), "\(out)")
-        #expect(try sh("git -C '\(wt)' rev-parse --abbrev-ref HEAD").trimmingCharacters(in: .whitespacesAndNewlines) == "feature/fix-ci")
+        #expect(
+            try sh("git -C '\(wt)' rev-parse --abbrev-ref HEAD").trimmingCharacters(in: .whitespacesAndNewlines)
+                == "feature/fix-ci")
     }
 
     @Test func reusesAnExistingWorktree() throws {

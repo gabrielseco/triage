@@ -33,8 +33,10 @@ struct ItemDetailView: View {
             }
             Text(item.headline).font(.title2.weight(.semibold)).textSelection(.enabled)
             Link(String("\(item.pr.repo.fullName) #\(item.pr.number) — \(item.pr.title)"), destination: item.pr.url)
-            Text("by \(item.pr.author) · \(item.pr.headRef) · updated \(item.pr.updatedAt.formatted(.relative(presentation: .named)))")
-                .font(.caption).foregroundStyle(.secondary)
+            Text(
+                "by \(item.pr.author) · \(item.pr.headRef) · updated \(item.pr.updatedAt.formatted(.relative(presentation: .named)))"
+            )
+            .font(.caption).foregroundStyle(.secondary)
         }
     }
 
@@ -43,34 +45,56 @@ struct ItemDetailView: View {
             if item.kind.isFixable {
                 Button {
                     Task { await store.explain(item) }
-                } label: { Label("Explain & propose fix", systemImage: "sparkles") }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(store.explanations[item.id] == .loading)
-                    .keyboardShortcut("e")
+                } label: {
+                    Label("Explain & propose fix", systemImage: "sparkles")
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(store.explanations[item.id] == .loading)
+                .keyboardShortcut("e")
 
                 Button {
                     Task { await store.fixInTerminal(item) }
-                } label: { Label("Fix in iTerm", systemImage: "terminal") }
-                    .help("Opens iTerm in a worktree for this PR and starts your harness (\(store.harnessCommand)) with the prompt")
-                    .keyboardShortcut("f")
+                } label: {
+                    Label("Fix in iTerm", systemImage: "terminal")
+                }
+                .help(
+                    "Opens iTerm in a worktree for this PR and starts your harness (\(store.harnessCommand)) with the prompt"
+                )
+                .keyboardShortcut("f")
 
                 Menu {
-                    Button("For a chat (explain + propose)") { Task { await store.copyPrompt(for: item, mode: .explain) } }
-                    Button("For Claude Code in your checkout") { Task { await store.copyPrompt(for: item, mode: .claudeCode) } }
-                } label: { Label("Copy prompt", systemImage: "doc.on.doc") }
-                    .fixedSize()
+                    Button("For a chat (explain + propose)") {
+                        Task { await store.copyPrompt(for: item, mode: .explain) }
+                    }
+                    Button("For Claude Code in your checkout") {
+                        Task { await store.copyPrompt(for: item, mode: .claudeCode) }
+                    }
+                } label: {
+                    Label("Copy prompt", systemImage: "doc.on.doc")
+                }
+                .fixedSize()
             }
             Spacer()
             Menu {
                 Button("1 hour") { store.snooze(item, for: 3600) }
                 Button("4 hours") { store.snooze(item, for: 4 * 3600) }
                 Button("Until tomorrow") { store.snooze(item, for: 24 * 3600) }
-            } label: { Label("Snooze", systemImage: "moon.zzz") }
-                .fixedSize()
-            Button { store.dismiss(item) } label: { Label("Dismiss", systemImage: "checkmark") }
-                .keyboardShortcut(.delete, modifiers: [])
-            Button { openURL(item.pr.url) } label: { Label("Open", systemImage: "safari") }
-                .keyboardShortcut("o")
+            } label: {
+                Label("Snooze", systemImage: "moon.zzz")
+            }
+            .fixedSize()
+            Button {
+                store.dismiss(item)
+            } label: {
+                Label("Dismiss", systemImage: "checkmark")
+            }
+            .keyboardShortcut(.delete, modifiers: [])
+            Button {
+                openURL(item.pr.url)
+            } label: {
+                Label("Open", systemImage: "safari")
+            }
+            .keyboardShortcut("o")
         }
     }
 
@@ -83,15 +107,20 @@ struct ItemDetailView: View {
     @ViewBuilder private var explanation: some View {
         switch store.explanations[item.id] {
         case .loading:
-            HStack { ProgressView().controlSize(.small); Text("Gathering logs and diff, asking Claude…").foregroundStyle(.secondary) }
-        case let .done(text):
+            HStack {
+                ProgressView().controlSize(.small);
+                Text("Gathering logs and diff, asking Claude…").foregroundStyle(.secondary)
+            }
+        case .done(let text):
             GroupBox {
                 ScrollView(.vertical) {
                     Text(markdown(text)).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .frame(maxHeight: 420)
-            } label: { Label("Claude", systemImage: "sparkles") }
-        case let .failed(msg):
+            } label: {
+                Label("Claude", systemImage: "sparkles")
+            }
+        case .failed(let msg):
             Label(msg, systemImage: "exclamationmark.triangle").foregroundStyle(.red)
         case nil:
             EmptyView()
@@ -111,7 +140,8 @@ struct EvidenceCard: View {
                 if let url = evidence.url { Link(destination: url) { Image(systemName: "arrow.up.right.square") } }
             }
             if let d = evidence.detail, !d.isEmpty {
-                Text(markdown(String(d.prefix(1500)))).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
+                Text(markdown(String(d.prefix(1500)))).font(.callout).foregroundStyle(.secondary).textSelection(
+                    .enabled)
             }
         }
         .padding(10)
@@ -121,5 +151,6 @@ struct EvidenceCard: View {
 }
 
 func markdown(_ s: String) -> AttributedString {
-    (try? AttributedString(markdown: s, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(s)
+    (try? AttributedString(markdown: s, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
+        ?? AttributedString(s)
 }

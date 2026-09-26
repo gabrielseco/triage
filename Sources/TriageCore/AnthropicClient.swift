@@ -10,8 +10,8 @@ public enum AnthropicError: LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .noKey: "No Anthropic API key. Set ANTHROPIC_API_KEY or add one in Settings."
-        case let .http(code, msg): "Anthropic HTTP \(code): \(msg)"
-        case let .refusal(why): "Claude declined this request\(why.map { ": \($0)" } ?? "")."
+        case .http(let code, let msg): "Anthropic HTTP \(code): \(msg)"
+        case .refusal(let why): "Claude declined this request\(why.map { ": \($0)" } ?? "")."
         case .empty: "Claude returned no text."
         }
     }
@@ -38,13 +38,14 @@ public struct AnthropicClient: Sendable {
         req.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
         // If safety classifiers decline, the server reruns on its recommended fallback model.
         req.setValue("server-side-fallback-2026-07-01", forHTTPHeaderField: "anthropic-beta")
-        req.httpBody = try JSONSerialization.data(withJSONObject: [
-            "model": model,
-            "max_tokens": 16000,
-            "fallbacks": "default",
-            "system": system,
-            "messages": [["role": "user", "content": prompt]],
-        ] as [String: Any])
+        req.httpBody = try JSONSerialization.data(
+            withJSONObject: [
+                "model": model,
+                "max_tokens": 16000,
+                "fallbacks": "default",
+                "system": system,
+                "messages": [["role": "user", "content": prompt]],
+            ] as [String: Any])
 
         let (data, resp) = try await URLSession.shared.data(for: req)
         let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
@@ -53,17 +54,24 @@ public struct AnthropicClient: Sendable {
             struct Block: Decodable { let type: String; let text: String? }
             struct StopDetails: Decodable { let explanation: String? }
             let content: [Block]
-            let stop_reason: String?
-            let stop_details: StopDetails?
+            let stopReason: String?
+            let stopDetails: StopDetails?
+            enum CodingKeys: String, CodingKey {
+                case content
+                case stopReason = "stop_reason"
+                case stopDetails = "stop_details"
+            }
         }
         struct ErrorBody: Decodable { struct E: Decodable { let message: String }; let error: E }
 
         guard (200..<300).contains(code) else {
-            let msg = (try? JSONDecoder().decode(ErrorBody.self, from: data))?.error.message ?? String(decoding: data, as: UTF8.self)
+            let msg =
+                (try? JSONDecoder().decode(ErrorBody.self, from: data))?.error.message
+                ?? String(decoding: data, as: UTF8.self)
             throw AnthropicError.http(code, msg)
         }
         let r = try JSONDecoder().decode(Response.self, from: data)
-        if r.stop_reason == "refusal" { throw AnthropicError.refusal(r.stop_details?.explanation) }
+        if r.stopReason == "refusal" { throw AnthropicError.refusal(r.stopDetails?.explanation) }
         let text = r.content.filter { $0.type == "text" }.compactMap(\.text).joined(separator: "\n\n")
         guard !text.isEmpty else { throw AnthropicError.empty }
         return text
@@ -75,16 +83,20 @@ public enum Keychain {
     static let service = "dev.rogal.triage"
 
     public static func get(_ account: String) -> String? {
-        let q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
-                                kSecAttrAccount as String: account, kSecReturnData as String: true]
+        let q: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
+            kSecAttrAccount as String: account, kSecReturnData as String: true,
+        ]
         var out: AnyObject?
         guard SecItemCopyMatching(q as CFDictionary, &out) == errSecSuccess, let d = out as? Data else { return nil }
         return String(data: d, encoding: .utf8)
     }
 
     public static func set(_ value: String?, for account: String) {
-        let base: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
-                                   kSecAttrAccount as String: account]
+        let base: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+        ]
         SecItemDelete(base as CFDictionary)
         guard let value, !value.isEmpty else { return }
         var add = base
