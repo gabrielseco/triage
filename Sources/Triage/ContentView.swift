@@ -104,7 +104,10 @@ struct Sidebar: View {
             }
             if !store.warnings.isEmpty {
                 Section("Partial data") {
-                    ForEach(store.warnings, id: \.self) { Text($0).font(.caption).foregroundStyle(.orange) }
+                    ForEach(store.warnings, id: \.self) {
+                        // Sidebar rows truncate to one line; these are sentences, so let them wrap.
+                        Text($0).font(.caption).foregroundStyle(.orange).lineLimit(3).help($0)
+                    }
                 }
             }
             if !store.dismissed.isEmpty || !store.snoozed.isEmpty {
