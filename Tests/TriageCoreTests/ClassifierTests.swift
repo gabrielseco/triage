@@ -125,3 +125,29 @@ private func comment(_ author: String, bot: Bool, _ body: String = "hi", url: St
     #expect(!p.contains("line 150\n"))
     #expect(p.contains("gh pr checkout 1020"))
 }
+
+private func thread(
+    _ n: Int, resolved: Bool = false, outdated: Bool = false, comments: Int = 1, bot: Bool = false
+) -> ReviewThreadInfo {
+    var c = comment(bot ? "bugbot" : "alice", bot: bot, url: "https://github.com/acme/web/pull/1020#r\(n)")
+    c.createdAt = Date(timeIntervalSince1970: TimeInterval(n))
+    return ReviewThreadInfo(isResolved: resolved, isOutdated: outdated, firstComment: c, commentCount: comments)
+}
+
+private func threadsID(_ threads: [ReviewThreadInfo]) -> String? {
+    Classifier.classify(pr(threads: threads)).items.first { $0.kind == .reviewThreads }?.id
+}
+
+@Test func resolvingOrOutdatingAThreadKeepsADismissalSticky() {
+    let before = threadsID([thread(1), thread(2)])
+    #expect(before != nil)
+    #expect(threadsID([thread(1), thread(2, resolved: true)]) == before)
+    #expect(threadsID([thread(1, outdated: true), thread(2)]) == before)
+}
+
+@Test func newConversationChangesTheReviewThreadsItem() {
+    let before = threadsID([thread(1), thread(2)])
+    #expect(threadsID([thread(1), thread(2, comments: 2)]) != before)  // a reply
+    #expect(threadsID([thread(1), thread(2), thread(3)]) != before)  // a new thread
+    #expect(threadsID([thread(1), thread(2), thread(3, bot: true)]) == before)  // bots have their own item
+}

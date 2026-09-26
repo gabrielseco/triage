@@ -75,19 +75,27 @@ public enum Classifier {
     /// All open threads started by humans collapse into one item.
     static func reviewThreads(_ pr: PullRequest, open: [ReviewThreadInfo]) -> AttentionItem? {
         let human = open.filter { !$0.firstComment.isBot }
-        guard let latest = human.max(by: { $0.firstComment.createdAt < $1.firstComment.createdAt }) else {
-            return nil
-        }
+        guard let first = human.first else { return nil }
         return AttentionItem(
-            id: "\(pr.id)|threads|\(latest.firstComment.url?.absoluteString ?? "\(human.count)")",
+            id: reviewThreadsID(pr),
             kind: .reviewThreads,
             severity: .medium,
             pr: pr,
             headline: human.count == 1
-                ? "\(latest.firstComment.author) left an unresolved comment"
+                ? "\(first.firstComment.author) left an unresolved comment"
                 : "\(human.count) unresolved review threads",
             evidence: human.map(threadEvidence)
         )
+    }
+
+    /// Changes when a reviewer says something new (a new thread or a reply), not when a thread is resolved
+    /// or goes outdated, so a dismissed item only comes back for new conversation. Built from every human
+    /// thread, resolved ones included, since the set of open ones shrinks as they're resolved.
+    static func reviewThreadsID(_ pr: PullRequest) -> String {
+        let human = pr.threads.filter { !$0.firstComment.isBot }
+        let newest = human.max { $0.firstComment.createdAt < $1.firstComment.createdAt }
+        let comments = human.reduce(0) { $0 + $1.commentCount }
+        return "\(pr.id)|threads|\(newest?.firstComment.url?.absoluteString ?? "")|\(comments)"
     }
 
     struct BotEntry {
