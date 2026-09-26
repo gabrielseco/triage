@@ -3,7 +3,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-APP="$HOME/Applications/Triage.app"
+APP="${TRIAGE_APP:-$HOME/Applications/Triage.app}"  # TRIAGE_APP: build elsewhere (/verify)
 BUNDLE_ID="dev.rogal.triage"
 
 swift build -c release -q --package-path "$ROOT"
