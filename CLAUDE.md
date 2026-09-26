@@ -9,6 +9,7 @@ Native macOS inbox for open PRs (SwiftUI, Swift 6, macOS 14+). Architecture: `RE
 scripts/check.sh         # what CI runs: swift-format, SwiftLint, Swift 6 build, tests, TriageCore coverage gate
 scripts/check.sh --fix   # auto-format first
 scripts/bundle.sh        # build ~/Applications/Triage.app (needed for notifications, login item, Fix in iTerm)
+scripts/snap.sh out.png  # screenshot the Triage window (out.mov 10 records 10s), used by /verify
 ```
 
 ## Workflow for every change
@@ -18,6 +19,8 @@ Do this without being asked:
 1. **Worktree.** Work in a git worktree under `.claude/worktrees/` (gitignored), branched from `origin/main`, never in the main checkout.
 2. **One PR per fix or feature.** Don't bundle unrelated changes.
 3. **Check before pushing.** `scripts/check.sh --fix` must pass. Add Swift Testing tests in `TriageCoreTests` for `TriageCore` changes.
+   For changes to the app target (`Sources/Triage`, `Resources`), run `/verify` too. It runs the PR build and
+   screenshots it, and those screenshots go in the PR.
 4. **Open the PR** with `.github/pull_request_template.md` (Summary, Why, collapsed What changed, Screenshots,
    Related Resources, Testing). Tick only the Testing boxes you actually ran.
 5. **Run `/pr-review` on the PR** and post the result on the PR itself: inline comments per finding, or a
