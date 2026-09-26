@@ -1,5 +1,6 @@
 import AppKit
 import ServiceManagement
+import TriageCore
 import UserNotifications
 
 @MainActor
@@ -71,7 +72,9 @@ enum ITerm {
     }
 
     /// Opens a new iTerm window running `path`. First use shows macOS's "Triage wants to control iTerm" prompt.
-    static func open(runningScript path: String) throws {
+    /// Runs through `osascript` rather than NSAppleScript, which is main-thread only and would freeze the UI
+    /// while iTerm launches or the permission prompt is up. Triage stays the responsible process for the prompt.
+    static func open(runningScript path: String) async throws {
         let escaped = path.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
         let source = """
             tell application "iTerm"
@@ -79,12 +82,12 @@ enum ITerm {
               create window with default profile command "\(escaped)"
             end tell
             """
-        var error: NSDictionary?
-        NSAppleScript(source: source)?.executeAndReturnError(&error)
-        if let error {
-            let msg = error[NSAppleScript.errorMessage] as? String ?? "AppleScript error"
+        let out = try await Subprocess.run("/usr/bin/osascript", ["-e", source])
+        guard out.status == 0 else {
+            let msg = out.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
             throw ScriptError(
-                message: "\(msg) — allow Triage under System Settings → Privacy & Security → Automation → iTerm.")
+                message: "\(msg.isEmpty ? "AppleScript error" : msg) — allow Triage under System Settings → "
+                    + "Privacy & Security → Automation → iTerm.")
         }
     }
 }
