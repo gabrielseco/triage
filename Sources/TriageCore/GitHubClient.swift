@@ -17,21 +17,12 @@ public enum GitHubError: LocalizedError {
 public enum GitHubAuth {
     /// GITHUB_TOKEN env var, else the `gh` CLI's token. The Phoenix backend will replace this with
     /// a per-user GitHub App installation token.
-    public static func resolveToken() -> String? {
+    public static func resolveToken() async -> String? {
         if let t = ProcessInfo.processInfo.environment["GITHUB_TOKEN"], !t.isEmpty { return t }
         for gh in ["/opt/homebrew/bin/gh", "/usr/local/bin/gh", "/usr/bin/gh"]
         where FileManager.default.isExecutableFile(atPath: gh) {
-            let p = Process()
-            p.executableURL = URL(fileURLWithPath: gh)
-            p.arguments = ["auth", "token"]
-            let out = Pipe()
-            p.standardOutput = out
-            p.standardError = Pipe()
-            do { try p.run() } catch { continue }
-            p.waitUntilExit()
-            let token = String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            if p.terminationStatus == 0, !token.isEmpty { return token }
+            guard let out = try? await Subprocess.run(gh, ["auth", "token"]) else { continue }
+            if out.status == 0, !out.trimmedStdout.isEmpty { return out.trimmedStdout }
         }
         return nil
     }
@@ -107,6 +98,20 @@ public struct GitHubClient: Sendable {
         req.setValue("application/vnd.github.diff", forHTTPHeaderField: "Accept")
         guard let data = try? await send(req) else { return nil }
         return String(decoding: data, as: UTF8.self)
+    }
+
+    // MARK: - Mutations
+
+    /// Closes the pull request without merging it (it can be reopened on GitHub).
+    public func closePullRequest(_ repo: RepoRef, number: Int) async throws {
+        _ = try await send(try closeRequest(repo, number: number))
+    }
+
+    func closeRequest(_ repo: RepoRef, number: Int) throws -> URLRequest {
+        var req = request(api.appendingPathComponent("repos/\(repo.fullName)/pulls/\(number)"))
+        req.httpMethod = "PATCH"
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["state": "closed"])
+        return req
     }
 
     // MARK: - Plumbing

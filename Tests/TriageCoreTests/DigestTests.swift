@@ -64,3 +64,14 @@ private func item(_ n: Int, _ kind: AttentionKind = .ciFailure, _ sev: Severity 
     #expect(d.body.contains("+3 more"))
     #expect(d.body.components(separatedBy: "\n").count == 5)
 }
+
+@Test func waitingItemsNeverMakeADigest() {
+    let waiting = [item(3, .awaitingReview, .info), item(4, .awaitingChecks, .info)]
+    let d = DigestBuilder.build(current: [item(1)] + waiting, previousIDs: [item(1).id], since: nil, calendar: cal)
+    #expect(d.newItems.isEmpty)
+    #expect(d.openCount == 1)
+    #expect(d.trackedIDs == [item(1).id])
+    // It never enters the baseline, so a waiting PR going away doesn't count as cleared either.
+    let later = DigestBuilder.build(current: [item(1)], previousIDs: d.trackedIDs, since: nil, calendar: cal)
+    #expect(later.clearedCount == 0)
+}

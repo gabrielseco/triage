@@ -6,15 +6,21 @@ public struct Digest: Sendable {
     /// Items open at the previous digest that are gone now (fixed, merged, dismissed, or superseded by a push).
     public var clearedCount: Int
     public var openCount: Int
+    /// Ids the next digest measures "new" against: the tracked items open now.
+    public var trackedIDs: Set<String>
     public var title: String
     public var body: String
 }
 
 public enum DigestBuilder {
+    /// What digests report on: passive items (waiting on review or CI) would make every opened PR "new".
+    public static func tracked(_ items: [AttentionItem]) -> [AttentionItem] { items.filter { !$0.kind.isPassive } }
+
     public static func build(
-        current: [AttentionItem], previousIDs: Set<String>, since: Date?,
+        current all: [AttentionItem], previousIDs: Set<String>, since: Date?,
         calendar: Calendar = .current
     ) -> Digest {
+        let current = tracked(all)
         let currentIDs = Set(current.map(\.id))
         let new =
             current
@@ -32,7 +38,7 @@ public enum DigestBuilder {
         lines.append(tally.joined(separator: " · "))
 
         return Digest(
-            newItems: new, clearedCount: cleared, openCount: current.count,
+            newItems: new, clearedCount: cleared, openCount: current.count, trackedIDs: currentIDs,
             title: title, body: lines.joined(separator: "\n"))
     }
 

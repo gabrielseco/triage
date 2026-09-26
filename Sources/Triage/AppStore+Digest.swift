@@ -12,7 +12,7 @@ extension AppStore {
         guard lastRefresh != nil, errors.count < max(repos.count, 1) else { return }  // don't digest stale data
         guard digestBaseline != nil else {
             // First run: everything open now is the baseline, so the first digest isn't "13 new".
-            digestBaseline = Set(activeItems.map(\.id))
+            digestBaseline = Set(DigestBuilder.tracked(activeItems).map(\.id))
             lastDigestAt = now
             return
         }
@@ -25,11 +25,10 @@ extension AppStore {
 
     func sendDigest(force: Bool, now: Date = Date()) async {
         if force { await refresh() }
-        let current = activeItems
-        let digest = DigestBuilder.build(current: current, previousIDs: digestBaseline ?? [], since: lastDigestAt)
+        let digest = DigestBuilder.build(current: activeItems, previousIDs: digestBaseline ?? [], since: lastDigestAt)
         guard await Notifier.send(title: digest.title, body: digest.body) || force else { return }
         lastDigestItemIDs = Set(digest.newItems.map(\.id))
-        digestBaseline = Set(current.map(\.id))
+        digestBaseline = digest.trackedIDs
         lastDigestAt = now
     }
 }
