@@ -140,3 +140,7 @@ private func decodePR() throws -> PullRequest {
     let snapshot = RepoSnapshot(pullRequests: [], rateLimit: .init(remaining: 4000, resetAt: Date()))
     #expect(RepoSnapshot.merging([snapshot, RepoSnapshot(pullRequests: [])]).allWarnings.isEmpty)
 }
+
+@Test func changesURLPointsAtTheDiff() throws {
+    #expect(try decodePR().changesURL.absoluteString == "https://github.com/remoteoss/remote-flows/pull/1392/changes")
+}

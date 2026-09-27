@@ -107,10 +107,11 @@ struct ItemDetailView: View {
                 Text(closeMessage)
             }
             Button {
-                openURL(item.pr.url)
+                openURL(item.pr.changesURL)
             } label: {
                 Label("Open", systemImage: "safari")
             }
+            .help("Open the PR's changes on GitHub")
             .keyboardShortcut("o")
         }
     }
