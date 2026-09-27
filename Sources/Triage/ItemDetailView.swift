@@ -77,6 +77,16 @@ struct ItemDetailView: View {
                 }
                 .fixedSize()
             }
+            Menu {
+                Button("Copy prompt for a chat") { Task { await store.copyExplainPRPrompt(for: item) } }
+            } label: {
+                Label("Explain PR", systemImage: "text.magnifyingglass")
+            } primaryAction: {
+                Task { await store.explainPRInTerminal(item) }
+            }
+            .fixedSize()
+            .help("Open Claude in iTerm in this PR's worktree to walk you through it (arrow: copy the prompt instead)")
+            .keyboardShortcut("e", modifiers: [.command, .shift])
             Spacer()
             Menu {
                 Button("1 hour") { store.snooze(item, for: 3600) }

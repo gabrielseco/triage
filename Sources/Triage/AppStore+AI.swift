@@ -26,6 +26,23 @@ extension AppStore {
         return PromptBuilder.prompt(for: item, context: ctx, mode: mode)
     }
 
+    /// Explain PR: the PR's description and diff, whatever the item is.
+    func buildExplainPRPrompt(for pr: PullRequest, inWorktree: Bool) async -> String {
+        var diff: String?
+        if let token = await GitHubAuth.resolveToken() {
+            diff = await GitHubClient(token: token).diff(pr.repo, number: pr.number)
+        }
+        return PromptBuilder.explainPRPrompt(for: pr, diff: diff, inWorktree: inWorktree)
+    }
+
+    func copyExplainPRPrompt(for item: AttentionItem) async {
+        actionStatus[item.id] = "Fetching the diff…"
+        let text = await buildExplainPRPrompt(for: item.pr, inWorktree: false)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        actionStatus[item.id] = "Copied the Explain PR prompt (\(text.count / 1000) KB) to the clipboard"
+    }
+
     func copyPrompt(for item: AttentionItem, mode: PromptMode) async {
         actionStatus[item.id] = "Fetching logs and diff…"
         let text = await buildPrompt(for: item, mode: mode)
