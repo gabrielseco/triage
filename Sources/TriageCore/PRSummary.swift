@@ -58,8 +58,10 @@ public enum PRSummary {
     /// The text of a markdown heading, lowercased and without a trailing colon, or nil if it isn't one.
     static func headingText(_ line: String) -> String? {
         let trimmed = line.trimmingCharacters(in: .whitespaces)
-        guard trimmed.hasPrefix("#") else { return nil }
-        let text = trimmed.drop { $0 == "#" }.trimmingCharacters(in: .whitespaces)
+        // 1–6 #s then a space, so "#1234 follow-up" or "#hashtag" isn't a heading.
+        let hashes = trimmed.prefix { $0 == "#" }.count
+        guard (1...6).contains(hashes), trimmed.dropFirst(hashes).first == " " else { return nil }
+        let text = trimmed.dropFirst(hashes).trimmingCharacters(in: .whitespaces)
         return text.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: ":"))
     }
 
@@ -77,14 +79,26 @@ public enum PRSummary {
         line.allSatisfy { "|-: ".contains($0) }
     }
 
-    /// Drops images and HTML, keeps only link text.
+    /// Drops images and HTML tags, keeps only link text. Tags are only removed outside code spans, so
+    /// `Result<Void, Error>` survives.
     static func inline(_ text: String) -> String {
         text
             .replacingOccurrences(of: #"!\[[^\]]*\]\([^)]*\)"#, with: "", options: .regularExpression)
             .replacingOccurrences(of: #"\[([^\]]*)\]\([^)]*\)"#, with: "$1", options: .regularExpression)
-            .replacingOccurrences(of: #"<[^>]+>"#, with: "", options: .regularExpression)
+            .components(separatedBy: "`").enumerated()
+            .map { index, part in
+                guard index.isMultiple(of: 2) else { return part }
+                return part.replacingOccurrences(
+                    of: htmlTag, with: "", options: [.regularExpression, .caseInsensitive])
+            }
+            .joined(separator: "`")
             .trimmingCharacters(in: .whitespaces)
     }
+
+    /// HTML tags seen in PR descriptions; anything else in angle brackets (`Array<String>`) is kept.
+    static let htmlTag =
+        #"</?(a|abbr|b|br|code|div|em|h[1-6]|hr|i|img|kbd|li|ol|p|picture|pre|source|span|strong|sub|sup|table"#
+        + #"|tbody|td|th|thead|tr|u|ul|video)\b[^<>]*>"#
 
     static func truncated(_ lines: [String]) -> String {
         var text = lines.prefix(maxLines).joined(separator: "\n")

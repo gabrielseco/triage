@@ -66,3 +66,12 @@ import Testing
     #expect(lines.count == PRSummary.maxLines)
     #expect(lines.last == "- item 8…")
 }
+
+@Test func genericsAndIssueReferencesSurvive() {
+    #expect(
+        PRSummary.extract("Returns `Result<Void, Error>` from `load`.") == "Returns `Result<Void, Error>` from `load`.")
+    #expect(PRSummary.extract("Keeps an Array<String> of ids.<br>Done.") == "Keeps an Array<String> of ids.Done.")
+    #expect(
+        PRSummary.extract("#1234 follow-up: retries the upload.\n\n## Testing")
+            == "#1234 follow-up: retries the upload.")
+}
