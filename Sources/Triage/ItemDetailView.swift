@@ -37,6 +37,11 @@ struct ItemDetailView: View {
             let updated = item.pr.updatedAt.formatted(.relative(presentation: .named))
             Text("by \(item.pr.author) · \(item.pr.headRef) · updated \(updated)")
                 .font(.caption).foregroundStyle(.secondary)
+            if let summary = item.pr.summary {
+                Text(markdown(summary)).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 4)
+            }
         }
     }
 

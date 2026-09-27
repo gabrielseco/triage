@@ -107,6 +107,8 @@ public struct PullRequest: Identifiable, Hashable, Sendable {
     public var checks: [CheckInfo]
     public var threads: [ReviewThreadInfo]
     public var comments: [CommentInfo]
+    /// What the PR is about, from its description (`PRSummary`). Nil when the description says nothing usable.
+    public var summary: String?
 
     public var id: String { "\(repo.fullName)#\(number)" }
 
@@ -115,7 +117,8 @@ public struct PullRequest: Identifiable, Hashable, Sendable {
         isDraft: Bool = false,
         updatedAt: Date = .now, headSha: String, headRef: String = "branch",
         mergeable: Mergeable = .mergeable, reviewDecision: ReviewDecision = .none,
-        checks: [CheckInfo] = [], threads: [ReviewThreadInfo] = [], comments: [CommentInfo] = []
+        checks: [CheckInfo] = [], threads: [ReviewThreadInfo] = [], comments: [CommentInfo] = [],
+        summary: String? = nil
     ) {
         self.repo = repo
         self.number = number
@@ -132,6 +135,7 @@ public struct PullRequest: Identifiable, Hashable, Sendable {
         self.checks = checks
         self.threads = threads
         self.comments = comments
+        self.summary = summary
     }
 }
 
