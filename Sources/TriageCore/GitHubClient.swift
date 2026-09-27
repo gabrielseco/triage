@@ -147,7 +147,7 @@ public struct GitHubClient: Sendable {
             pullRequests(states: OPEN, first: 30, orderBy: {field: UPDATED_AT, direction: DESC}) {
               totalCount
               nodes {
-                number title url isDraft updatedAt mergeable reviewDecision headRefName
+                number title body url isDraft updatedAt mergeable reviewDecision headRefName
                 author { login __typename avatarUrl(size: 64) }
                 commits(last: 1) { nodes { commit { oid statusCheckRollup { contexts(first: 100) { totalCount nodes {
                   __typename
@@ -261,7 +261,7 @@ struct PRNode: Decodable {
         let comments: Comments
     }
 
-    let number: Int, title: String, url: URL, isDraft: Bool, updatedAt: Date
+    let number: Int, title: String, body: String?, url: URL, isDraft: Bool, updatedAt: Date
     let mergeable: String, reviewDecision: String?, headRefName: String
     let author: ActorNode?
     let commits: Conn<CommitNode>
@@ -297,7 +297,8 @@ struct PRNode: Decodable {
             reviewDecision: reviewDecision.flatMap(ReviewDecision.init(rawValue:)) ?? .none,
             checks: head?.statusCheckRollup?.contexts.nodes.map(\.model) ?? [],
             threads: threads,
-            comments: comments.nodes.map(\.model)
+            comments: comments.nodes.map(\.model),
+            summary: PRSummary.extract(body)
         )
     }
 }
