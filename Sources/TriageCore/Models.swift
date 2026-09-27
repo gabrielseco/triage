@@ -111,6 +111,8 @@ public struct PullRequest: Identifiable, Hashable, Sendable {
     public var summary: String?
 
     public var id: String { "\(repo.fullName)#\(number)" }
+    /// The PR's diff on GitHub (the "Files changed" tab).
+    public var changesURL: URL { url.appendingPathComponent("changes") }
 
     public init(
         repo: RepoRef, number: Int, title: String, url: URL, author: String, authorAvatar: URL? = nil,
