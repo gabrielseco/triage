@@ -20,6 +20,7 @@ public struct RepoRef: Hashable, Sendable, Identifiable {
         let base =
             switch forge {
             case .github: URL(string: "https://github.com")!
+            // `init(gitlabPath:host:)` checked the host; the fallback is unreachable.
             case .gitlab(let host): URL(string: "https://\(host)") ?? URL(string: "https://gitlab.com")!
             }
         return owner.split(separator: "/").reduce(base) { $0.appendingPathComponent(String($1)) }
@@ -39,9 +40,10 @@ public struct RepoRef: Hashable, Sendable, Identifiable {
         self.name = name
     }
 
-    /// A GitLab project from its full path, `group/subgroup/project`. Nil without a group.
+    /// A GitLab project from its full path, `group/subgroup/project`. Nil without a group, or if `host` isn't
+    /// a bare host name (so `url` can't point somewhere else).
     public init?(gitlabPath path: String, host: String) {
-        guard let slash = path.lastIndex(of: "/") else { return nil }
+        guard URL(string: "https://\(host)")?.host == host, let slash = path.lastIndex(of: "/") else { return nil }
         let owner = String(path[..<slash])
         let name = String(path[path.index(after: slash)...])
         guard !owner.isEmpty, !name.isEmpty else { return nil }

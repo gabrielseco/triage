@@ -35,6 +35,9 @@ import Testing
     #expect(r.pullsURL.absoluteString == "https://gitlab.com/acme/platform/web/-/merge_requests")
     #expect(RepoRef(gitlabPath: "web", host: "gitlab.com") == nil)
     #expect(RepoRef(gitlabPath: "/web", host: "gitlab.com") == nil)
+    for bad in ["gitlab.acme .com", "https://gitlab.com", "gitlab.com/x", ""] {
+        #expect(RepoRef(gitlabPath: "acme/web", host: bad) == nil, "host \(bad)")
+    }
 }
 
 /// A GitHub repo and a GitLab project with the same path are different repos, with different item ids.
