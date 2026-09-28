@@ -4,12 +4,14 @@ import Testing
 @testable import TriageCore
 
 private func pr(
-    draft: Bool = false, mergeable: Mergeable = .mergeable, review: ReviewDecision = .approved,
+    author: String = "me", approvedBy: Set<String> = [], draft: Bool = false, mergeable: Mergeable = .mergeable,
+    review: ReviewDecision = .approved,
     checks: [CheckState] = [.success]
 ) -> PullRequest {
     PullRequest(
         repo: RepoRef(owner: "o", name: "r"), number: 1, title: "t", url: URL(string: "https://github.com/o/r/pull/1")!,
-        author: "me", isDraft: draft, headSha: "abc", mergeable: mergeable, reviewDecision: review,
+        author: author, isDraft: draft, headSha: "abc", mergeable: mergeable, reviewDecision: review,
+        approvedBy: approvedBy,
         checks: checks.enumerated().map { CheckInfo(name: "c\($0.offset)", state: $0.element) })
 }
 
@@ -37,4 +39,13 @@ private func pr(
 
 @Test func mergeMethodMapsToRESTValues() {
     #expect(MergeMethod.allCases.map(\.restValue) == ["merge", "squash", "rebase"])
+}
+
+@Test func onlyOthersReadyPRsYouHaventApprovedCanBeApproved() {
+    #expect(pr(author: "teammate").canBeApproved(by: "me"))
+    #expect(!pr(author: "me").canBeApproved(by: "me"))
+    #expect(!pr(author: "teammate", approvedBy: ["me"]).canBeApproved(by: "me"))
+    #expect(pr(author: "teammate", approvedBy: ["someone"]).canBeApproved(by: "me"))
+    #expect(!pr(author: "teammate", draft: true).canBeApproved(by: "me"))
+    #expect(!pr(author: "teammate").canBeApproved(by: nil))
 }

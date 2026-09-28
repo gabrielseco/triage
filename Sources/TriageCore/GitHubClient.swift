@@ -144,6 +144,18 @@ public struct GitHubClient: Sendable {
         return req
     }
 
+    /// Approves the pull request as the viewer, pinned to `sha` so the approval is for the commit that was seen.
+    public func approvePullRequest(_ repo: RepoRef, number: Int, sha: String) async throws {
+        _ = try await send(try approveRequest(repo, number: number, sha: sha))
+    }
+
+    func approveRequest(_ repo: RepoRef, number: Int, sha: String) throws -> URLRequest {
+        var req = request(api.appendingPathComponent("repos/\(repo.fullName)/pulls/\(number)/reviews"))
+        req.httpMethod = "POST"
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["commit_id": sha, "event": "APPROVE"])
+        return req
+    }
+
     // MARK: - Plumbing
 
     func request(_ url: URL) -> URLRequest {
@@ -172,6 +184,7 @@ public struct GitHubClient: Sendable {
               nodes {
                 number title body url isDraft createdAt updatedAt mergeable reviewDecision headRefName
                 author { login __typename avatarUrl(size: 64) }
+                latestOpinionatedReviews(first: 30) { nodes { state author { login } } }
                 commits(last: 1) { nodes { commit { oid statusCheckRollup { contexts(first: 100) { totalCount nodes {
                   __typename
                   ... on CheckRun { name conclusion status detailsUrl databaseId title }
@@ -287,9 +300,16 @@ struct PRNode: Decodable {
         let comments: Comments
     }
 
+    /// Each reviewer's latest approval or change request (comment-only reviews don't count).
+    struct ReviewNode: Decodable {
+        let state: String
+        let author: ActorNode?
+    }
+
     let number: Int, title: String, body: String?, url: URL, isDraft: Bool, createdAt: Date, updatedAt: Date
     let mergeable: String, reviewDecision: String?, headRefName: String
     let author: ActorNode?
+    let latestOpinionatedReviews: Conn<ReviewNode>?
     let commits: Conn<CommitNode>
     let reviewThreads: CountedConn<ThreadNode>
     let comments: Conn<CommentNode>
@@ -322,6 +342,8 @@ struct PRNode: Decodable {
             headRef: headRefName,
             mergeable: Mergeable(rawValue: mergeable) ?? .unknown,
             reviewDecision: reviewDecision.flatMap(ReviewDecision.init(rawValue:)) ?? .none,
+            approvedBy: Set(
+                latestOpinionatedReviews?.nodes.filter { $0.state == "APPROVED" }.compactMap(\.author?.login) ?? []),
             checks: head?.statusCheckRollup?.contexts.nodes.map(\.model) ?? [],
             threads: threads,
             comments: comments.nodes.map(\.model),

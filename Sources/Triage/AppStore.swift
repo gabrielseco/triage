@@ -52,6 +52,8 @@ final class AppStore {
     var actionStatus: [String: String] = [:]
     /// PRs closed or merged from Triage, hidden until a refresh confirms they're gone from GitHub's open list.
     var closedPRIDs: Set<String> = []
+    /// `repo#number@headSha` approved from Triage, so Approve hides before a refresh reports the review.
+    var approvedHeads: Set<String> = []
     /// The merge or close waiting for a yes in the item detail.
     var confirming: PRConfirmation?
     private var autoRefreshStarted = false

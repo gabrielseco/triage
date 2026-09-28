@@ -57,6 +57,14 @@ struct ItemDetailView: View {
                 .disabled(item.pr.mergeBlocker != nil)
                 .help("\(item.pr.mergeMethod.title) on GitHub (⇧⌘M)")
             }
+            if store.canApprove(item.pr) {
+                Button {
+                    Task { await store.approvePullRequest(item) }
+                } label: {
+                    Label("Approve", systemImage: "checkmark.seal")
+                }
+                .help("Approve \(item.pr.author)'s PR on GitHub (⇧⌘A)")
+            }
             if item.kind.isFixable {
                 Button {
                     Task { await store.explain(item) }
@@ -130,7 +138,16 @@ struct ItemDetailView: View {
         ) { c in
             switch c.action {
             case .merge:
-                Button(c.item.pr.mergeMethod.title) { Task { await store.mergePullRequest(c.item) } }
+                let method = c.item.pr.mergeMethod.title
+                // Someone else's PR you haven't approved: approving is the default, merging as-is the fallback.
+                if store.canApprove(c.item.pr) {
+                    Button("Approve, then \(method.lowercased())") {
+                        Task { await store.mergePullRequest(c.item, approvingFirst: true) }
+                    }
+                    Button("\(method) without approving") { Task { await store.mergePullRequest(c.item) } }
+                } else {
+                    Button(method) { Task { await store.mergePullRequest(c.item) } }
+                }
             case .close:
                 Button("Close PR", role: .destructive) { Task { await store.closePullRequest(c.item) } }
             }
@@ -260,7 +277,7 @@ func markdown(_ s: String) -> AttributedString {
         ?? AttributedString(s)
 }
 
-/// Merge, close and open on GitHub: the item detail's Open menu and the Pull Request menu in the menu bar.
+/// Approve, merge, close and open on GitHub: the item detail's Open menu and the Pull Request menu in the menu bar.
 /// Shortcuts are bound in the menu bar only, so a key press can't fire both copies.
 struct PullRequestActions: View {
     @Environment(AppStore.self) private var store
@@ -269,6 +286,10 @@ struct PullRequestActions: View {
     var inMenuBar = false
 
     var body: some View {
+        if store.canApprove(item.pr) {
+            Button("Approve") { Task { await store.approvePullRequest(item) } }
+                .shortcut("a", modifiers: [.command, .shift], if: inMenuBar)
+        }
         Button("Merge…") { confirm(.merge) }
             .shortcut("m", modifiers: [.command, .shift], if: inMenuBar)
             .disabled(item.pr.mergeBlocker != nil)

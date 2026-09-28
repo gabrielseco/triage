@@ -24,6 +24,13 @@ extension PullRequest {
         return nil
     }
 
+    /// Whether the viewer can approve it: someone else's PR, ready for review, not approved by them yet.
+    /// GitHub doesn't let you approve your own PR.
+    public func canBeApproved(by viewer: String?) -> Bool {
+        guard let viewer else { return false }
+        return author != viewer && !isDraft && !approvedBy.contains(viewer)
+    }
+
     /// Reasons to think twice before merging, which branch protection may or may not enforce.
     public var mergeWarnings: [String] {
         var w: [String] = []
