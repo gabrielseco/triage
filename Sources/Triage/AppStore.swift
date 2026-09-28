@@ -73,7 +73,10 @@ final class AppStore {
         // The selected item may not be in the new list; move to its first item so the detail matches.
         didSet { if selectedItem == nil { selection = visibleItems.first?.id } }
     }
-    var selection: String?
+    var selection: String? {
+        // A merge or close asked for another item isn't answered by this one, nor later by surprise.
+        didSet { if confirming?.item.id != selection { confirming = nil } }
+    }
 
     init() {
         repos = Self.load("repos") ?? []

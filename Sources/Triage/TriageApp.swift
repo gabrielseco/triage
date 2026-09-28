@@ -23,13 +23,7 @@ struct TriageApp: App {
                 Button("Refresh") { Task { await delegate.store.refresh() } }
                     .keyboardShortcut("r")
             }
-            CommandMenu("Pull Request") {
-                if let item = delegate.store.selectedItem {
-                    PullRequestActions(item: item, inMenuBar: true).environment(delegate.store)
-                } else {
-                    Text("Select an item to act on its PR")
-                }
-            }
+            CommandMenu("Pull Request") { PullRequestMenu().environment(delegate.store) }
         }
 
         MenuBarExtra {
@@ -40,6 +34,19 @@ struct TriageApp: App {
 
         Settings {
             SettingsView().environment(delegate.store)
+        }
+    }
+}
+
+/// A view, not inline in `commands`, so it re-renders when the selection changes.
+struct PullRequestMenu: View {
+    @Environment(AppStore.self) private var store
+
+    var body: some View {
+        if let item = store.selectedItem {
+            PullRequestActions(item: item, inMenuBar: true)
+        } else {
+            Text("Select an item to act on its PR")
         }
     }
 }
