@@ -61,7 +61,7 @@ Two design rules drive everything:
 │ CI failing  1│ remote-flows #1385   🔇4  │ [Explain] [Copy prompt] [Snooze] │
 │ Merge confl 6│   ⤴ Conflicts with base   │                                  │
 │ …            │   ⚙ cursor: GBR schema…   │ Claude's answer (after Explain)  │
-│ Watching     │                           │ Evidence cards (checks, comments)│
+│ GitHub       │                           │ Evidence cards (checks, comments)│
 │  remote-flows│                           │                                  │
 └──────────────┴───────────────────────────┴──────────────────────────────────┘
 ```

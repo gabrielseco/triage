@@ -76,7 +76,7 @@ struct Sidebar: View {
                     row(k.title, k.symbol, store.count(k)).tag(SidebarFilter.kind(k))
                 }
             }
-            Section("Watching") {
+            Section("GitHub") {
                 ForEach(store.repos) { r in
                     row(r.fullName, "book.closed", store.count(repo: r.id))
                         .tag(SidebarFilter.repo(r.id))
