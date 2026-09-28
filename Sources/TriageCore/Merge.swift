@@ -43,7 +43,7 @@ extension PullRequest {
         case .reviewRequired: w.append("It isn't approved yet")
         case .approved, .none: break
         }
-        if mergeable == .unknown { w.append("GitHub is still checking mergeability") }
+        if mergeable == .unknown { w.append("\(repo.forge.name) is still checking mergeability") }
         return w
     }
 }

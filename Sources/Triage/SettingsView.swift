@@ -9,6 +9,10 @@ struct SettingsView: View {
     @State private var loginItem = LoginItem.isEnabled
     @State private var loginError: String?
     @State private var testResult: String?
+    @State private var gitlabHostDraft = ""
+    @State private var gitlabToken = ""
+    @State private var gitlabStatus: String?
+    @State private var gitlabFailed = false
 
     static let keySourceHelp = """
         Key source is a 1Password secret reference (item → field menu → Copy Secret Reference) \
@@ -109,6 +113,7 @@ struct SettingsView: View {
                 }
                 Button("Send a digest now") { Task { await store.sendDigest(force: true) } }
             }
+            gitlab
             Section("GitHub") {
                 Text(
                     ProcessInfo.processInfo.environment["GITHUB_TOKEN"] != nil
@@ -121,5 +126,71 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .frame(width: 440)
         .padding()
+        .onAppear { gitlabHostDraft = store.gitlabHost }
+    }
+
+    static let gitlabHelp = """
+        Merge requests assigned to you or waiting for your review, across your projects. Read-only for now: \
+        approve, merge and close them on GitLab; Fix in iTerm isn't available for them yet. The token needs the \
+        read_api scope and is kept in the Keychain (or set GITLAB_TOKEN).
+        """
+
+    private var gitlab: some View {
+        Section {
+            Toggle(
+                "Show GitLab merge requests",
+                isOn: Binding(
+                    get: { !store.gitlabHost.isEmpty },
+                    set: { on in
+                        store.gitlabHost = on ? (gitlabHostDraft.isEmpty ? "gitlab.com" : gitlabHostDraft) : ""
+                        gitlabHostDraft = store.gitlabHost
+                        report(nil)
+                        Task { await store.refresh() }
+                    }))
+            if !store.gitlabHost.isEmpty {
+                TextField("Host", text: $gitlabHostDraft, prompt: Text("gitlab.com"))
+                    .onSubmit {
+                        let host = gitlabHostDraft.trimmingCharacters(in: .whitespaces)
+                        guard !host.isEmpty, host != store.gitlabHost else { return }
+                        store.gitlabHost = host
+                        report(nil)
+                        Task { await store.refresh() }
+                    }
+                SecureField("Token", text: $gitlabToken, prompt: Text("Paste a new token"))
+                HStack {
+                    Button("Save token") {
+                        do {
+                            try store.saveGitLabToken(gitlabToken)
+                            gitlabToken = ""
+                            report("Saved to Keychain")
+                        } catch { report(error.localizedDescription, failed: true) }
+                    }
+                    .disabled(gitlabToken.isEmpty)
+                    Button("Test") {
+                        report("Signing in…")
+                        Task {
+                            do {
+                                let client = try await store.forgeClient(.gitlab(host: store.gitlabHost))
+                                report("✓ Signed in as \(try await client.viewer())")
+                            } catch { report(error.localizedDescription, failed: true) }
+                        }
+                    }
+                    if let gitlabStatus {
+                        Text(gitlabStatus).font(.caption).foregroundStyle(gitlabFailed ? .red : .secondary)
+                    } else if let me = store.gitlabViewer {
+                        Text("Signed in as \(me)").font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+            }
+        } header: {
+            Text("GitLab")
+        } footer: {
+            Text(Self.gitlabHelp).font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    private func report(_ status: String?, failed: Bool = false) {
+        gitlabStatus = status
+        gitlabFailed = failed
     }
 }

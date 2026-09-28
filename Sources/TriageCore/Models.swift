@@ -175,8 +175,15 @@ public struct PullRequest: Identifiable, Hashable, Sendable {
     public var mergeMethod: MergeMethod
 
     public var id: String { "\(repo.id)#\(number)" }
-    /// The PR's diff on GitHub (the "Files changed" tab).
-    public var changesURL: URL { url.appendingPathComponent("changes") }
+    /// The number as the forge writes it: `#12`, or `!12` for a GitLab merge request.
+    public var ref: String { "\(repo.forge.numberPrefix)\(number)" }
+    /// The PR's diff: GitHub's "Files changed" tab, GitLab's "Changes".
+    public var changesURL: URL {
+        switch repo.forge {
+        case .github: url.appendingPathComponent("changes")
+        case .gitlab: url.appendingPathComponent("diffs")
+        }
+    }
     /// Where Open goes: your own PR opens on its conversation, to see what reviewers said; anyone else's on the
     /// diff, since you're there to review it.
     public func primaryURL(viewer: String?) -> URL { author == viewer ? url : changesURL }

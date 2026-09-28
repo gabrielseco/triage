@@ -15,24 +15,25 @@ extension AppStore {
 
     /// Someone else's PR you haven't approved, counting approvals sent since the last refresh.
     func canApprove(_ pr: PullRequest) -> Bool {
-        pr.canBeApproved(by: viewer) && !approvedHeads.contains(Self.approvalKey(pr))
+        can(.approve, pr) && pr.canBeApproved(by: viewer(for: pr.repo.forge))
+            && !approvedHeads.contains(Self.approvalKey(pr))
     }
 
     func approvePullRequest(_ item: AttentionItem) async {
         guard await sendApproval(item) else { return }
-        actionStatus[item.id] = "Approved #\(item.pr.number)"
+        actionStatus[item.id] = "Approved \(item.pr.ref)"
         await refresh()  // it may be ready to merge now
     }
 
     /// Posts the approval, with progress and errors in the item's status. Returns whether it went through.
     private func sendApproval(_ item: AttentionItem) async -> Bool {
         let pr = item.pr
-        actionStatus[item.id] = "Approving #\(pr.number)…"
+        actionStatus[item.id] = "Approving \(pr.ref)…"
         do {
             try await approve(pr, with: try await forgeClient(pr.repo.forge))
             return true
         } catch {
-            actionStatus[item.id] = "Couldn't approve #\(pr.number): \(error.localizedDescription)"
+            actionStatus[item.id] = "Couldn't approve \(pr.ref): \(error.localizedDescription)"
             return false
         }
     }
@@ -74,11 +75,11 @@ extension AppStore {
         _ item: AttentionItem, doing: String, failed: String, _ change: (any ForgeClient) async throws -> Void
     ) async {
         let pr = item.pr
-        actionStatus[item.id] = "\(doing) #\(pr.number)…"
+        actionStatus[item.id] = "\(doing) \(pr.ref)…"
         do {
             try await change(try await forgeClient(pr.repo.forge))
         } catch {
-            actionStatus[item.id] = "Couldn't \(failed) #\(pr.number): \(error.localizedDescription)"
+            actionStatus[item.id] = "Couldn't \(failed) \(pr.ref): \(error.localizedDescription)"
             return
         }
         actionStatus[item.id] = nil

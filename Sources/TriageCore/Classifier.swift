@@ -208,7 +208,7 @@ public enum Classifier {
             kind: .awaitingChecks,
             severity: .info,
             pr: pr,
-            headline: "Approved · \(running ?? "GitHub is still checking mergeability")",
+            headline: "Approved · \(running ?? "\(pr.repo.forge.name) is still checking mergeability")",
             evidence: pr.checks.filter { $0.state == .pending }.map {
                 Evidence(title: "\($0.name) is running", url: $0.url)
             }

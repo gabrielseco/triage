@@ -6,6 +6,37 @@ public enum Forge: Hashable, Sendable {
     /// A GitLab instance by host, e.g. `gitlab.com`.
     case gitlab(host: String)
 
+    public var name: String {
+        switch self {
+        case .github: "GitHub"
+        case .gitlab: "GitLab"
+        }
+    }
+
+    /// How a PR number is written: `#12` on GitHub, `!12` for a GitLab merge request.
+    public var numberPrefix: String {
+        switch self {
+        case .github: "#"
+        case .gitlab: "!"
+        }
+    }
+
+    /// What the forge calls a pull request, for labels.
+    public var pullRequestsName: String {
+        switch self {
+        case .github: "Pull requests"
+        case .gitlab: "Merge requests"
+        }
+    }
+
+    /// The CLI command that shows a PR, for prompts: `gh pr view 12`, `glab mr view 12`.
+    public func cli(_ verb: String, _ number: Int) -> String {
+        switch self {
+        case .github: "gh pr \(verb) \(number)"
+        case .gitlab: "glab mr \(verb) \(number)"
+        }
+    }
+
     /// What Triage can do with this forge's pull requests; views hide what's missing.
     public var capabilities: ForgeCapabilities {
         switch self {
@@ -39,8 +70,9 @@ public protocol ForgeClient: Sendable {
 
     /// The signed-in user's login, for "Mine" and whose comments are new.
     func viewer() async throws -> String
-    /// Every watched source's open pull requests. One source failing doesn't lose the others.
-    func fetch() async -> [RepoResult]
+    /// Every watched source's open pull requests. One repo failing doesn't lose the others; it throws only when
+    /// nothing could be read (a bad token, the instance unreachable).
+    func fetch() async throws -> [RepoResult]
 
     /// The log or output of a failed check, for the fix prompt. Nil if there's none to read.
     func ciLog(_ pr: PullRequest, checkRunID: Int) async -> String?
@@ -141,4 +173,36 @@ public struct GitHubForge: ForgeClient {
     public func close(_ pr: PullRequest) async throws {
         try await client.closePullRequest(pr.repo, number: pr.number)
     }
+}
+
+/// GitLab behind `ForgeClient`, read-only for now: the merge requests assigned to the viewer or waiting on
+/// their review, across projects. Actions throw until their capability is turned on.
+public struct GitLabForge: ForgeClient {
+    let client: GitLabClient
+
+    public var forge: Forge { .gitlab(host: client.host) }
+
+    public init(host: String, token: String) { client = GitLabClient(host: host, token: token) }
+
+    public func viewer() async throws -> String { try await client.viewerUsername() }
+
+    public func fetch() async throws -> [RepoResult] { Self.results(try await client.mergeRequests()) }
+
+    /// One result per project, so projects behave like watched repos (new-PR clocks, the sidebar). Warnings
+    /// aren't per project, so they ride on the first one; they're merged and sorted with the rest anyway.
+    static func results(_ snapshot: RepoSnapshot) -> [RepoResult] {
+        let byRepo = Dictionary(grouping: snapshot.pullRequests, by: \.repo)
+        return byRepo.keys.sorted { $0.id < $1.id }.enumerated().map { i, repo in
+            RepoResult(
+                repo: repo,
+                result: .success(
+                    RepoSnapshot(pullRequests: byRepo[repo] ?? [], warnings: i == 0 ? snapshot.warnings : [])))
+        }
+    }
+
+    public func ciLog(_ pr: PullRequest, checkRunID: Int) async -> String? { nil }
+    public func diff(_ pr: PullRequest) async -> String? { nil }
+    public func approve(_ pr: PullRequest) async throws { throw ForgeError.unsupported(forge) }
+    public func merge(_ pr: PullRequest) async throws { throw ForgeError.unsupported(forge) }
+    public func close(_ pr: PullRequest) async throws { throw ForgeError.unsupported(forge) }
 }
