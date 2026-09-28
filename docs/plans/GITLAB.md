@@ -1,6 +1,7 @@
 # Plan: GitLab merge requests assigned to me
 
-Status: plan agreed, nothing built yet. Date: 2026-09-28.
+Status: phases 1–4 shipped (#33–#36), GitLab MRs show read-only. Phase 5 is on hold until it's needed:
+see [Still missing](#still-missing). Updated: 2026-09-28.
 
 ## Goal
 
@@ -170,7 +171,62 @@ is slower per refresh. `glab` stays only as an optional checkout command.
    (`#`/`!`, "GitHub is still checking…", `gh pr view` in prompts). `/verify` + `/design-review`.
 5. **Turn capabilities on, one PR each:** `.diff` + `.ciLogs` (AI summaries and fix prompts), `.checkout`
    (Handoff, extend `HandoffScriptIntegrationTests`), then `.approve`, `.merge`, `.close` (needs `api` scope,
-   GitLab merge methods).
+   GitLab merge methods). **On hold:** broken down with implementation notes in [Still missing](#still-missing).
+
+## Still missing
+
+Phases 1–4 are in: GitLab MRs assigned to you or waiting on your review show in the inbox and the sidebar,
+classified like GitHub PRs, with every action GitLab can't do yet hidden (`Forge.gitlab.capabilities == []`).
+What's below is parked on purpose: none of it was needed day to day yet. Pick an item up when it is. Each is
+one PR, and most start by adding a capability to `Forge.capabilities` for `.gitlab`, which un-hides the UI
+that's already there for GitHub.
+
+### Works with the current `read_api` token
+
+1. **Diff in prompts** (`.diff`). "Explain & propose fix", "Copy prompt" and "Explain PR" get no code changes
+   for a GitLab MR today. Implement `GitLabForge.diff` with REST
+   `GET /api/v4/projects/:id/merge_requests/:iid/raw_diffs` (`:id` is the URL-encoded full path), and return nil
+   on failure like GitHub. Then add `.diff` to GitLab's capabilities.
+2. **CI job logs in fix prompts** (`.ciLogs`). `CheckInfo.checkRunID` already holds the numeric job id (parsed
+   from `gid://gitlab/Ci::Build/<id>`). Implement `GitLabForge.ciLog` with REST
+   `GET /api/v4/projects/:id/jobs/:job_id/trace`. The synthetic "Pipeline" check has no job id, so it gets no
+   log: consider pointing it at the first failed job of a downstream pipeline instead. Ship together with 1.
+3. **"Waiting on you" for reviews.** The list query knows whether an MR came from `assignedMergeRequests` or
+   `reviewRequestedMergeRequests`, but `PullRequest` drops it. Carry a `role` (assignee / reviewer / both) on
+   `PullRequest` (or on `GitLabClient`'s result), and let `Classifier.awaitingReview` say "Waiting for your
+   review" when you're a reviewer who hasn't reviewed (`reviewState == UNREVIEWED` for the viewer). Needs a
+   Classifier test; the item id must not change when only `role` changes.
+4. **Fix in iTerm and Explain PR in iTerm** (`.checkout`).
+   - `Handoff.originMatches` already works for GitLab remotes (`git@gitlab.com:group/sub/project.git`), and
+     `findCheckout` looks for `<root>/<project name>`. Check both with a GitLab fixture.
+   - Add "Set local checkout…" to the GitLab sidebar rows' context menu (`checkoutPaths` is keyed by
+     `repo.id`, so it's host-aware already).
+   - The handoff script's fork fallback runs `gh pr checkout`. Pass the forge's command in
+     (`Forge.cli("checkout", n)`, i.e. `glab mr checkout n`) or drop the fallback for GitLab: there are no
+     fork MRs, so `git fetch origin <branch>` always works.
+   - Extend `HandoffScriptIntegrationTests`.
+5. **Bot noise for GitLab-only bots.** `Classifier.noiseBots` is GitHub logins. The Terraform plan bot on
+   GitLab posts "0 failure:" plans that the alarm words flag as findings. Either add GitLab bot names to the
+   set (display names for access-token bots, see `GLUser.login`) or make the list a setting.
+
+### Needs a token with the `api` scope
+
+Settings should say which scope is missing when a write gets a 403, rather than a raw error.
+
+6. **Approve** (`.approve`). `POST /api/v4/projects/:id/merge_requests/:iid/approve` with `sha` = head, so the
+   approval is for the commit you saw (like GitHub's `commit_id`). `PullRequest.canBeApproved` already works from
+   `approvedBy`; GitLab also allows approving your own MR if the project permits it, so check that rule.
+7. **Merge** (`.merge`). `PUT /api/v4/projects/:id/merge_requests/:iid/merge` with `sha` (GitLab answers 409 if
+   the head moved) and `squash`. Fetch the project's `mergeMethod` (merge / rebase_merge / ff) and
+   `squashOption` in the detail query and map them onto `MergeMethod` (or a GitLab variant). `mergeBlocker`
+   should read `detailedMergeStatus` (`DISCUSSIONS_NOT_RESOLVED`, `CI_MUST_PASS`, `NOT_APPROVED`, …), and
+   "Merge when pipeline succeeds" is worth considering.
+8. **Close** (`.close`). `PUT /api/v4/projects/:id/merge_requests/:iid` with `state_event=close`.
+
+### Not GitLab, found on the way
+
+- At the minimum window size (1000×600) the three columns overflow the window on `main` too: the sidebar's
+  leading edge and the detail's trailing buttons clip. Found in #36's design review.
 
 ## Risks
 
