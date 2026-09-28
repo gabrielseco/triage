@@ -110,6 +110,8 @@ public struct PullRequest: Identifiable, Hashable, Sendable {
     public var comments: [CommentInfo]
     /// What the PR is about, from its description (`PRSummary`). Nil when the description says nothing usable.
     public var summary: String?
+    /// The method GitHub's merge button would use for the viewer: their last one, or the repo's default.
+    public var mergeMethod: MergeMethod
 
     public var id: String { "\(repo.fullName)#\(number)" }
     /// The PR's diff on GitHub (the "Files changed" tab).
@@ -121,7 +123,7 @@ public struct PullRequest: Identifiable, Hashable, Sendable {
         updatedAt: Date = .now, headSha: String, headRef: String = "branch",
         mergeable: Mergeable = .mergeable, reviewDecision: ReviewDecision = .none,
         checks: [CheckInfo] = [], threads: [ReviewThreadInfo] = [], comments: [CommentInfo] = [],
-        summary: String? = nil
+        summary: String? = nil, mergeMethod: MergeMethod = .merge
     ) {
         self.repo = repo
         self.number = number
@@ -140,6 +142,7 @@ public struct PullRequest: Identifiable, Hashable, Sendable {
         self.threads = threads
         self.comments = comments
         self.summary = summary
+        self.mergeMethod = mergeMethod
     }
 }
 

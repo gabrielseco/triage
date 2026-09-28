@@ -10,7 +10,7 @@ private let truncated = Data(
     """
     {"data": {
       "rateLimit": {"remaining": 4000, "resetAt": "2026-09-26T12:00:00Z"},
-      "repository": {"pullRequests": {"totalCount": 42, "nodes": [{
+      "repository": {"viewerDefaultMergeMethod": "SQUASH", "pullRequests": {"totalCount": 42, "nodes": [{
         "number": 7, "title": "t", "url": "https://github.com/o/r/pull/7", "isDraft": false,
         "createdAt": "2026-09-25T10:00:00Z", "updatedAt": "2026-09-26T10:00:00Z",
         "mergeable": "MERGEABLE", "reviewDecision": null, "headRefName": "b",
@@ -146,4 +146,11 @@ private func decodePR() throws -> PullRequest {
 
 @Test func changesURLPointsAtTheDiff() throws {
     #expect(try decodePR().changesURL.absoluteString == "https://github.com/remoteoss/remote-flows/pull/1392/changes")
+}
+
+@Test func viewerDefaultMergeMethodDecodes() throws {
+    #expect(try decode(truncated).repository?.viewerDefaultMergeMethod == "SQUASH")
+    let missing = String(decoding: truncated, as: UTF8.self)
+        .replacingOccurrences(of: #""viewerDefaultMergeMethod": "SQUASH", "#, with: "")
+    #expect(try decode(Data(missing.utf8)).repository?.viewerDefaultMergeMethod == nil)
 }

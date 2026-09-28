@@ -8,9 +8,15 @@ public enum GitHubError: LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .noToken: "No GitHub token. Set GITHUB_TOKEN or run `gh auth login`."
-        case .http(let code, let body): "GitHub HTTP \(code): \(body.prefix(300))"
+        case .http(let code, let body): "GitHub HTTP \(code): \(Self.message(in: body) ?? String(body.prefix(300)))"
         case .graphql(let msg): "GitHub GraphQL: \(msg)"
         }
+    }
+
+    /// The `message` of a REST error body, e.g. "Pull Request is not mergeable".
+    static func message(in body: String) -> String? {
+        struct Body: Decodable { let message: String }
+        return try? JSONDecoder().decode(Body.self, from: Data(body.utf8)).message
     }
 }
 
@@ -58,7 +64,10 @@ public struct GitHubClient: Sendable {
         }
         warnings += prs.flatMap { $0.truncationWarnings(repo: repo) }
         let rateLimit = d.rateLimit.map { RepoSnapshot.RateLimit(remaining: $0.remaining, resetAt: $0.resetAt) }
-        return RepoSnapshot(pullRequests: prs.map { $0.toModel(repo: repo) }, warnings: warnings, rateLimit: rateLimit)
+        let method = r.viewerDefaultMergeMethod.flatMap(MergeMethod.init(rawValue:)) ?? .merge
+        return RepoSnapshot(
+            pullRequests: prs.map { $0.toModel(repo: repo, mergeMethod: method) }, warnings: warnings,
+            rateLimit: rateLimit)
     }
 
     func graphql<T: Decodable>(_ query: String, variables: [String: String]) async throws -> T {
@@ -122,6 +131,19 @@ public struct GitHubClient: Sendable {
         return req
     }
 
+    /// Merges the pull request, but only if its head is still `sha`, so a push since the last refresh isn't
+    /// merged unseen (GitHub answers 409).
+    public func mergePullRequest(_ repo: RepoRef, number: Int, sha: String, method: MergeMethod) async throws {
+        _ = try await send(try mergeRequest(repo, number: number, sha: sha, method: method))
+    }
+
+    func mergeRequest(_ repo: RepoRef, number: Int, sha: String, method: MergeMethod) throws -> URLRequest {
+        var req = request(api.appendingPathComponent("repos/\(repo.fullName)/pulls/\(number)/merge"))
+        req.httpMethod = "PUT"
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["sha": sha, "merge_method": method.restValue])
+        return req
+    }
+
     // MARK: - Plumbing
 
     func request(_ url: URL) -> URLRequest {
@@ -144,6 +166,7 @@ public struct GitHubClient: Sendable {
         query($owner: String!, $name: String!) {
           rateLimit { remaining resetAt }
           repository(owner: $owner, name: $name) {
+            viewerDefaultMergeMethod
             pullRequests(states: OPEN, first: 30, orderBy: {field: UPDATED_AT, direction: DESC}) {
               totalCount
               nodes {
@@ -237,7 +260,10 @@ struct ContextNode: Decodable {
 }
 
 struct RepoData: Decodable {
-    struct Repo: Decodable { let pullRequests: CountedConn<PRNode> }
+    struct Repo: Decodable {
+        let viewerDefaultMergeMethod: String?
+        let pullRequests: CountedConn<PRNode>
+    }
     struct RateLimit: Decodable {
         let remaining: Int
         let resetAt: Date
@@ -280,7 +306,7 @@ struct PRNode: Decodable {
         return w
     }
 
-    func toModel(repo: RepoRef) -> PullRequest {
+    func toModel(repo: RepoRef, mergeMethod: MergeMethod = .merge) -> PullRequest {
         let head = commits.nodes.last?.commit
         let threads: [ReviewThreadInfo] = reviewThreads.nodes.compactMap { t in
             guard let first = t.comments.nodes.first else { return nil }
@@ -299,7 +325,8 @@ struct PRNode: Decodable {
             checks: head?.statusCheckRollup?.contexts.nodes.map(\.model) ?? [],
             threads: threads,
             comments: comments.nodes.map(\.model),
-            summary: PRSummary.extract(body)
+            summary: PRSummary.extract(body),
+            mergeMethod: mergeMethod
         )
     }
 }
