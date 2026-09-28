@@ -85,14 +85,14 @@ query {
 
 ## Adapter: one interface per forge
 
-The app talks to a `ForgeClient` protocol; `GitHubClient` and `GitLabClient` implement it. Everything above the
+The app talks to a `ForgeClient` protocol; `GitHubForge` (wrapping today's `GitHubClient`) and `GitLabClient`
+implement it. Everything above the
 client (Classifier, AppStore, views) sees only `PullRequest`, `RepoSnapshot` and the protocol, so GitLab is
 "just another adapter".
 
 ```swift
 public protocol ForgeClient: Sendable {
     var forge: Forge { get }
-    var capabilities: ForgeCapabilities { get }
 
     func viewer() async throws -> String
     /// GitHub: one query per watched repo. GitLab: one "my MRs" query, grouped into snapshots per project.
