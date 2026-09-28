@@ -224,3 +224,10 @@ private func threadsID(_ threads: [ReviewThreadInfo]) -> String? {
     let (items, _) = Classifier.classify(pr(), viewer: "someone-else")
     #expect(items.map(\.kind) == [.awaitingReview])
 }
+
+@Test func noiseBotPRIsNeverNew() {
+    var bump = pr()
+    bump.author = "renovate[bot]"
+    let (items, _) = Classifier.classify(bump, viewer: "someone-else", isNew: true)
+    #expect(!items.map(\.kind).contains(.newPR))
+}

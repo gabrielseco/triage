@@ -216,7 +216,10 @@ final class AppStore {
         }
         let fetched = merged.pullRequests
         var seen = seenPRs
-        seen.startWatching(results.filter { (try? $0.result.get()) != nil }.map(\.repo))
+        // Against the current repos, not `watched`: a repo removed mid-fetch mustn't get its clock back.
+        let stillWatched = Set(repos)
+        seen.startWatching(
+            results.filter { stillWatched.contains($0.repo) && (try? $0.result.get()) != nil }.map(\.repo))
 
         var newItems: [AttentionItem] = []
         var newStats: [String: PRStats] = [:]
