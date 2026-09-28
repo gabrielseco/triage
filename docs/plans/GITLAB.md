@@ -98,14 +98,13 @@ public protocol ForgeClient: Sendable {
     /// GitHub: one query per watched repo. GitLab: one "my MRs" query, grouped into snapshots per project.
     func fetch() async -> [RepoResult]
 
-    /// GitHub: the Actions job log, or the check run's output for other checks.
-    func ciLog(_ pr: PullRequest, check: CheckInfo) async -> String?
+    /// GitHub: the Actions job log, or the check run's output for other checks. GitLab: the job trace.
+    func ciLog(_ pr: PullRequest, checkRunID: Int) async -> String?
     func diff(_ pr: PullRequest) async -> String?
     func approve(_ pr: PullRequest) async throws
-    func merge(_ pr: PullRequest, method: MergeMethod) async throws
+    /// With `pr.mergeMethod`, pinned to `pr.headSha`.
+    func merge(_ pr: PullRequest) async throws
     func close(_ pr: PullRequest) async throws
-    /// The shell command that checks the branch out, for Handoff and the prompts.
-    func checkoutCommand(_ pr: PullRequest) -> String
 }
 
 public struct ForgeCapabilities: OptionSet, Sendable {
@@ -120,7 +119,8 @@ public struct ForgeCapabilities: OptionSet, Sendable {
   and merges results. A failing client goes to `errors` without losing the others' data.
 - **Methods take a `PullRequest`, not `(RepoRef, number)`,** so each adapter reads what it needs (`iid`,
   project id, `headSha`) without the protocol knowing about either forge.
-- **Capabilities gate the UI.** `store.can(.merge, pr)` checks `client(for: pr.repo.forge).capabilities`.
+- **Capabilities gate the UI.** They live on `Forge` (`pr.repo.forge.capabilities`), so a view can check them
+  without resolving a token.
   Buttons, menu items and prompt sections that need a missing capability are hidden, not disabled with an
   error. GitHub is `.all`; GitLab starts at `[]` and grows one phase at a time. Unimplemented GitLab methods
   throw `ForgeError.unsupported`, which the gating makes unreachable.
@@ -128,7 +128,10 @@ public struct ForgeCapabilities: OptionSet, Sendable {
   `forge.numberPrefix` (`#`/`!`), links (`/changes` vs `/-/merge_requests/N/diffs`, Checks tab vs
   `/pipelines`). Classifier headlines ("GitHub is still checking…") and `PromptBuilder` use them.
 - **Refactor GitHub onto the protocol first, with no behavior change.** That's its own PR and proves the
-  interface before any GitLab code exists.
+  interface before any GitLab code exists. `GitHubForge` wraps the existing `GitHubClient`, so its request
+  builders and tests stay as they are.
+- **Checkout** gets its own protocol method (`checkoutCommand`) with the `.checkout` capability, when Handoff
+  needs it for GitLab.
 
 ### Rest of the architecture
 
@@ -154,15 +157,16 @@ is slower per refresh. `glab` stays only as an optional checkout command.
 
 ## Phases (one PR each)
 
-1. **`ForgeClient` protocol, GitHub only:** extract the protocol and `ForgeCapabilities`, move `RepoResult`
-   from the app target into `TriageCore`, make `GitHubClient` conform, route AppStore through it, forge-provided wording. No behavior change, GitHub ids byte-for-byte
-   unchanged (test).
+1. **`ForgeClient` protocol, GitHub only:** the protocol, `Forge` (`.github` only) with `ForgeCapabilities`,
+   `RepoResult` moved into `TriageCore`, a `GitHubForge` adapter, AppStore routed through it. No behavior
+   change; GitHub ids and `RepoRef` JSON unchanged (test).
 2. **Core model:** `Forge.gitlab(host:)` on `RepoRef`, nested paths, host-aware ids for GitLab only, old
    `repos` JSON still decodes (test). No UI.
 3. **GitLab client + mapping:** query, `toModel`, bot detection, system-note filtering, Classifier fixtures.
    Measure query complexity on the work account here. Capabilities `[]`.
 4. **Wire into the app, read-only:** Settings section, Keychain token, refresh, sidebar row, GitLab links. MRs
-   show and classify; no actions. `/verify` + `/design-review`.
+   show and classify; no actions. Views hide actions by capability, and wording comes from the forge
+   (`#`/`!`, "GitHub is still checking…", `gh pr view` in prompts). `/verify` + `/design-review`.
 5. **Turn capabilities on, one PR each:** `.diff` + `.ciLogs` (AI summaries and fix prompts), `.checkout`
    (Handoff, extend `HandoffScriptIntegrationTests`), then `.approve`, `.merge`, `.close` (needs `api` scope,
    GitLab merge methods).
