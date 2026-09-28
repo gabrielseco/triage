@@ -121,7 +121,7 @@ struct ItemDetailView: View {
             }
             .fixedSize()
             .help(
-                item.pr.author == store.viewer
+                item.pr.primaryURL(viewer: store.viewer) == item.pr.url
                     ? "Open your PR's conversation on GitHub (arrow: changes, merge, close)"
                     : "Open the PR's changes on GitHub (arrow: conversation, merge, close)")
         }
