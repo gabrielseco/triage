@@ -28,12 +28,8 @@ extension AppStore {
     private func sendApproval(_ item: AttentionItem) async -> Bool {
         let pr = item.pr
         actionStatus[item.id] = "Approving #\(pr.number)…"
-        guard let token = await GitHubAuth.resolveToken() else {
-            actionStatus[item.id] = GitHubError.noToken.localizedDescription
-            return false
-        }
         do {
-            try await approve(pr, with: GitHubClient(token: token))
+            try await approve(pr, with: try await forgeClient(pr.repo.forge))
             return true
         } catch {
             actionStatus[item.id] = "Couldn't approve #\(pr.number): \(error.localizedDescription)"
@@ -42,11 +38,11 @@ extension AppStore {
     }
 
     /// Hides Approve at once (so it can't be sent twice), and brings it back if GitHub refuses.
-    private func approve(_ pr: PullRequest, with gh: GitHubClient) async throws {
+    private func approve(_ pr: PullRequest, with client: any ForgeClient) async throws {
         let key = Self.approvalKey(pr)
         approvedHeads.insert(key)
         do {
-            try await gh.approvePullRequest(pr.repo, number: pr.number, sha: pr.headSha)
+            try await client.approve(pr)
         } catch {
             approvedHeads.remove(key)
             throw error
@@ -63,32 +59,24 @@ extension AppStore {
     func mergePullRequest(_ item: AttentionItem, approvingFirst: Bool = false) async {
         if approvingFirst, !(await sendApproval(item)) { return }
         let pr = item.pr
-        await mutate(item, doing: "Merging", failed: "merge") { gh in
-            try await gh.mergePullRequest(pr.repo, number: pr.number, sha: pr.headSha, method: pr.mergeMethod)
-        }
+        await mutate(item, doing: "Merging", failed: "merge") { try await $0.merge(pr) }
     }
 
     // MARK: - Close
 
     func closePullRequest(_ item: AttentionItem) async {
         let pr = item.pr
-        await mutate(item, doing: "Closing", failed: "close") { gh in
-            try await gh.closePullRequest(pr.repo, number: pr.number)
-        }
+        await mutate(item, doing: "Closing", failed: "close") { try await $0.close(pr) }
     }
 
     /// Runs a change that takes the PR out of the open list, then hides it.
     private func mutate(
-        _ item: AttentionItem, doing: String, failed: String, _ change: (GitHubClient) async throws -> Void
+        _ item: AttentionItem, doing: String, failed: String, _ change: (any ForgeClient) async throws -> Void
     ) async {
         let pr = item.pr
         actionStatus[item.id] = "\(doing) #\(pr.number)…"
-        guard let token = await GitHubAuth.resolveToken() else {
-            actionStatus[item.id] = GitHubError.noToken.localizedDescription
-            return
-        }
         do {
-            try await change(GitHubClient(token: token))
+            try await change(try await forgeClient(pr.repo.forge))
         } catch {
             actionStatus[item.id] = "Couldn't \(failed) #\(pr.number): \(error.localizedDescription)"
             return
