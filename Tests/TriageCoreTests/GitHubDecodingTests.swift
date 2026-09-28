@@ -148,6 +148,13 @@ private func decodePR() throws -> PullRequest {
     #expect(try decodePR().changesURL.absoluteString == "https://github.com/remoteoss/remote-flows/pull/1392/changes")
 }
 
+@Test func openGoesToTheConversationForYourOwnPRAndTheDiffOtherwise() throws {
+    let pr = try decodePR()
+    #expect(pr.primaryURL(viewer: pr.author) == pr.url)
+    #expect(pr.primaryURL(viewer: "someone-else") == pr.changesURL)
+    #expect(pr.primaryURL(viewer: nil) == pr.changesURL)
+}
+
 @Test func viewerDefaultMergeMethodDecodes() throws {
     #expect(try decode(truncated).repository?.viewerDefaultMergeMethod == "SQUASH")
     let missing = String(decoding: truncated, as: UTF8.self)

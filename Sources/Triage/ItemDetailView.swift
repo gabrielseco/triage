@@ -117,10 +117,13 @@ struct ItemDetailView: View {
             } label: {
                 Label("Open", systemImage: "safari")
             } primaryAction: {
-                openURL(item.pr.changesURL)
+                openURL(item.pr.primaryURL(viewer: store.viewer))
             }
             .fixedSize()
-            .help("Open the PR's changes on GitHub (arrow: merge, close, more)")
+            .help(
+                item.pr.primaryURL(viewer: store.viewer) == item.pr.url
+                    ? "Open your PR's conversation on GitHub (arrow: changes, merge, close)"
+                    : "Open the PR's changes on GitHub (arrow: conversation, merge, close)")
         }
         .confirmationDialog(
             confirmTitle, isPresented: confirmShown, titleVisibility: .visible, presenting: store.confirming
@@ -271,14 +274,26 @@ struct PullRequestActions: View {
             .disabled(item.pr.mergeBlocker != nil)
         Button("Close PR…") { confirm(.close) }
         Divider()
-        Button("Open Changes on GitHub") { openURL(item.pr.changesURL) }
-            .shortcut("o", if: inMenuBar)
-        Button("Open Conversation on GitHub") { openURL(item.pr.url) }
-            .shortcut("o", modifiers: [.command, .shift], if: inMenuBar)
+        // ⌘O goes where Open does (the conversation for your own PR, the changes otherwise), ⌘⇧O to the other.
+        if item.pr.primaryURL(viewer: store.viewer) == item.pr.url {
+            openConversation.shortcut("o", if: inMenuBar)
+            openChanges.shortcut("o", modifiers: [.command, .shift], if: inMenuBar)
+        } else {
+            openChanges.shortcut("o", if: inMenuBar)
+            openConversation.shortcut("o", modifiers: [.command, .shift], if: inMenuBar)
+        }
         if let blocker = item.pr.mergeBlocker {
             Divider()
             Text("Can't merge: \(blocker.lowercased())")
         }
+    }
+
+    private var openChanges: some View {
+        Button("Open Changes on GitHub") { openURL(item.pr.changesURL) }
+    }
+
+    private var openConversation: some View {
+        Button("Open Conversation on GitHub") { openURL(item.pr.url) }
     }
 
     /// The dialog lives in the item detail, so bring the window back if it was closed.
