@@ -225,9 +225,9 @@ private func threadsID(_ threads: [ReviewThreadInfo]) -> String? {
     #expect(items.map(\.kind) == [.awaitingReview])
 }
 
-@Test func noiseBotPRIsNeverNew() {
+@Test func dependencyBotPRIsNew() {
     var bump = pr()
     bump.author = "renovate[bot]"
     let (items, _) = Classifier.classify(bump, viewer: "someone-else", isNew: true)
-    #expect(!items.map(\.kind).contains(.newPR))
+    #expect(items.first { $0.kind == .newPR }?.headline == "Opened by renovate[bot]")
 }
