@@ -132,11 +132,26 @@ struct Sidebar: View {
 
 struct InboxList: View {
     @Environment(AppStore.self) private var store
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         @Bindable var store = store
         Group {
-            if store.visibleItems.isEmpty {
+            if store.visibleItems.isEmpty, let repo = selectedRepo {
+                ContentUnavailableView {
+                    Label("Inbox zero", systemImage: "checkmark.circle")
+                } description: {
+                    Text("Nothing in \(repo.fullName) needs you right now.")
+                } actions: {
+                    HStack {
+                        Button("Open pull requests") { openURL(repo.pullsURL) }
+                            .buttonStyle(.borderedProminent)
+                        Button("Repository") { openURL(repo.url) }
+                    }
+                    .fixedSize()
+                    .padding(.top, 8)
+                }
+            } else if store.visibleItems.isEmpty {
                 ContentUnavailableView(
                     store.prs.isEmpty ? "No open PRs yet" : "Inbox zero",
                     systemImage: "checkmark.circle",
@@ -155,8 +170,14 @@ struct InboxList: View {
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if case .repo(let name) = store.filter, let repo = RepoRef(string: name) { RepoLinks(repo: repo) }
+            // The empty state has its own buttons; this bar is for a list that fills the column.
+            if let repo = selectedRepo, !store.visibleItems.isEmpty { RepoLinks(repo: repo) }
         }
+    }
+
+    private var selectedRepo: RepoRef? {
+        guard case .repo(let name) = store.filter else { return nil }
+        return RepoRef(string: name)
     }
 }
 
