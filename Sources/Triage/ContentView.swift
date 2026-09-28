@@ -16,11 +16,10 @@ struct ContentView: View {
             if let item = store.selectedItem {
                 ItemDetailView(item: item).id(item.id)
             } else {
-                ContentUnavailableView(
+                EmptyState(
                     "Nothing selected", systemImage: "tray",
-                    description: Text(
-                        store.repos.isEmpty
-                            ? "Add a repo in the sidebar to start watching." : "Pick an item from the inbox."))
+                    description: store.repos.isEmpty
+                        ? "Add a repo in the sidebar to start watching." : "Pick an item from the inbox.")
             }
         }
         .toolbar {
@@ -57,6 +56,7 @@ struct ContentView: View {
 
 struct Sidebar: View {
     @Environment(AppStore.self) private var store
+    @Environment(\.openURL) private var openURL
     @State private var newRepo = ""
     @State private var addFailed = false
 
@@ -81,6 +81,9 @@ struct Sidebar: View {
                     row(r.fullName, "book.closed", store.count(repo: r.fullName))
                         .tag(SidebarFilter.repo(r.fullName))
                         .contextMenu {
+                            Button("Open Pull Requests on GitHub") { openURL(r.pullsURL) }
+                            Button("Open Repository on GitHub") { openURL(r.url) }
+                            Divider()
                             Button("Set local checkout…") { store.chooseCheckout(for: r) }
                             if let p = store.checkoutPaths[r.fullName] {
                                 Text("Checkout: \((p as NSString).abbreviatingWithTildeInPath)")
@@ -128,15 +131,24 @@ struct Sidebar: View {
 
 struct InboxList: View {
     @Environment(AppStore.self) private var store
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         @Bindable var store = store
         Group {
-            if store.visibleItems.isEmpty {
-                ContentUnavailableView(
-                    store.prs.isEmpty ? "No open PRs yet" : "Inbox zero",
-                    systemImage: "checkmark.circle",
-                    description: Text(store.prs.isEmpty ? "Add a repo to watch." : "Nothing here needs you right now."))
+            if store.visibleItems.isEmpty, let repo = selectedRepo {
+                EmptyState(
+                    "Inbox zero", systemImage: "checkmark.circle",
+                    description: "Nothing in \(repo.fullName) needs you right now."
+                ) {
+                    Button("Open pull requests") { openURL(repo.pullsURL) }
+                        .buttonStyle(.borderedProminent)
+                    Button("Repository") { openURL(repo.url) }
+                }
+            } else if store.visibleItems.isEmpty {
+                EmptyState(
+                    store.prs.isEmpty ? "No open PRs yet" : "Inbox zero", systemImage: "checkmark.circle",
+                    description: store.prs.isEmpty ? "Add a repo to watch." : "Nothing here needs you right now.")
             } else {
                 List(selection: $store.selection) {
                     ForEach(store.groupedVisible, id: \.pr.id) { group in
@@ -150,6 +162,69 @@ struct InboxList: View {
                 }
             }
         }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            // The empty state has its own buttons; this bar is for a list that fills the column.
+            if let repo = selectedRepo, !store.visibleItems.isEmpty { RepoLinks(repo: repo) }
+        }
+    }
+
+    private var selectedRepo: RepoRef? {
+        guard case .repo(let name) = store.filter else { return nil }
+        return RepoRef(string: name)
+    }
+}
+
+/// Like ContentUnavailableView, with the icon closer to the title.
+struct EmptyState<Actions: View>: View {
+    let title: String
+    let systemImage: String
+    let description: String
+    @ViewBuilder let actions: Actions
+
+    init(
+        _ title: String, systemImage: String, description: String,
+        @ViewBuilder actions: () -> Actions = { EmptyView() }
+    ) {
+        self.title = title
+        self.systemImage = systemImage
+        self.description = description
+        self.actions = actions()
+    }
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Image(systemName: systemImage).font(.system(size: 36)).foregroundStyle(.tertiary)
+            Text(title).font(.title2.weight(.semibold)).foregroundStyle(.secondary)
+            Text(description).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            if Actions.self != EmptyView.self { HStack { actions }.fixedSize().padding(.top, 8) }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// Under a repo's list, so the repo is one click away even when nothing in it needs you.
+struct RepoLinks: View {
+    @Environment(\.openURL) private var openURL
+    let repo: RepoRef
+
+    var body: some View {
+        HStack {
+            Button {
+                openURL(repo.pullsURL)
+            } label: {
+                Label("Pull requests", systemImage: "arrow.triangle.pull")
+            }
+            Button {
+                openURL(repo.url)
+            } label: {
+                Label("Repository", systemImage: "book.closed")
+            }
+            Spacer()
+        }
+        .help("Open \(repo.fullName) on GitHub")
+        .padding(10)
+        .background(.bar)
     }
 }
 

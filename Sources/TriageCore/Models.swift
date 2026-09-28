@@ -6,6 +6,12 @@ public struct RepoRef: Hashable, Codable, Sendable, Identifiable {
 
     public var id: String { fullName }
     public var fullName: String { "\(owner)/\(name)" }
+    /// The repo's page on GitHub.
+    public var url: URL {
+        URL(string: "https://github.com")!.appendingPathComponent(owner).appendingPathComponent(name)
+    }
+    /// Its open pull requests on GitHub.
+    public var pullsURL: URL { url.appendingPathComponent("pulls") }
 
     public init(owner: String, name: String) {
         self.owner = owner
