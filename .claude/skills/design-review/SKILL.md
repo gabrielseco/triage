@@ -51,6 +51,7 @@ For each surface and state from Step 1:
 - **Light and dark.** Relaunch the PR build with the appearance forced for that app only:
   ```bash
   V=<scratchpad>/verify/Triage.app
+  [[ "$V" == */verify/Triage.app ]] || exit 1    # never let the pattern match the installed app
   pkill -f "$V/Contents/MacOS/Triage"; sleep 1
   open "$V" --args -AppleInterfaceStyle Dark     # plain `open "$V"` for light (if the system is light)
   ```
@@ -58,7 +59,10 @@ For each surface and state from Step 1:
   to switch System Settings › Appearance, so ask for that. Don't change it yourself.
 - **Two sizes.** Minimum (1000×600) and roomy (1600×1000):
   ```bash
-  osascript -e 'tell application "System Events" to tell (first process whose unix id is '"$(pgrep -f "$V/Contents/MacOS/Triage")"') to set size of window 1 to {1000, 600}'
+  V=<scratchpad>/verify/Triage.app
+  [[ "$V" == */verify/Triage.app ]] || exit 1
+  PID=$(pgrep -nf "$V/Contents/MacOS/Triage") || exit 1
+  osascript -e "tell application \"System Events\" to tell (first process whose unix id is $PID) to set size of window 1 to {1000, 600}"
   ```
 - **States:** reach them with `swift scripts/ax.swift press "<label>"` (select a row, open a filter, hover isn't
   reachable, so read it from code). For states the real data doesn't have (empty inbox, error, a very long title),
@@ -103,10 +107,12 @@ Each finding: what's wrong, the screenshot, the rule it breaks (DESIGN.md sectio
 
 - In the chat: verdict (**looks good** / **polish needed** / **blocking issues**), findings by grade, and the list
   of screenshot paths (light/dark, before/after) for the user to drag into the PR's Screenshots table.
-- On the PR, once it exists (before that, the chat report is enough; post when the PR is open): inline comments for findings that point at a line (`gh api repos/{owner}/{repo}/pulls/<n>/comments`
-  with `commit_id`, `path`, `line`, `side: RIGHT`), prefixed `[design · blocking]`, `[design · polish]` or
-  `[design · nit]`, plus one summary comment with the verdict. If nothing came up, post a short "Design review: no
-  findings" comment.
+- On the PR, once it exists (before that, the chat report is enough): one review, posted the way `/pr-review`
+  does (`gh api repos/<owner>/<repo>/pulls/<n>/reviews --input <json>`, `"event": "COMMENT"`, head `commit_id`,
+  `comments[]` of `{path, line, side: "RIGHT", body}`). The body carries the verdict. Label each comment
+  `issue (blocking, design):`, `suggestion (design):` or `nitpick (design):` and end it with `[by Claude]`.
+  Findings that don't point at a line go in the body. With nothing to report, post a short
+  `gh pr review <n> --comment --body "Design review: no findings [by Claude]"`.
 - Blocking findings get fixed on the branch before the PR is marked ready, then run this again. Polish is fixed
   unless the user says otherwise.
 - If a finding shows DESIGN.md is wrong or silent (a new pattern the PR introduces on purpose), propose the
