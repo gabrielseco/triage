@@ -7,12 +7,13 @@ concept is mapped to the closest thing you already know.
 
 ## 1. What problem it solves
 
-With many open PRs across several repos, the raw GitHub event stream is too noisy to follow: CI runs,
-bot comments, review threads, merge conflicts. Triage turns that stream into a **short list of attention
+With many open PRs across several repos, the raw event stream is too noisy to follow: CI runs,
+bot comments, review threads, merge conflicts. Triage reads GitHub repos you choose and, optionally, the
+GitLab merge requests assigned to you or waiting on your review. Triage turns that stream into a **short list of attention
 items**, each with a reason and a next action:
 
 ```
-GitHub (30 open PRs, ~150 checks, ~100 bot comments)
+GitHub (30 open PRs, ~150 checks, ~100 bot comments) + GitLab (your MRs)
         │  fetch every 2 min
         ▼
 Classifier (plain rules, no AI)
@@ -41,13 +42,14 @@ Two design rules drive everything:
 | Launch / rebuild | `triage` in the terminal (zsh function in `~/.zshrc`) |
 | Watch a repo | Type `owner/repo` (or paste a GitHub URL) in the sidebar field → Enter |
 | Stop watching | Right-click the repo in the sidebar → Stop watching |
+| GitLab | Settings → GitLab → Show GitLab merge requests, then paste a `read_api` token (or keep one in the Keychain). Projects appear in the sidebar by themselves |
 | Refresh | ⌘R, or wait. It auto-refreshes every 2 minutes |
 | Explain an item | Select it → **Explain & propose fix** (⌘E) |
 | Open PR in browser | **Open** (⌘O) |
 | Hide an item | **Dismiss** (Delete key) or **Snooze** 1h / 4h / until tomorrow |
 | Bring hidden back | "Show N hidden" at the bottom of the sidebar |
 | Only your PRs | Person toggle in the toolbar |
-| Settings | ⌘, → API key, model, digest hours, weekdays only, open at login |
+| Settings | ⌘, → API key, model, digest hours, weekdays only, open at login, GitLab |
 | Menu bar | Tray icon with a count: top items, Send digest now, Refresh, Quit |
 
 **The three columns:**
@@ -63,10 +65,13 @@ Two design rules drive everything:
 │ …            │   ⚙ cursor: GBR schema…   │ Claude's answer (after Explain)  │
 │ GitHub       │                           │ Evidence cards (checks, comments)│
 │  remote-flows│                           │                                  │
+│ GitLab       │ web !12              🔇1  │                                  │
+│  web         │   ✖ Pipeline is failing   │                                  │
 └──────────────┴───────────────────────────┴──────────────────────────────────┘
 ```
 
-The PR header shows 🔇 N (bot comments muted as noise) and 🕐 N (checks still running).
+The PR header shows 🔇 N (bot comments muted as noise) and 🕐 N (checks still running). GitLab merge
+requests are numbered `!12`, GitHub PRs `#12`.
 
 ---
 
@@ -78,7 +83,9 @@ triage/
 ├── Sources/
 │   ├── TriageCore/                ← pure logic library, no UI (like a lib/ app in an umbrella)
 │   │   ├── Models.swift           ← types: PullRequest, AttentionItem, Severity…
+│   │   ├── Forge.swift            ← ForgeClient protocol, what each forge can do, the GitHub/GitLab adapters
 │   │   ├── GitHubClient.swift     ← GraphQL + REST calls, token lookup
+│   │   ├── GitLabClient.swift     ← GitLab GraphQL: your MRs → PullRequest
 │   │   ├── Classifier.swift       ← PR snapshot → attention items (the rules)
 │   │   ├── PromptBuilder.swift    ← evidence + logs + diff → one prompt string
 │   │   ├── AnthropicClient.swift  ← Messages API call + Keychain helper
@@ -152,11 +159,17 @@ This works like an Elixir umbrella where `core` doesn't depend on `web`.
         │                                                                     │
         ▼                                                                     │
  refresh()                                                                    │
-   1. token  = GitHubAuth.resolveToken()   ($GITHUB_TOKEN or `gh auth token`) │
-   2. viewer = GitHubClient.viewerLogin()  (once, for "Only my PRs")          │
-   3. for each watched repo, in parallel (TaskGroup ≈ Promise.all):           │
-        GitHubClient.openPullRequests(repo)   → 1 GraphQL query per repo      │
-   4. for each PR: Classifier.classify(pr)  → [AttentionItem] + PRStats       │
+   GitHub and GitLab in parallel (async let ≈ Promise.all), each a           │
+   ForgeClient; one failing doesn't lose the other's data:                    │
+   GitHub:                                                                    │
+     1. token  = GitHubAuth.resolveToken() ($GITHUB_TOKEN or `gh auth token`) │
+     2. viewer = login (once, for "Only my PRs")                              │
+     3. for each watched repo, in parallel: 1 GraphQL query per repo          │
+   GitLab (if on in Settings):                                                │
+     1. token  = GITLAB_TOKEN or the Keychain (read once per session)         │
+     2. viewer = username (once; it's usually not your GitHub login)          │
+     3. 1 list query (your MRs), then 1 detail query per MR, in parallel      │
+   4. for each PR: Classifier.classify(pr, viewer for its forge) → items      │
    5. store.items = …  → SwiftUI re-renders whatever reads items              │
    6. drop dismissed/snoozed ids that no longer exist                         │
         │                                                                     │
@@ -170,6 +183,7 @@ This works like an Elixir umbrella where `core` doesn't depend on `web`.
    1. buildPrompt(item, .explain)
         - CI failure: fetch job logs (REST) for up to 3 failing checks
         - fetch the PR diff (REST)
+        - (GitLab MRs skip both for now: see docs/plans/GITLAB.md › Still missing)
         - PromptBuilder.prompt(...)  → one big string
    2. AnthropicClient.complete(system:prompt:)  → POST /v1/messages
    3. explanations[item.id] = .done(text)  → detail pane renders it
@@ -183,16 +197,49 @@ This works like an Elixir umbrella where `core` doesn't depend on `web`.
 
 Plain data types, all `Sendable` value types:
 
-- `RepoRef` is `owner/name`. Its parser accepts `acme/web` or `https://github.com/acme/web.git`.
+- `RepoRef` is `owner/name` plus its `forge` (`.github` or `.gitlab(host:)`). Its parser accepts `acme/web`
+  or `https://github.com/acme/web.git`. A GitLab owner can nest (`group/subgroup`). `RepoRef.id` is what
+  dismissals, snoozes and seen PRs are keyed by: plain `owner/name` for GitHub (unchanged since before
+  GitLab), `host/group/project` for GitLab, so the two can never collide. GitHub repos save to JSON exactly
+  as they always did.
 - `PullRequest` is a snapshot: title, author, head SHA, `mergeable`, `reviewDecision`, plus
-  `checks: [CheckInfo]`, `threads: [ReviewThreadInfo]` and `comments: [CommentInfo]`.
+  `checks: [CheckInfo]`, `threads: [ReviewThreadInfo]` and `comments: [CommentInfo]`. It's the same shape for
+  a GitHub PR and a GitLab MR; `pr.ref` writes the number the forge's way (`#12` / `!12`).
 - `CheckInfo.state` is normalized to `success | failure | pending | neutral`. GitHub has two different
   systems (Check Runs and commit Statuses), and both map into this one shape.
 - `AttentionItem` holds `id`, `kind`, `severity`, the `pr`, a one-line `headline`, and `evidence` (the
   failing checks / comments that justify it).
 - `Severity` runs `info < low < medium < high` and drives sorting, colors, and what the menu bar counts.
 
-### 6.2 GitHub client (`GitHubClient.swift`)
+### 6.2 Forges: one interface, two services (`Forge.swift`)
+
+The app never calls GitHub or GitLab directly. It talks to a `ForgeClient` protocol (≈ a TypeScript
+interface), and `GitHubForge` and `GitLabForge` are adapters behind it:
+
+```swift
+protocol ForgeClient {
+    var forge: Forge { get }                        // .github or .gitlab(host:)
+    func viewer() async throws -> String            // who "you" are there
+    func fetch() async throws -> [RepoResult]       // open PRs, one result per repo/project
+    func ciLog(_ pr: PullRequest, checkRunID: Int) async -> String?
+    func diff(_ pr: PullRequest) async -> String?
+    func approve(_ pr: PullRequest) async throws
+    func merge(_ pr: PullRequest) async throws
+    func close(_ pr: PullRequest) async throws
+}
+```
+
+- **`fetch()` hides how each forge fetches.** GitHub runs one query per watched repo; GitLab one query for
+  "my MRs" across all projects, grouped into one result per project.
+- **Capabilities** (`Forge.capabilities`, an option set of `ciLogs`, `diff`, `checkout`, `approve`, `merge`,
+  `close`) say what Triage can do for a forge's PRs. GitHub has all of them; GitLab has none yet, so its
+  merge requests are read-only. Views ask `store.can(.merge, pr)` and **hide** what's missing, rather than
+  showing a button that fails. Turning a GitLab feature on is implementing the method and adding the
+  capability (see `docs/plans/GITLAB.md` › Still missing).
+- **Wording** comes from the forge too: `forge.name` ("GitHub"/"GitLab"), `numberPrefix` (`#`/`!`),
+  `pullRequestsName`, and `forge.cli("checkout", n)` (`gh pr checkout n` / `glab mr checkout n`) for prompts.
+
+### 6.3 GitHub client (`GitHubClient.swift`)
 
 **Auth (prototype):** `$GITHUB_TOKEN`, else it shells out to `gh auth token`. So it acts as *you*, with
 whatever repos your `gh` login can see.
@@ -224,7 +271,41 @@ type plus a mapper function, so the rest of the app never sees GitHub's shape.
 
 **Bot detection:** an author is a bot if GraphQL says `__typename == "Bot"` or the login ends in `[bot]`.
 
-### 6.3 Classifier (`Classifier.swift`), the heart of it
+### 6.4 GitLab client (`GitLabClient.swift`)
+
+**Auth:** a personal access token with the `read_api` scope, from `$GITLAB_TOKEN` or the Keychain
+(service `dev.rogal.triage.gitlab`, account = host), pasted in Settings → GitLab. The app reads it once per
+session and keeps it in memory.
+
+**Two steps per refresh**, because GitLab caps a query's complexity at 250 and nesting jobs and discussions
+for 50 MRs goes far over it:
+
+1. A cheap list query (complexity ~28): `currentUser { assignedMergeRequests, reviewRequestedMergeRequests }`,
+   50 each, open, most recently updated first. An MR in both lists is fetched once.
+2. One detail query per MR, in parallel (complexity ~78 each): pipeline jobs, discussions with their notes,
+   approvals, reviewers' review state, merge status.
+
+One MR failing to load becomes a warning; all of them failing (bad token, instance down) is one "GitLab: …"
+error. The GitHub data stays either way.
+
+**Mapping onto `PullRequest`** (`MRNode.toModel`), where GitLab differs from GitHub:
+
+| GitLab | Becomes |
+|---|---|
+| `iid` | `number`, shown as `!12` |
+| Pipeline jobs | `checks` (allow-failure jobs are neutral; the job id is kept for logs later) |
+| A pipeline that failed or is running with no job saying so (a config error, a downstream pipeline) | one extra "Pipeline" check, so the MR can't read as green |
+| Resolvable discussions | `threads`; plain comments → `comments` |
+| **System notes** ("added 3 commits", "changed the title") | dropped: otherwise every push would change item ids |
+| A reviewer's `REQUESTED_CHANGES` | `reviewDecision = .changesRequested` |
+| `approvalsLeft > 0` / someone approved | `.reviewRequired` / `.approved`. With no approval rules GitLab calls every MR "approved"; that alone isn't enough |
+| `detailedMergeStatus` `CONFLICT`, `NEED_REBASE` / `CHECKING`… | `.conflicting` / `.unknown` |
+| Access-token bots (`project_<id>_bot_<hash>`) | a bot, named by its display name (`cursor` for Cursor Bugbot, as on GitHub) |
+
+Threads are never marked outdated: GitLab has no simple flag, and guessing would hide real unresolved threads
+after a push.
+
+### 6.5 Classifier (`Classifier.swift`), the heart of it
 
 `Classifier.classify(pr) -> (items, stats)`: a pure function with no I/O. It's easy to test, and it's
 the piece most likely to move to the backend later.
@@ -258,7 +339,11 @@ first markdown heading, e.g. `cursor: GBR schema pin exceeds latest version`.
 It's the same idea as a React `key` or an idempotency key: stable while nothing changed, new when
 something did. Both dismissals and the digest's "what's new" are built on this.
 
-### 6.4 Prompt builder (`PromptBuilder.swift`)
+The classifier doesn't know which forge a PR came from. It gets the viewer for the PR's forge (your GitHub
+login or your GitLab username), and the forge-specific work (system notes, pipeline checks, review state) is
+done in the mapping, so the same rules and ids work for both.
+
+### 6.6 Prompt builder (`PromptBuilder.swift`)
 
 This follows the same pattern as expenses-backend's `get_*_prompt` MCP tools: **assemble all the
 evidence into one string**, so whoever reads it (Claude, or you) doesn't need to fetch anything.
@@ -286,7 +371,7 @@ Two modes:
 The system prompt tells Claude to be concrete and to say when a failure looks flaky or unrelated
 (recommend a rerun rather than a code change).
 
-### 6.5 Anthropic client (`AnthropicClient.swift`)
+### 6.7 Anthropic client (`AnthropicClient.swift`)
 
 Raw HTTP, because there's no official Swift SDK. It's one non-streaming `POST
 https://api.anthropic.com/v1/messages`:
@@ -314,7 +399,7 @@ The response's `text` blocks are joined and returned. A `stop_reason: "refusal"`
   3. A key pasted in Settings, stored in the macOS **Keychain** (the OS's encrypted secret store).
 - **Model:** editable in Settings (default `claude-opus-5`).
 
-### 6.6 Digest (`Digest.swift`)
+### 6.8 Digest (`Digest.swift`)
 
 Two pure functions:
 
@@ -327,7 +412,7 @@ Two pure functions:
 
 ---
 
-### 6.7 Fix in iTerm (`Handoff.swift`)
+### 6.9 Fix in iTerm (`Handoff.swift`)
 
 Hands an item to a coding agent (your "harness") in a terminal, in its **own git worktree per PR**. That way
 several agents can work on different PRs in parallel without touching your main checkout.
@@ -361,28 +446,36 @@ the environment. It holds:
 
 - **Persisted** (saved to `UserDefaults` on every change via `didSet`): `repos`, `dismissed`, `snoozed`,
   `onlyMine`, `model`, `digestHours`, `digestWeekdaysOnly`, `digestBaseline`, `lastDigestItemIDs`,
-  `lastDigestAt`.
-- **In-memory**: `prs`, `items`, `stats`, `viewer`, `isRefreshing`, `errors`, `explanations`, `filter`,
-  `selection`.
+  `lastDigestAt`, `gitlabHost` (empty = GitLab off).
+- **In-memory**: `prs`, `items`, `stats`, `viewer` (GitHub) and `gitlabViewer`, `isRefreshing`, `errors`,
+  `explanations`, `filter`, `selection`, the cached GitLab token.
 - **Derived** (computed properties, like selectors / `useMemo`):
   - `activeItems`: items minus dismissed, minus snoozed-until-future, minus others' PRs if "Only mine",
     sorted by severity then recency.
   - `visibleItems`: `activeItems` narrowed by the sidebar filter (all / kind / repo / last digest).
   - `groupedVisible`: grouped by PR for the inbox sections.
   - `summaryLine`: "13 need you · 0 PRs waiting on CI · 107 bot comments muted".
+  - `gitlabProjects`: the GitLab projects with an MR for you, for the sidebar.
+  - `viewer(for: forge)` and `can(capability, pr)`: who you are on a PR's forge, and what Triage may do.
 - **Actions**: `refresh`, `addRepo`, `removeRepo`, `dismiss`, `snooze`, `restoreHidden`, `explain`,
-  `copyPrompt`, `sendDigestIfDue`, `sendDigest`, `showMainWindow`.
+  `copyPrompt`, `sendDigestIfDue`, `sendDigest`, `showMainWindow`, `saveGitLabToken`. PR actions (approve,
+  merge, close) go through `forgeClient(_:repos:)` (`AppStore+Forge.swift`).
 
 ### 7.2 Views
 
 - **`TriageApp`**: the `@main` entry. It declares three *scenes*: the main `Window`, the `MenuBarExtra`
   (tray icon + menu) and `Settings`. It injects the store with `.environment(delegate.store)`.
 - **`ContentView`**: `NavigationSplitView` with `Sidebar`, `InboxList` (sections per PR, `PRHeader` +
-  `ItemRow`s) and `ItemDetailView`, plus the toolbar (summary, Only mine, Refresh).
+  `ItemRow`s) and `ItemDetailView`, plus the toolbar (summary, Only mine, Refresh). The sidebar has a
+  **GitHub** section (the repos you watch) and, when it's on, a **GitLab** section (projects by name, from
+  the fetch; nothing to add or remove).
 - **`ItemDetailView`**: header, action buttons with keyboard shortcuts, Claude's answer (loading / done /
-  failed), and evidence cards. Markdown in comments/answers is rendered inline.
+  failed), and evidence cards. Markdown in comments/answers is rendered inline. Buttons the PR's forge can't
+  do are hidden: for a GitLab MR that's Approve, Merge, Close and Fix in iTerm, and Explain PR copies a
+  prompt instead of opening iTerm.
 - **`SettingsView`**: API key → Keychain, model, digest hours, weekdays only, open at login, "send a
-  digest now", and which GitHub token source is in use.
+  digest now", GitLab (on/off, host, token → Keychain, Test, "Signed in as …"), and which GitHub token source
+  is in use.
 
 A quirk worth knowing: `Text("#\(number)")` in SwiftUI is *localized*, so numbers get thousands
 separators (`#1.392`). Use `Text(verbatim:)` or `String(…)` for ids.
@@ -409,6 +502,8 @@ separators (`#1.392`). Use `Text(verbatim:)` or `String(…)` for ids.
 | Anthropic API key via 1Password | Only the `op://` reference in `UserDefaults`; the key lives in memory | Touch ID once per app session |
 | Anthropic API key (if pasted in Settings) | Keychain, service `dev.rogal.triage` | Encrypted by macOS |
 | GitHub token | Not stored; read from `$GITHUB_TOKEN` / `gh` each refresh | |
+| GitLab host | `UserDefaults` key `gitlabHost` | Empty means GitLab is off |
+| GitLab token | Keychain, service `dev.rogal.triage.gitlab`, account = host (or `$GITLAB_TOKEN`) | Read once per app session, then kept in memory. macOS may ask once to let Triage use it |
 | PRs, items, Claude answers | Memory only | Refetched on launch; answers are lost on quit |
 
 Stale dismissals are cleaned up on each refresh: once an item id no longer exists, it's dropped.
@@ -445,7 +540,7 @@ every refresh (2 min):
 | `scripts/bundle.sh` | `swift build -c release` → creates `Triage.app/Contents/{MacOS,Resources,Info.plist}`, builds `AppIcon.icns` from the PNG with `sips` + `iconutil`, ad-hoc codesigns, migrates old settings once |
 | `scripts/render-icon.sh` | Renders `Resources/AppIcon.svg` → `AppIcon.png` (1024px, transparent) with headless Chrome |
 | `swift run Triage` | Quick dev run, no bundle (no notifications or login item) |
-| `swift test` | 16 tests: classifier rules, dedup ids, bot severity, prompt assembly, digest diff and schedule |
+| `swift test` | Swift Testing suite: classifier rules, dedup ids, bot severity, prompt assembly, digest diff and schedule, GitHub and GitLab decoding (fixtures, no network), forge ids and wording |
 
 An `.app` is only a folder with a known layout. `Info.plist` gives it an identity (`dev.rogal.triage`),
 which macOS needs for notifications, Keychain scoping, login items and the icon. There's no Xcode
@@ -458,6 +553,7 @@ project; SwiftPM + a shell script is enough for a personal tool.
 | Trigger | Calls | Cost |
 |---|---|---|
 | Every 2 min | 1 GraphQL query per watched repo (+1 viewer query once) | Free; well within GitHub's 5,000 points/hour |
+| Every 2 min, GitLab on | 1 list query + 1 detail query per MR for you (+1 viewer query once) | Free; gitlab.com allows 2,000 requests/min |
 | Explain | 1–3 job-log fetches + 1 diff fetch + **1 Claude request** | One Opus request per click (prompt up to ~60KB of diff + log tails) |
 | Copy prompt | Same GitHub fetches, no Claude call | Free |
 | Digest | Nothing extra (uses the latest refresh) | Free |
@@ -476,6 +572,9 @@ project; SwiftPM + a shell script is enough for a personal tool.
 - **Timing:** macOS may delay a sleeping app's timers (App Nap), so a digest can arrive a few minutes
   late.
 - **Claude answers aren't saved**, and "Fix it" (an agent that pushes a commit) doesn't exist yet.
+- **GitLab is read-only.** No diff or CI logs in prompts, no Fix in iTerm, no approve/merge/close, and
+  reviewer MRs aren't flagged as "waiting for your review" yet. Each is written up, with how to build it, in
+  `docs/plans/GITLAB.md` › Still missing.
 
 ---
 
