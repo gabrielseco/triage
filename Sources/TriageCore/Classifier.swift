@@ -16,8 +16,11 @@ public enum Classifier {
         login.lowercased().replacingOccurrences(of: "[bot]", with: "")
     }
 
-    /// `viewer` is the signed-in login: their own review comments don't count as something new.
-    public static func classify(_ pr: PullRequest, viewer: String? = nil) -> (items: [AttentionItem], stats: PRStats) {
+    /// `viewer` is the signed-in login: their own review comments don't count as something new. `isNew` says the
+    /// PR was opened since Triage started watching its repo and hasn't been dismissed yet (`SeenPRs`).
+    public static func classify(
+        _ pr: PullRequest, viewer: String? = nil, isNew: Bool = false
+    ) -> (items: [AttentionItem], stats: PRStats) {
         var stats = PRStats(pendingChecks: pr.checks.filter { $0.state == .pending }.count)
         let open = pr.threads.filter { !$0.isResolved && !$0.isOutdated }
 
@@ -29,6 +32,7 @@ public enum Classifier {
         if items.isEmpty, let quiet = readyToMerge(pr) ?? awaitingChecks(pr) ?? awaitingReview(pr) {
             items.append(quiet)
         }
+        if isNew, let new = newPR(pr, viewer: viewer) { items.append(new) }
         return (items, stats)
     }
 
@@ -139,6 +143,20 @@ public enum Classifier {
                 evidence: sorted.map(\.evidence)
             )
         }
+    }
+
+    /// Someone else opened a PR: news even when nothing is wrong with it, since otherwise it would only show up
+    /// as a passive "waiting for review". Added after the quiet items so it doesn't hide them.
+    static func newPR(_ pr: PullRequest, viewer: String?) -> AttentionItem? {
+        guard pr.author != viewer else { return nil }
+        return AttentionItem(
+            id: "\(pr.id)|new",
+            kind: .newPR,
+            severity: .low,
+            pr: pr,
+            headline: "\(pr.isDraft ? "Draft opened" : "Opened") by \(pr.author)",
+            evidence: [Evidence(title: pr.title, detail: pr.summary, url: pr.url)]
+        )
     }
 
     /// Approved, green, mergeable, not a draft. Only offered when nothing else is open on the PR.

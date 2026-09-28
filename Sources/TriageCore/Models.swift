@@ -99,6 +99,7 @@ public struct PullRequest: Identifiable, Hashable, Sendable {
     public var author: String
     public var authorAvatar: URL?
     public var isDraft: Bool
+    public var createdAt: Date
     public var updatedAt: Date
     public var headSha: String
     public var headRef: String
@@ -116,7 +117,7 @@ public struct PullRequest: Identifiable, Hashable, Sendable {
 
     public init(
         repo: RepoRef, number: Int, title: String, url: URL, author: String, authorAvatar: URL? = nil,
-        isDraft: Bool = false,
+        isDraft: Bool = false, createdAt: Date = .distantPast,
         updatedAt: Date = .now, headSha: String, headRef: String = "branch",
         mergeable: Mergeable = .mergeable, reviewDecision: ReviewDecision = .none,
         checks: [CheckInfo] = [], threads: [ReviewThreadInfo] = [], comments: [CommentInfo] = [],
@@ -129,6 +130,7 @@ public struct PullRequest: Identifiable, Hashable, Sendable {
         self.author = author
         self.authorAvatar = authorAvatar
         self.isDraft = isDraft
+        self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.headSha = headSha
         self.headRef = headRef
@@ -143,7 +145,7 @@ public struct PullRequest: Identifiable, Hashable, Sendable {
 
 public enum AttentionKind: String, CaseIterable, Sendable, Codable {
     case ciFailure, mergeConflict, changesRequested, reviewThreads, botFinding, readyToMerge, awaitingChecks,
-        awaitingReview
+        awaitingReview, newPR
 
     public var title: String {
         switch self {
@@ -155,6 +157,7 @@ public enum AttentionKind: String, CaseIterable, Sendable, Codable {
         case .readyToMerge: "Ready to merge"
         case .awaitingChecks: "Waiting on CI"
         case .awaitingReview: "Waiting for review"
+        case .newPR: "New PR"
         }
     }
 
@@ -168,6 +171,7 @@ public enum AttentionKind: String, CaseIterable, Sendable, Codable {
         case .readyToMerge: "checkmark.seal.fill"
         case .awaitingChecks: "clock.arrow.circlepath"
         case .awaitingReview: "hourglass"
+        case .newPR: "sparkles"
         }
     }
 
@@ -175,7 +179,7 @@ public enum AttentionKind: String, CaseIterable, Sendable, Codable {
     public var isFixable: Bool {
         switch self {
         case .ciFailure, .mergeConflict, .changesRequested, .reviewThreads, .botFinding: true
-        case .readyToMerge, .awaitingChecks, .awaitingReview: false
+        case .readyToMerge, .awaitingChecks, .awaitingReview, .newPR: false
         }
     }
 
@@ -184,7 +188,8 @@ public enum AttentionKind: String, CaseIterable, Sendable, Codable {
     public var isPassive: Bool {
         switch self {
         case .awaitingChecks, .awaitingReview: true
-        case .ciFailure, .mergeConflict, .changesRequested, .reviewThreads, .botFinding, .readyToMerge: false
+        case .ciFailure, .mergeConflict, .changesRequested, .reviewThreads, .botFinding, .readyToMerge, .newPR:
+            false
         }
     }
 }

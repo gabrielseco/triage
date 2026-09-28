@@ -12,7 +12,8 @@ private let truncated = Data(
       "rateLimit": {"remaining": 4000, "resetAt": "2026-09-26T12:00:00Z"},
       "repository": {"pullRequests": {"totalCount": 42, "nodes": [{
         "number": 7, "title": "t", "url": "https://github.com/o/r/pull/7", "isDraft": false,
-        "updatedAt": "2026-09-26T10:00:00Z", "mergeable": "MERGEABLE", "reviewDecision": null, "headRefName": "b",
+        "createdAt": "2026-09-25T10:00:00Z", "updatedAt": "2026-09-26T10:00:00Z",
+        "mergeable": "MERGEABLE", "reviewDecision": null, "headRefName": "b",
         "author": {"login": "me", "__typename": "User", "avatarUrl": null},
         "commits": {"nodes": [{"commit": {"oid": "abc", "statusCheckRollup": {"contexts": {"totalCount": 130,
           "nodes": [{"__typename": "CheckRun", "name": "ci", "conclusion": "FAILURE", "status": "COMPLETED",
@@ -54,7 +55,8 @@ private let fixture = """
     {"repository": {"pullRequests": {"totalCount": 1, "nodes": [{
       "number": 1392, "title": "chore(deps-dev): update dependency jsdom to v30.1.0",
       "url": "https://github.com/remoteoss/remote-flows/pull/1392", "isDraft": false,
-      "updatedAt": "2026-09-24T10:00:00Z", "mergeable": "CONFLICTING", "reviewDecision": null,
+      "createdAt": "2026-09-23T10:00:00Z", "updatedAt": "2026-09-24T10:00:00Z",
+      "mergeable": "CONFLICTING", "reviewDecision": null,
       "headRefName": "renovate/jsdom-30.x",
       "author": {"login": "renovate", "__typename": "Bot", "avatarUrl": "https://avatars.githubusercontent.com/in/2740"},
       "commits": {"nodes": [{"commit": {"oid": "abc123", "statusCheckRollup": {"contexts": {"totalCount": 4, "nodes": [
@@ -97,6 +99,7 @@ private func decodePR() throws -> PullRequest {
     #expect(pr.author == "renovate")
     #expect(pr.authorAvatar?.host == "avatars.githubusercontent.com")
     #expect(pr.headSha == "abc123")
+    #expect(pr.createdAt == ISO8601DateFormatter().date(from: "2026-09-23T10:00:00Z"))
     #expect(pr.mergeable == .conflicting)
     #expect(pr.reviewDecision == .none)
 }

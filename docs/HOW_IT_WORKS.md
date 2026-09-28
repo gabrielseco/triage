@@ -237,6 +237,7 @@ the piece most likely to move to the backend later.
 | Unresolved, not outdated thread started by a **human** | Unresolved review (all threads → one item) | medium | `pr\|threads\|<latest thread url>` |
 | Comment or unresolved thread by a **non-noise bot** | Bot finding (one item **per bot**) | from the bot's own label, see below | `pr\|bot\|<login>\|<latest url>` |
 | Nothing else open + approved + mergeable + all checks green + not draft | Ready to merge | info | `pr\|ready\|<headSha>` |
+| Opened by someone else after the repo was first fetched, not dismissed yet (`SeenPRs`) | New PR (next to any other item) | low | `pr\|new` |
 
 **Noise bots** are counted in `PRStats.noiseComments` and never become items: `codecov`, `vercel`,
 `netlify`, `github-actions`, `changeset-bot`, `dependabot`, `renovate`, `sonarcloud`, `linear`,
