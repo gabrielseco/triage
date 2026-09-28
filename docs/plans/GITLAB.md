@@ -53,7 +53,7 @@ and tested.
 | `mergeable` | `detailedMergeStatus`: `conflict` / `need_rebase` → `.conflicting`, `checking` / `unchecked` → `.unknown` | Other states (`not_approved`, `discussions_not_resolved`, `ci_must_pass`) become merge warnings |
 | `reviewDecision` | `approved` / `approvalsLeft` → `.approved` / `.reviewRequired`; any reviewer with `mergeRequestInteraction.reviewState == REQUESTED_CHANGES` → `.changesRequested` | See open question 3 |
 | `checks` | `headPipeline { status jobs { nodes { id name status webUrl } } }` | Job status → `CheckState`. `id` → `checkRunID`, so the job log (`/projects/:id/jobs/:id/trace`) feeds the CI prompt |
-| `threads` | `discussions { resolvable resolved notes { author body position { newPath newLine } } }` for diff/resolvable discussions | `isOutdated`: compare `position.headSha` with `diffHeadSha` (approximate) |
+| `threads` | `discussions { resolvable resolved notes { author body position { newPath newLine } } }` for diff/resolvable discussions | `isOutdated` is always false: GitLab has no simple flag, and comparing commits would hide every unresolved thread after a push |
 | `comments` | Non-resolvable discussions' notes, **excluding `system: true`** | System notes ("added 3 commits", "changed title") would otherwise all look like new comments and churn item ids |
 | `mergeMethod` | `project { mergeMethod squashOption }` | Needs a GitLab variant or a provider-neutral enum |
 
@@ -163,6 +163,7 @@ is slower per refresh. `glab` stays only as an optional checkout command.
 2. **Core model:** `Forge.gitlab(host:)` on `RepoRef`, nested paths, host-aware ids for GitLab only, old
    `repos` JSON still decodes (test). No UI.
 3. **GitLab client + mapping:** query, `toModel`, bot detection, system-note filtering, Classifier fixtures.
+   `GitLabClient.mergeRequests()` returns one account-wide snapshot; the `ForgeClient` adapter comes with phase 4.
    Measure query complexity on the work account here. Capabilities `[]`.
 4. **Wire into the app, read-only:** Settings section, Keychain token, refresh, sidebar row, GitLab links. MRs
    show and classify; no actions. Views hide actions by capability, and wording comes from the forge
