@@ -64,3 +64,13 @@ private func pr(_ number: Int, in repo: RepoRef = web, createdAt: Date) -> PullR
     let decoded = try JSONDecoder().decode(SeenPRs.self, from: JSONEncoder().encode(seen))
     #expect(decoded == seen)
 }
+
+@Test func undismissAllBringsNewPRsBackButKeepsTheClock() {
+    var seen = SeenPRs()
+    seen.startWatching([web], now: start)
+    let a = pr(2, createdAt: start.addingTimeInterval(60))
+    seen.dismiss(a)
+    seen.undismissAll()
+    #expect(seen.isNew(a))
+    #expect(!seen.isNew(pr(1, createdAt: start.addingTimeInterval(-60))))
+}

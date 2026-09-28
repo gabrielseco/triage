@@ -176,6 +176,7 @@ final class AppStore {
     func restoreHidden() {
         dismissed = []
         snoozed = [:]
+        seenPRs.undismissAll()
     }
 
     func advanceSelection(from item: AttentionItem) {

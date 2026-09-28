@@ -29,4 +29,9 @@ public struct SeenPRs: Codable, Equatable, Sendable {
     }
 
     public mutating func dismiss(_ pr: PullRequest) { repos[pr.repo.fullName]?.dismissed.insert(pr.number) }
+
+    /// "Show hidden": dismissed new PRs come back like any other dismissed item.
+    public mutating func undismissAll() {
+        for key in repos.keys { repos[key]?.dismissed = [] }
+    }
 }
