@@ -77,7 +77,7 @@ struct MenuBarContent: View {
         }
         Divider()
         ForEach(store.activeItems.filter { $0.severity >= .medium }.prefix(10)) { item in
-            Button(String("\(item.pr.repo.name)#\(item.pr.number) · \(item.kind.title): \(item.headline)")) {
+            Button(String("\(item.pr.repo.name)\(item.pr.ref) · \(item.kind.title): \(item.headline)")) {
                 store.filter = .all
                 store.selection = item.id
                 store.showMainWindow()

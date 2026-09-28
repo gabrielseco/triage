@@ -30,10 +30,12 @@ struct ItemDetailView: View {
                     .font(.subheadline.weight(.semibold))
                 Text(item.severity.label).font(.caption).padding(.horizontal, 6).padding(.vertical, 2)
                     .background(item.severity.color.opacity(0.15), in: Capsule())
-                if let ci = item.pr.ciStatus { CIBadge(status: ci, url: item.pr.checksURL) }
+                if let ci = item.pr.ciStatus {
+                    CIBadge(status: ci, url: item.pr.checksURL, forge: item.pr.repo.forge)
+                }
             }
             Text(item.headline).font(.title2.weight(.semibold)).textSelection(.enabled)
-            Link(String("\(item.pr.repo.fullName) #\(item.pr.number) — \(item.pr.title)"), destination: item.pr.url)
+            Link(String("\(item.pr.repo.fullName) \(item.pr.ref) — \(item.pr.title)"), destination: item.pr.url)
             let updated = item.pr.updatedAt.formatted(.relative(presentation: .named))
             Text("by \(item.pr.author) · \(item.pr.headRef) · updated \(updated)")
                 .font(.caption).foregroundStyle(.secondary)
@@ -47,7 +49,7 @@ struct ItemDetailView: View {
 
     private var actions: some View {
         HStack {
-            if item.kind == .readyToMerge {
+            if item.kind == .readyToMerge, store.can(.merge, item.pr) {
                 Button {
                     store.confirming = PRConfirmation(action: .merge, item: item)
                 } label: {
@@ -55,7 +57,7 @@ struct ItemDetailView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(item.pr.mergeBlocker != nil)
-                .help("\(item.pr.mergeMethod.title) on GitHub (⇧⌘M)")
+                .help("\(item.pr.mergeMethod.title) on \(forgeName) (⇧⌘M)")
             }
             if store.canApprove(item.pr) {
                 Button {
@@ -63,7 +65,7 @@ struct ItemDetailView: View {
                 } label: {
                     Label("Approve", systemImage: "checkmark.seal")
                 }
-                .help("Approve \(item.pr.author)'s PR on GitHub (⇧⌘A)")
+                .help("Approve \(item.pr.author)'s PR on \(forgeName) (⇧⌘A)")
             }
             if item.kind.isFixable {
                 Button {
@@ -75,13 +77,15 @@ struct ItemDetailView: View {
                 .disabled(store.explanations[item.id] == .loading)
                 .keyboardShortcut("e")
 
-                Button {
-                    Task { await store.fixInTerminal(item) }
-                } label: {
-                    Label("Fix in iTerm", systemImage: "terminal")
+                if store.can(.checkout, item.pr) {
+                    Button {
+                        Task { await store.fixInTerminal(item) }
+                    } label: {
+                        Label("Fix in iTerm", systemImage: "terminal")
+                    }
+                    .help("Opens iTerm in a worktree for this PR and runs \(store.harnessCommand) with the prompt")
+                    .keyboardShortcut("f")
                 }
-                .help("Opens iTerm in a worktree for this PR and runs \(store.harnessCommand) with the prompt")
-                .keyboardShortcut("f")
 
                 Menu {
                     Button("For a chat (explain + propose)") {
@@ -95,16 +99,29 @@ struct ItemDetailView: View {
                 }
                 .fixedSize()
             }
-            Menu {
-                Button("Copy prompt for a chat") { Task { await store.copyExplainPRPrompt(for: item) } }
-            } label: {
-                Label("Explain PR", systemImage: "text.magnifyingglass")
-            } primaryAction: {
-                Task { await store.explainPRInTerminal(item) }
+            if store.can(.checkout, item.pr) {
+                Menu {
+                    Button("Copy prompt for a chat") { Task { await store.copyExplainPRPrompt(for: item) } }
+                } label: {
+                    Label("Explain PR", systemImage: "text.magnifyingglass")
+                } primaryAction: {
+                    Task { await store.explainPRInTerminal(item) }
+                }
+                .fixedSize()
+                .help(
+                    "Open Claude in iTerm in this PR's worktree to walk you through it (arrow: copy the prompt instead)"
+                )
+                .keyboardShortcut("e", modifiers: [.command, .shift])
+            } else {
+                // No worktree without checkout: the prompt for a chat is what's left.
+                Button {
+                    Task { await store.copyExplainPRPrompt(for: item) }
+                } label: {
+                    Label("Explain PR", systemImage: "text.magnifyingglass")
+                }
+                .help("Copy a prompt that walks you through this merge request, for a chat")
+                .keyboardShortcut("e", modifiers: [.command, .shift])
             }
-            .fixedSize()
-            .help("Open Claude in iTerm in this PR's worktree to walk you through it (arrow: copy the prompt instead)")
-            .keyboardShortcut("e", modifiers: [.command, .shift])
             Spacer()
             Menu {
                 Button("1 hour") { store.snooze(item, for: 3600) }
@@ -125,13 +142,13 @@ struct ItemDetailView: View {
             } label: {
                 Label("Open", systemImage: "safari")
             } primaryAction: {
-                openURL(item.pr.primaryURL(viewer: store.viewer))
+                openURL(item.pr.primaryURL(viewer: viewer))
             }
             .fixedSize()
             .help(
-                item.pr.primaryURL(viewer: store.viewer) == item.pr.url
-                    ? "Open your PR's conversation on GitHub (arrow: changes, merge, close)"
-                    : "Open the PR's changes on GitHub (arrow: conversation, merge, close)")
+                item.pr.primaryURL(viewer: viewer) == item.pr.url
+                    ? "Open your PR's conversation on \(forgeName) (arrow: more)"
+                    : "Open the PR's changes on \(forgeName) (arrow: more)")
         }
         .confirmationDialog(
             confirmTitle, isPresented: confirmShown, titleVisibility: .visible, presenting: store.confirming
@@ -165,7 +182,7 @@ struct ItemDetailView: View {
 
     private var confirmTitle: String {
         let verb = store.confirming?.action == .close ? "Close" : "Merge"
-        return "\(verb) \(item.pr.repo.fullName) #\(item.pr.number)?"
+        return "\(verb) \(item.pr.repo.fullName) \(item.pr.ref)?"
     }
 
     private var mergeMessage: String {
@@ -175,9 +192,12 @@ struct ItemDetailView: View {
 
     /// Leads with the author when it's someone else's PR, so a teammate's work isn't closed by mistake.
     private var closeMessage: String {
-        let owner = item.pr.author == store.viewer ? "" : "This is \(item.pr.author)'s PR.\n\n"
-        return "\(owner)\(item.pr.title)\n\nIt's closed on GitHub without merging. You can reopen it there."
+        let owner = item.pr.author == viewer ? "" : "This is \(item.pr.author)'s PR.\n\n"
+        return "\(owner)\(item.pr.title)\n\nIt's closed on \(forgeName) without merging. You can reopen it there."
     }
+
+    private var viewer: String? { store.viewer(for: item.pr.repo.forge) }
+    private var forgeName: String { item.pr.repo.forge.name }
 
     @ViewBuilder private var status: some View {
         if let s = store.actionStatus[item.id] {
@@ -235,6 +255,7 @@ struct EvidenceCard: View {
 struct CIBadge: View {
     let status: CIStatus
     let url: URL
+    let forge: Forge
 
     var body: some View {
         Link(destination: url) {
@@ -244,7 +265,7 @@ struct CIBadge: View {
                 .padding(.horizontal, 6).padding(.vertical, 2)
                 .background(color.opacity(0.15), in: Capsule())
         }
-        .help("Open the checks on GitHub")
+        .help("Open the checks on \(forge.name)")
     }
 
     private var symbol: String {
@@ -277,7 +298,8 @@ func markdown(_ s: String) -> AttributedString {
         ?? AttributedString(s)
 }
 
-/// Approve, merge, close and open on GitHub: the item detail's Open menu and the Pull Request menu in the menu bar.
+/// Approve, merge, close and open on the forge: the item detail's Open menu and the Pull Request menu in the menu
+/// bar. Actions the forge can't do yet are left out.
 /// Shortcuts are bound in the menu bar only, so a key press can't fire both copies.
 struct PullRequestActions: View {
     @Environment(AppStore.self) private var store
@@ -290,31 +312,37 @@ struct PullRequestActions: View {
             Button("Approve") { Task { await store.approvePullRequest(item) } }
                 .shortcut("a", modifiers: [.command, .shift], if: inMenuBar)
         }
-        Button("Merge…") { confirm(.merge) }
-            .shortcut("m", modifiers: [.command, .shift], if: inMenuBar)
-            .disabled(item.pr.mergeBlocker != nil)
-        Button("Close PR…") { confirm(.close) }
-        Divider()
+        if store.can(.merge, item.pr) {
+            Button("Merge…") { confirm(.merge) }
+                .shortcut("m", modifiers: [.command, .shift], if: inMenuBar)
+                .disabled(item.pr.mergeBlocker != nil)
+        }
+        if store.can(.close, item.pr) {
+            Button("Close PR…") { confirm(.close) }
+        }
+        if store.can(.approve, item.pr) || store.can(.merge, item.pr) || store.can(.close, item.pr) {
+            Divider()
+        }
         // ⌘O goes where Open does (the conversation for your own PR, the changes otherwise), ⌘⇧O to the other.
-        if item.pr.primaryURL(viewer: store.viewer) == item.pr.url {
+        if item.pr.primaryURL(viewer: store.viewer(for: item.pr.repo.forge)) == item.pr.url {
             openConversation.shortcut("o", if: inMenuBar)
             openChanges.shortcut("o", modifiers: [.command, .shift], if: inMenuBar)
         } else {
             openChanges.shortcut("o", if: inMenuBar)
             openConversation.shortcut("o", modifiers: [.command, .shift], if: inMenuBar)
         }
-        if let blocker = item.pr.mergeBlocker {
+        if store.can(.merge, item.pr), let blocker = item.pr.mergeBlocker {
             Divider()
             Text("Can't merge: \(blocker.lowercased())")
         }
     }
 
     private var openChanges: some View {
-        Button("Open Changes on GitHub") { openURL(item.pr.changesURL) }
+        Button("Open Changes on \(item.pr.repo.forge.name)") { openURL(item.pr.changesURL) }
     }
 
     private var openConversation: some View {
-        Button("Open Conversation on GitHub") { openURL(item.pr.url) }
+        Button("Open Conversation on \(item.pr.repo.forge.name)") { openURL(item.pr.url) }
     }
 
     /// The dialog lives in the item detail, so bring the window back if it was closed.

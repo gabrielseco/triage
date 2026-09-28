@@ -34,7 +34,7 @@ public enum PromptBuilder {
     public static func prompt(for item: AttentionItem, context: PromptContext, mode: PromptMode) -> String {
         let pr = item.pr
         var s = """
-            You're on PR #\(pr.number) in \(pr.repo.fullName): "\(pr.title)"
+            You're on PR \(pr.ref) in \(pr.repo.fullName): "\(pr.title)"
             Author: \(pr.author) · branch \(pr.headRef) · head \(pr.headSha.prefix(10))
             \(pr.url.absoluteString)
 
@@ -53,7 +53,7 @@ public enum PromptBuilder {
     /// `inWorktree` is true when an agent starts in the PR's worktree (iTerm); false for a prompt pasted into a chat.
     public static func explainPRPrompt(for pr: PullRequest, diff: String?, inWorktree: Bool) -> String {
         var s = """
-            Explain PR #\(pr.number) in \(pr.repo.fullName) to me: "\(pr.title)"
+            Explain PR \(pr.ref) in \(pr.repo.fullName) to me: "\(pr.title)"
             Author: \(pr.author) · branch \(pr.headRef) · head \(pr.headSha.prefix(10))
             \(pr.url.absoluteString)
 
@@ -63,7 +63,7 @@ public enum PromptBuilder {
         let whereYouAre =
             inWorktree
             ? "You're in a git worktree on branch \(pr.headRef), already up to date. Read the code around the changes "
-                + "as needed, and `gh pr view \(pr.number)` for the full description and discussion."
+                + "as needed, and `\(pr.repo.forge.cli("view", pr.number))` for the full description and discussion."
             : "Work from the description and diff above."
         s += """
 
@@ -112,8 +112,9 @@ public enum PromptBuilder {
                 4. Draft a one-paragraph reply to post on the PR, if a reply is warranted.
                 """
         case .claudeCode:
+            let checkout = pr.repo.forge.cli("checkout", pr.number)
             return """
-                Run `gh pr checkout \(pr.number)` in a checkout of \(pr.repo.fullName) if you aren't on the branch.
+                Run `\(checkout)` in a checkout of \(pr.repo.fullName) if you aren't on the branch.
                 1. Read the evidence above and the relevant code, and explain the issue.
                 2. Propose a fix and wait for my go-ahead before editing.
                 3. After I approve: make the change, run the relevant tests locally, commit, and push to \(pr.headRef).

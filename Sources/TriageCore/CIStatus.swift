@@ -31,6 +31,11 @@ extension PullRequest {
         return CIStatus(failed: count(.failure), running: count(.pending), passed: count(.success) + count(.neutral))
     }
 
-    /// The PR's Checks tab on GitHub.
-    public var checksURL: URL { url.appendingPathComponent("checks") }
+    /// The PR's Checks tab on GitHub, its Pipelines tab on GitLab.
+    public var checksURL: URL {
+        switch repo.forge {
+        case .github: url.appendingPathComponent("checks")
+        case .gitlab: url.appendingPathComponent("pipelines")
+        }
+    }
 }

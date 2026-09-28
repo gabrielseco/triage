@@ -1,11 +1,13 @@
 import Foundation
 
 public enum GitLabError: LocalizedError {
+    case noToken
     case http(Int, String)
     case graphql(String)
 
     public var errorDescription: String? {
         switch self {
+        case .noToken: "No GitLab token. Add one in Settings → GitLab."
         case .http(401, _): "GitLab rejected the token (expired or revoked?). Create a new one with read_api."
         case .http(let code, let body): "GitLab HTTP \(code): \(Self.message(in: body) ?? String(body.prefix(300)))"
         case .graphql(let msg): "GitLab GraphQL: \(msg)"
@@ -20,6 +22,17 @@ public enum GitLabError: LocalizedError {
         }
         guard let b = try? JSONDecoder().decode(Body.self, from: Data(body.utf8)) else { return nil }
         return b.message ?? b.error
+    }
+}
+
+public enum GitLabAuth {
+    /// Where Settings keeps a host's token: its own Keychain service, with the host as the account.
+    public static let keychainService = "dev.rogal.triage.gitlab"
+
+    /// GITLAB_TOKEN env var, else the Keychain entry for `host`.
+    public static func token(host: String) -> String? {
+        if let t = ProcessInfo.processInfo.environment["GITLAB_TOKEN"], !t.isEmpty { return t }
+        return Keychain.get(host, service: keychainService)
     }
 }
 

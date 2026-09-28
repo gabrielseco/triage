@@ -94,3 +94,63 @@ struct Boom: LocalizedError {
     }
     #expect(e.localizedDescription == "acme/api: boom")
 }
+
+private func mr(_ path: String, _ number: Int, host: String = "gitlab.com") throws -> PullRequest {
+    let repo = try #require(RepoRef(gitlabPath: path, host: host))
+    return PullRequest(
+        repo: repo, number: number, title: "t",
+        url: repo.url.appendingPathComponent("-/merge_requests/\(number)"), author: "a", headSha: "s",
+        mergeable: .unknown)
+}
+
+@Test func gitlabMergeRequestsReadLikeGitLab() throws {
+    let pr = try mr("acme/web", 12)
+    #expect(pr.ref == "!12")
+    #expect(pr.changesURL.absoluteString == "https://gitlab.com/acme/web/-/merge_requests/12/diffs")
+    #expect(pr.checksURL.absoluteString == "https://gitlab.com/acme/web/-/merge_requests/12/pipelines")
+    #expect(pr.mergeWarnings.contains("GitLab is still checking mergeability"))
+    #expect(Forge.gitlab(host: "gitlab.com").cli("checkout", 12) == "glab mr checkout 12")
+    #expect(Forge.gitlab(host: "gitlab.com").pullRequestsName == "Merge requests")
+
+    let gh = PullRequest(
+        repo: RepoRef(owner: "acme", name: "web"), number: 7, title: "t",
+        url: try #require(URL(string: "https://github.com/acme/web/pull/7")), author: "a", headSha: "s")
+    #expect(gh.ref == "#7")
+    #expect(gh.changesURL.absoluteString.hasSuffix("/pull/7/changes"))
+    #expect(Forge.github.cli("view", 7) == "gh pr view 7")
+}
+
+@Test func gitlabPromptsUseGlab() throws {
+    let pr = try mr("acme/web", 12)
+    let item = AttentionItem(id: "x", kind: .ciFailure, severity: .high, pr: pr, headline: "h", evidence: [])
+    let prompt = PromptBuilder.prompt(for: item, context: PromptContext(), mode: .claudeCode)
+    #expect(prompt.contains("PR !12 in acme/web"))
+    #expect(prompt.contains("`glab mr checkout 12`"))
+    #expect(!prompt.contains("gh pr"))
+    let explain = PromptBuilder.explainPRPrompt(for: pr, diff: nil, inWorktree: true)
+    #expect(explain.contains("`glab mr view 12`"))
+}
+
+@Test func gitlabResultsGroupByProjectWithWarningsOnce() throws {
+    let snap = RepoSnapshot(
+        pullRequests: [try mr("acme/web", 1), try mr("acme/api", 2), try mr("acme/web", 3)],
+        warnings: ["GitLab: capped"])
+    let results = GitLabForge.results(snap)
+    #expect(results.map(\.repo.id) == ["gitlab.com/acme/api", "gitlab.com/acme/web"])
+    let snaps = try results.map { try $0.result.get() }
+    #expect(snaps.map { $0.pullRequests.map(\.number) } == [[2], [1, 3]])
+    #expect(snaps.flatMap(\.warnings) == ["GitLab: capped"])
+    #expect(GitLabForge.results(RepoSnapshot(pullRequests: [])).isEmpty)
+}
+
+@Test func gitlabActionsAreNotSupportedYet() async throws {
+    let forge = GitLabForge(host: "gitlab.com", token: "t")
+    let pr = try mr("acme/web", 1)
+    #expect(forge.forge == .gitlab(host: "gitlab.com"))
+    await #expect(throws: ForgeError.self) { try await forge.merge(pr) }
+    await #expect(throws: ForgeError.self) { try await forge.approve(pr) }
+    await #expect(throws: ForgeError.self) { try await forge.close(pr) }
+    #expect(await forge.diff(pr) == nil)
+    #expect(await forge.ciLog(pr, checkRunID: 1) == nil)
+    #expect(GitLabError.noToken.localizedDescription.contains("Settings"))
+}

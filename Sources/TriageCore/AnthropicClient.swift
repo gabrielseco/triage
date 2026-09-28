@@ -90,9 +90,10 @@ public struct AnthropicClient: Sendable {
 
 /// Minimal Keychain wrapper for the API key typed into Settings.
 public enum Keychain {
-    static let service = "dev.rogal.triage"
+    /// The app's own entries (the Anthropic key); GitLab tokens use `GitLabAuth.keychainService`.
+    public static let service = "dev.rogal.triage"
 
-    public static func get(_ account: String) -> String? {
+    public static func get(_ account: String, service: String = service) -> String? {
         let q: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
             kSecAttrAccount as String: account, kSecReturnData as String: true,
@@ -104,8 +105,8 @@ public enum Keychain {
 
     /// Replaces the stored value; nil or empty removes it. Throws if the Keychain refused, and then the
     /// previous value is still there: it's updated in place, never deleted first.
-    public static func set(_ value: String?, for account: String) throws {
-        try set(value, for: account, using: .system)
+    public static func set(_ value: String?, for account: String, service: String = service) throws {
+        try set(value, for: account, service: service, using: .system)
     }
 
     /// The three SecItem calls `set` needs, swappable so tests don't touch the real Keychain.
@@ -120,7 +121,9 @@ public enum Keychain {
             delete: { SecItemDelete($0 as CFDictionary) })
     }
 
-    static func set(_ value: String?, for account: String, using ops: Operations) throws {
+    static func set(
+        _ value: String?, for account: String, service: String = service, using ops: Operations
+    ) throws {
         let base: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
             kSecAttrAccount as String: account,

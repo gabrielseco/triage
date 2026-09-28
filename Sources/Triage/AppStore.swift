@@ -48,6 +48,15 @@ final class AppStore {
     // Fix in iTerm: repo full name → local clone, and the harness command template.
     var checkoutPaths: [String: String] { didSet { save(checkoutPaths, "checkoutPaths") } }
     var harnessCommand: String { didSet { defaults.set(harnessCommand, forKey: "harnessCommand") } }
+    /// The GitLab instance whose merge requests (assigned to you or waiting on your review) are shown, e.g.
+    /// gitlab.com. Empty means GitLab is off. The token lives in the Keychain, never here.
+    var gitlabHost: String {
+        didSet {
+            defaults.set(gitlabHost, forKey: "gitlabHost")
+            gitlabViewer = nil
+            cachedGitLabToken = nil
+        }
+    }
     /// Per item: what the last Fix in / Copy did, shown under the buttons.
     var actionStatus: [String: String] = [:]
     /// PRs closed or merged from Triage, hidden until a refresh confirms they're gone from GitHub's open list.
@@ -60,11 +69,16 @@ final class AppStore {
     private var refreshAgain = false
     /// Key read from the key source, held in memory only so it's fetched once per app session.
     var cachedOnePasswordKey: String?
+    /// The GitLab token, read from the Keychain once per session rather than on every refresh.
+    var cachedGitLabToken: String?
 
     var prs: [PullRequest] = []
     var items: [AttentionItem] = []
     var stats: [String: PRStats] = [:]
+    /// The GitHub login.
     var viewer: String?
+    /// The GitLab username, which is usually different.
+    var gitlabViewer: String?
     var isRefreshing = false
     var lastRefresh: Date?
     var errors: [String] = []
@@ -90,6 +104,7 @@ final class AppStore {
         onePasswordRef = UserDefaults.standard.string(forKey: "onePasswordRef") ?? ""
         checkoutPaths = Self.load("checkoutPaths") ?? [:]
         harnessCommand = UserDefaults.standard.string(forKey: "harnessCommand") ?? Handoff.defaultHarnessCommand
+        gitlabHost = UserDefaults.standard.string(forKey: "gitlabHost") ?? ""
         digestHours = Self.load("digestHours") ?? [12, 18]
         digestWeekdaysOnly = UserDefaults.standard.object(forKey: "digestWeekdaysOnly") as? Bool ?? true
         digestBaseline = Self.load("digestBaseline")
@@ -106,7 +121,10 @@ final class AppStore {
             items
             .filter { !dismissed.contains($0.id) && (snoozed[$0.id] ?? .distantPast) < now }
             .filter { !closedPRIDs.contains($0.pr.id) }
-            .filter { !onlyMine || viewer == nil || $0.pr.author == viewer }
+            .filter { item in
+                guard onlyMine, let me = viewer(for: item.pr.repo.forge) else { return true }
+                return item.pr.author == me
+            }
             .sorted { ($0.severity, $0.pr.updatedAt) > ($1.severity, $1.pr.updatedAt) }
     }
 
@@ -141,6 +159,25 @@ final class AppStore {
         let waiting = stats.values.filter { $0.pendingChecks > 0 }.count
         let noise = stats.values.reduce(0) { $0 + $1.noiseComments }
         return "\(needs) need you · \(waiting) PRs waiting on CI · \(noise) bot comments muted"
+    }
+
+    /// Who you are on `forge`: "Mine", whose comments are new, what you can approve.
+    func viewer(for forge: Forge) -> String? {
+        switch forge {
+        case .github: viewer
+        case .gitlab: gitlabViewer
+        }
+    }
+
+    /// Whether Triage can do `capability` for this PR yet; views hide what it can't.
+    func can(_ capability: ForgeCapabilities, _ pr: PullRequest) -> Bool {
+        pr.repo.forge.capabilities.contains(capability)
+    }
+
+    /// GitLab projects with an open merge request for you, for the sidebar. They come from the fetch rather
+    /// than a list you keep.
+    var gitlabProjects: [RepoRef] {
+        Set(prs.map(\.repo).filter { $0.forge != .github }).sorted { $0.fullName < $1.fullName }
     }
 
     func count(_ k: AttentionKind) -> Int { activeItems.filter { $0.kind == k }.count }
@@ -208,32 +245,31 @@ final class AppStore {
     }
 
     private func refreshOnce() async {
-        let client: any ForgeClient
-        do { client = try await forgeClient(.github, repos: repos) } catch {
-            errors = [error.localizedDescription]
-            return
-        }
-        if viewer == nil { viewer = try? await client.viewer() }
-
-        // A repo removed while fetching must not bring back its PRs, warnings or errors.
-        let watched = Set(repos)
-        let results = await client.fetch().filter { watched.contains($0.repo) }
+        async let github = fetchGitHub()
+        async let gitlab = fetchGitLab()
+        let (gh, gl) = await (github, gitlab)
+        // Checked after the fetch: a repo removed, or GitLab turned off or pointed elsewhere, while fetching
+        // must not bring back its PRs, warnings or errors.
+        let current = Set(repos)
+        let host = gitlabHost
+        let results =
+            gh.results.filter { current.contains($0.repo) }
+            + (host.isEmpty ? [] : gl.results.filter { $0.repo.forge == .gitlab(host: host) })
         let merged = RepoSnapshot.merging(results.compactMap { try? $0.result.get() })
-        let errs = results.compactMap { r -> String? in
-            guard case .failure(let e) = r.result else { return nil }
-            return e.localizedDescription
-        }
+        let errs =
+            gh.errors + (host.isEmpty ? [] : gl.errors)
+            + results.compactMap { r -> String? in
+                guard case .failure(let e) = r.result else { return nil }
+                return e.localizedDescription
+            }
         let fetched = merged.pullRequests
         var seen = seenPRs
-        // Against the current repos, not `watched`: a repo removed mid-fetch mustn't get its clock back.
-        let stillWatched = Set(repos)
-        seen.startWatching(
-            results.filter { stillWatched.contains($0.repo) && (try? $0.result.get()) != nil }.map(\.repo))
+        seen.startWatching(results.filter { (try? $0.result.get()) != nil }.map(\.repo))
 
         var newItems: [AttentionItem] = []
         var newStats: [String: PRStats] = [:]
         for pr in fetched {
-            let (i, s) = Classifier.classify(pr, viewer: viewer, isNew: seen.isNew(pr))
+            let (i, s) = Classifier.classify(pr, viewer: viewer(for: pr.repo.forge), isNew: seen.isNew(pr))
             newItems += i
             newStats[pr.id] = s
         }
@@ -250,6 +286,32 @@ final class AppStore {
         closedPRIDs.formIntersection(fetched.map(\.id))
         snoozed = snoozed.filter { live.contains($0.key) && $0.value > Date() }
         if !live.contains(selection ?? "") { selection = visibleItems.first?.id }
+    }
+
+    private struct Fetched {
+        var results: [RepoResult] = []
+        var errors: [String] = []
+    }
+
+    private func fetchGitHub() async -> Fetched {
+        do {
+            let client = try await forgeClient(.github, repos: repos)
+            if viewer == nil { viewer = try? await client.viewer() }
+            return Fetched(results: try await client.fetch())
+        } catch {
+            return Fetched(errors: [error.localizedDescription])
+        }
+    }
+
+    private func fetchGitLab() async -> Fetched {
+        guard !gitlabHost.isEmpty else { return Fetched() }
+        do {
+            let client = try await forgeClient(.gitlab(host: gitlabHost))
+            if gitlabViewer == nil { gitlabViewer = try? await client.viewer() }
+            return Fetched(results: try await client.fetch())
+        } catch {
+            return Fetched(errors: ["GitLab: \(error.localizedDescription)"])
+        }
     }
 
     func startAutoRefresh() {

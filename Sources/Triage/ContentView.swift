@@ -100,6 +100,24 @@ struct Sidebar: View {
                     }
                     .foregroundStyle(addFailed ? .red : .primary)
             }
+            if !store.gitlabHost.isEmpty {
+                // Projects come and go with your merge requests; there's nothing to add or stop watching.
+                Section("GitLab") {
+                    ForEach(store.gitlabProjects) { r in
+                        // Group paths are long and shared (`org/team/…`), so the name is what tells them apart.
+                        row(r.name, "book.closed", store.count(repo: r.id))
+                            .tag(SidebarFilter.repo(r.id))
+                            .help(r.fullName)
+                            .contextMenu {
+                                Button("Open Merge Requests on GitLab") { openURL(r.pullsURL) }
+                                Button("Open Project on GitLab") { openURL(r.url) }
+                            }
+                    }
+                    if store.gitlabProjects.isEmpty {
+                        Text("No merge requests for you").font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+            }
             if !store.errors.isEmpty {
                 Section("Errors") {
                     ForEach(store.errors, id: \.self) { Text($0).font(.caption).foregroundStyle(.red) }
@@ -141,7 +159,7 @@ struct InboxList: View {
                     "Inbox zero", systemImage: "checkmark.circle",
                     description: "Nothing in \(repo.fullName) needs you right now."
                 ) {
-                    Button("Open pull requests") { openURL(repo.pullsURL) }
+                    Button("Open \(repo.forge.pullRequestsName.lowercased())") { openURL(repo.pullsURL) }
                         .buttonStyle(.borderedProminent)
                     Button("Repository") { openURL(repo.url) }
                 }
@@ -156,7 +174,8 @@ struct InboxList: View {
                             ForEach(group.items) { ItemRow(item: $0).tag($0.id) }
                         } header: {
                             PRHeader(
-                                pr: group.pr, stats: store.stats[group.pr.id], isMine: group.pr.author == store.viewer)
+                                pr: group.pr, stats: store.stats[group.pr.id],
+                                isMine: group.pr.author == store.viewer(for: group.pr.repo.forge))
                         }
                     }
                 }
@@ -169,8 +188,8 @@ struct InboxList: View {
     }
 
     private var selectedRepo: RepoRef? {
-        guard case .repo(let name) = store.filter else { return nil }
-        return RepoRef(string: name)
+        guard case .repo(let id) = store.filter else { return nil }
+        return (store.repos + store.gitlabProjects).first { $0.id == id }
     }
 }
 
@@ -213,7 +232,7 @@ struct RepoLinks: View {
             Button {
                 openURL(repo.pullsURL)
             } label: {
-                Label("Pull requests", systemImage: "arrow.triangle.pull")
+                Label(repo.forge.pullRequestsName, systemImage: "arrow.triangle.pull")
             }
             Button {
                 openURL(repo.url)
@@ -222,7 +241,7 @@ struct RepoLinks: View {
             }
             Spacer()
         }
-        .help("Open \(repo.fullName) on GitHub")
+        .help("Open \(repo.fullName) on \(repo.forge.name)")
         .padding(10)
         .background(.bar)
     }
@@ -236,7 +255,7 @@ struct PRHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 6) {
-                Text(verbatim: "\(pr.repo.name) #\(pr.number)").font(.caption.monospaced())
+                Text(verbatim: "\(pr.repo.name) \(pr.ref)").font(.caption.monospaced())
                 if pr.isDraft {
                     Text("draft").font(.caption2).padding(.horizontal, 4).background(.quaternary, in: Capsule())
                 }
