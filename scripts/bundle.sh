@@ -6,7 +6,8 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP="${TRIAGE_APP:-$HOME/Applications/Triage.app}"  # TRIAGE_APP: build elsewhere (/verify)
 BUNDLE_ID="dev.rogal.triage"
 
-swift build -c release -q --package-path "$ROOT"
+# Low CPU priority: this runs from /verify and the post-merge hook while the user is working.
+nice -n 10 swift build -c release -q --package-path "$ROOT"
 
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$ROOT/.build/release/Triage" "$APP/Contents/MacOS/Triage"

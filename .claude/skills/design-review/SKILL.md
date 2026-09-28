@@ -53,7 +53,7 @@ For each surface and state from Step 1:
   V=<scratchpad>/verify/Triage.app
   [[ "$V" == */verify/Triage.app ]] || exit 1    # never let the pattern match the installed app
   pkill -f "$V/Contents/MacOS/Triage"; sleep 1
-  open "$V" --args -AppleInterfaceStyle Dark     # plain `open "$V"` for light (if the system is light)
+  open -g "$V" --args -AppleInterfaceStyle Dark  # plain `open -g "$V"` for light (if the system is light)
   ```
   Check the first dark capture really is dark. If the system itself is in dark mode, the light pass needs the user
   to switch System Settings › Appearance, so ask for that. Don't change it yourself.
