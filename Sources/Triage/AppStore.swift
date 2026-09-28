@@ -114,6 +114,7 @@ final class AppStore {
     var visibleItems: [AttentionItem] {
         switch filter {
         case .all: inboxItems
+        case .kind(.awaitingReview): activeItems.filter { $0.kind == .awaitingReview }.sortedByCreation()
         case .kind(let k): activeItems.filter { $0.kind == k }
         case .repo(let r): activeItems.filter { $0.pr.repo.fullName == r }
         case .lastDigest: activeItems.filter { lastDigestItemIDs.contains($0.id) }

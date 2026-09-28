@@ -238,6 +238,14 @@ public struct AttentionItem: Identifiable, Hashable, Sendable {
     public var evidence: [Evidence]
 }
 
+extension [AttentionItem] {
+    /// Waiting for review reads as a queue: the most recently opened PR first, so the order doesn't reshuffle
+    /// every time someone pushes to or comments on a PR in it.
+    public func sortedByCreation() -> [AttentionItem] {
+        sorted { ($0.pr.createdAt, $0.pr.number) > ($1.pr.createdAt, $1.pr.number) }
+    }
+}
+
 public struct PRStats: Sendable, Hashable {
     public var noiseComments = 0
     public var pendingChecks = 0
