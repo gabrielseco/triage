@@ -89,3 +89,6 @@ what differs. Screenshots can't be uploaded to the PR with `gh`, so list the fil
 the PR's Screenshots table. For Before shots, run Step 2 from `origin/main` (a throwaway worktree) or
 capture the installed app before the swap if it matches main. Only tick the "Tried in the bundled app"
 Testing box when this ran.
+
+This checks behaviour, not looks. If the PR changes anything visible, run `/design-review` next: it reuses
+Steps 2, 3 and 5 and reviews the result against `docs/DESIGN.md`.

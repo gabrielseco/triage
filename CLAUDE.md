@@ -1,7 +1,7 @@
 # Triage
 
 Native macOS inbox for open PRs (SwiftUI, Swift 6, macOS 14+). Architecture: `README.md` and
-`docs/HOW_IT_WORKS.md`.
+`docs/HOW_IT_WORKS.md`. UI rules: `docs/DESIGN.md`.
 
 ## Commands
 
@@ -20,11 +20,14 @@ Do this without being asked:
 2. **One PR per fix or feature.** Don't bundle unrelated changes.
 3. **Check before pushing.** `scripts/check.sh --fix` must pass. Add Swift Testing tests in `TriageCoreTests` for `TriageCore` changes.
    For changes to the app target (`Sources/Triage`, `Resources`), run `/verify` too. It runs the PR build and
-   screenshots it, and those screenshots go in the PR.
+   screenshots it, and those screenshots go in the PR. If the change is visible (layout, styling, copy, a new
+   view or state), run `/design-review` after `/verify` and fix its blocking findings before pushing. It checks
+   the build against `docs/DESIGN.md` in light and dark mode and at the minimum window size.
 4. **Open the PR** with `.github/pull_request_template.md` (Summary, Why, collapsed What changed, Screenshots,
    Related Resources, Testing). Tick only the Testing boxes you actually ran.
-5. **Run `/pr-review` on the PR** and post the result on the PR itself: inline comments per finding, or a
-   short "no findings" comment. Fix the findings on the branch, push, and run `/pr-review` again.
+5. **Run `/pr-review` on the PR** (and `/design-review` if the change is visible) and post the result on the PR
+   itself: inline comments per finding, or a short "no findings" comment. Fix the findings on the branch, push,
+   and run `/pr-review` again.
 6. **Merge only when the user asks**, and then only with CI green and no blocking findings, using a merge commit
    (`gh pr merge --merge`). After merging, say what other open PRs now need a rebase.
 7. **After merging, update the main checkout.** Run `git pull` on `main` in the main checkout (not a worktree). The
