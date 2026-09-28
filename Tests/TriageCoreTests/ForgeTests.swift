@@ -13,9 +13,62 @@ import Testing
     let r = RepoRef(owner: "acme", name: "web")
     #expect(r.forge == .github)
     #expect(r.id == "acme/web")
-    let json = try JSONEncoder().encode(r)
-    #expect(String(decoding: json, as: UTF8.self).contains("forge") == false)
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = .sortedKeys
+    #expect(String(decoding: try encoder.encode(r), as: UTF8.self) == #"{"name":"web","owner":"acme"}"#)
     #expect(try JSONDecoder().decode(RepoRef.self, from: Data(#"{"owner":"acme","name":"web"}"#.utf8)) == r)
+}
+
+@Test func gitlabCanDoNothingYet() {
+    #expect(Forge.gitlab(host: "gitlab.com").capabilities.isEmpty)
+    #expect(ForgeError.unsupported(.gitlab(host: "gitlab.com")).localizedDescription.contains("gitlab.com"))
+}
+
+@Test func gitlabProjectsNestAndLeadWithTheHost() throws {
+    let r = try #require(RepoRef(gitlabPath: "acme/platform/web", host: "gitlab.com"))
+    #expect(r.forge == .gitlab(host: "gitlab.com"))
+    #expect(r.owner == "acme/platform")
+    #expect(r.name == "web")
+    #expect(r.fullName == "acme/platform/web")
+    #expect(r.id == "gitlab.com/acme/platform/web")
+    #expect(r.url.absoluteString == "https://gitlab.com/acme/platform/web")
+    #expect(r.pullsURL.absoluteString == "https://gitlab.com/acme/platform/web/-/merge_requests")
+    #expect(RepoRef(gitlabPath: "web", host: "gitlab.com") == nil)
+    #expect(RepoRef(gitlabPath: "/web", host: "gitlab.com") == nil)
+}
+
+/// A GitHub repo and a GitLab project with the same path are different repos, with different item ids.
+@Test func sameNameOnBothForgesDoesntCollide() throws {
+    let gh = RepoRef(owner: "acme", name: "web")
+    let gl = try #require(RepoRef(gitlabPath: "acme/web", host: "gitlab.com"))
+    #expect(gh != gl)
+    #expect(gh.id != gl.id)
+    let pr = { (repo: RepoRef) in
+        PullRequest(repo: repo, number: 1, title: "t", url: repo.url, author: "a", headSha: "s")
+    }
+    #expect(pr(gh).id == "acme/web#1")
+    #expect(pr(gl).id == "gitlab.com/acme/web#1")
+}
+
+@Test func gitlabReposRoundTripThroughJSON() throws {
+    let r = try #require(RepoRef(gitlabPath: "acme/platform/web", host: "gitlab.example.com"))
+    let back = try JSONDecoder().decode(RepoRef.self, from: try JSONEncoder().encode(r))
+    #expect(back == r)
+    #expect(back.id == "gitlab.example.com/acme/platform/web")
+}
+
+@Test func seenPRsKeepGitHubAndGitLabApart() throws {
+    let gh = RepoRef(owner: "acme", name: "web")
+    let gl = try #require(RepoRef(gitlabPath: "acme/web", host: "gitlab.com"))
+    var seen = SeenPRs()
+    seen.startWatching([gh], now: Date(timeIntervalSince1970: 0))
+    #expect(Set(seen.repos.keys) == ["acme/web"])
+    let fresh = PullRequest(
+        repo: gl, number: 1, title: "t", url: gl.url, author: "a", createdAt: Date(timeIntervalSince1970: 10),
+        headSha: "s")
+    #expect(seen.isNew(fresh) == false)  // its project isn't watched yet
+    seen.startWatching([gl], now: Date(timeIntervalSince1970: 5))
+    #expect(seen.isNew(fresh))
 }
 
 struct Boom: LocalizedError {

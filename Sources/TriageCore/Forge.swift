@@ -1,13 +1,17 @@
 import Foundation
 
-/// Where pull requests come from. GitLab joins in a later step (docs/plans/GITLAB.md).
+/// Where pull requests come from. GitLab is being added in steps (docs/plans/GITLAB.md).
 public enum Forge: Hashable, Sendable {
     case github
+    /// A GitLab instance by host, e.g. `gitlab.com`.
+    case gitlab(host: String)
 
     /// What Triage can do with this forge's pull requests; views hide what's missing.
     public var capabilities: ForgeCapabilities {
         switch self {
         case .github: .all
+        // Each GitLab capability is turned on as it's built.
+        case .gitlab: []
         }
     }
 }
@@ -76,6 +80,18 @@ public struct RepoResult: Sendable {
             var results: [RepoResult] = []
             for await r in group { results.append(r) }
             return results
+        }
+    }
+}
+
+public enum ForgeError: LocalizedError {
+    /// A forge Triage can't talk to yet.
+    case unsupported(Forge)
+
+    public var errorDescription: String? {
+        switch self {
+        case .unsupported(.github): "GitHub isn't supported yet."
+        case .unsupported(.gitlab(let host)): "GitLab (\(host)) isn't supported yet."
         }
     }
 }
