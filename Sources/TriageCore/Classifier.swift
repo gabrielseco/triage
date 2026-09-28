@@ -147,9 +147,9 @@ public enum Classifier {
 
     /// Someone else opened a PR: news even when nothing is wrong with it, since otherwise it would only show up
     /// as a passive "waiting for review". Added after the quiet items so it doesn't hide them. Not for the viewer's
-    /// own PRs, nor for noise bots' dependency bumps, which would bury a human's PR.
+    /// own PRs. Dependency bumps (renovate, dependabot) count too: they need a review and a merge like any other PR.
     static func newPR(_ pr: PullRequest, viewer: String?) -> AttentionItem? {
-        guard pr.author != viewer, !noiseBots.contains(normalizedLogin(pr.author)) else { return nil }
+        guard pr.author != viewer else { return nil }
         return AttentionItem(
             id: "\(pr.id)|new",
             kind: .newPR,
