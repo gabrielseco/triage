@@ -198,3 +198,36 @@ private func threadsID(_ threads: [ReviewThreadInfo]) -> String? {
     #expect(threadsID([thread(1), thread(2, replies: ["cursor[bot]"])]) == before)
     #expect(threadsID([thread(1, replies: ["me", "alice"]), thread(2)]) != before)  // the reviewer answered back
 }
+
+@Test func newPRIsAddedNextToTheQuietItem() {
+    let (items, _) = Classifier.classify(pr(), viewer: "someone-else", isNew: true)
+    #expect(items.map(\.kind) == [.awaitingReview, .newPR])
+    let new = items[1]
+    #expect(new.id == "acme/web#1020|new")
+    #expect(new.headline == "Opened by gabriel")
+    #expect(new.evidence.map(\.title) == ["Add thing"])
+    #expect(!new.kind.isPassive)
+}
+
+@Test func newPRSitsAlongsideProblems() {
+    let (items, _) = Classifier.classify(pr(mergeable: .conflicting, draft: true), isNew: true)
+    #expect(items.map(\.kind) == [.mergeConflict, .newPR])
+    #expect(items[1].headline == "Draft opened by gabriel")
+}
+
+@Test func viewersOwnPRIsNeverNew() {
+    let (items, _) = Classifier.classify(pr(), viewer: "gabriel", isNew: true)
+    #expect(!items.map(\.kind).contains(.newPR))
+}
+
+@Test func notNewMeansNoNewPRItem() {
+    let (items, _) = Classifier.classify(pr(), viewer: "someone-else")
+    #expect(items.map(\.kind) == [.awaitingReview])
+}
+
+@Test func noiseBotPRIsNeverNew() {
+    var bump = pr()
+    bump.author = "renovate[bot]"
+    let (items, _) = Classifier.classify(bump, viewer: "someone-else", isNew: true)
+    #expect(!items.map(\.kind).contains(.newPR))
+}

@@ -23,6 +23,8 @@ final class AppStore {
     var repos: [RepoRef] { didSet { save(repos, "repos") } }
     var dismissed: Set<String> { didSet { save(dismissed, "dismissed") } }
     var snoozed: [String: Date] { didSet { save(snoozed, "snoozed") } }
+    /// When each repo started being watched and which new PRs were dismissed: the rest show a New PR item.
+    var seenPRs: SeenPRs { didSet { save(seenPRs, "seenPRs") } }
     var onlyMine: Bool { didSet { defaults.set(onlyMine, forKey: "onlyMine") } }
     var model: String { didSet { defaults.set(model, forKey: "model") } }
     /// e.g. op://Employee/Anthropic API/credential. Only the reference is stored, never the key.
@@ -75,6 +77,7 @@ final class AppStore {
         repos = Self.load("repos") ?? []
         dismissed = Self.load("dismissed") ?? []
         snoozed = Self.load("snoozed") ?? [:]
+        seenPRs = Self.load("seenPRs") ?? SeenPRs()
         onlyMine = UserDefaults.standard.bool(forKey: "onlyMine")
         model = UserDefaults.standard.string(forKey: "model") ?? AnthropicClient.defaultModel
         onePasswordRef = UserDefaults.standard.string(forKey: "onePasswordRef") ?? ""
@@ -152,6 +155,7 @@ final class AppStore {
         repos.removeAll { $0 == r }
         items.removeAll { $0.pr.repo == r }
         prs.removeAll { $0.repo == r }
+        seenPRs.stopWatching(r)
         // Warnings and errors are strings led by the repo ("owner/name: …", "owner/name#7: …").
         let isAbout = { (line: String) in line.hasPrefix("\(r.fullName):") || line.hasPrefix("\(r.fullName)#") }
         warnings.removeAll(where: isAbout)
@@ -160,6 +164,7 @@ final class AppStore {
 
     func dismiss(_ item: AttentionItem) {
         dismissed.insert(item.id)
+        if item.kind == .newPR { seenPRs.dismiss(item.pr) }
         advanceSelection(from: item)
     }
 
@@ -171,6 +176,7 @@ final class AppStore {
     func restoreHidden() {
         dismissed = []
         snoozed = [:]
+        seenPRs.undismissAll()
     }
 
     func advanceSelection(from item: AttentionItem) {
@@ -210,15 +216,21 @@ final class AppStore {
             return e.localizedDescription
         }
         let fetched = merged.pullRequests
+        var seen = seenPRs
+        // Against the current repos, not `watched`: a repo removed mid-fetch mustn't get its clock back.
+        let stillWatched = Set(repos)
+        seen.startWatching(
+            results.filter { stillWatched.contains($0.repo) && (try? $0.result.get()) != nil }.map(\.repo))
 
         var newItems: [AttentionItem] = []
         var newStats: [String: PRStats] = [:]
         for pr in fetched {
-            let (i, s) = Classifier.classify(pr, viewer: viewer)
+            let (i, s) = Classifier.classify(pr, viewer: viewer, isNew: seen.isNew(pr))
             newItems += i
             newStats[pr.id] = s
         }
         prs = fetched
+        seenPRs = seen
         items = newItems
         stats = newStats
         errors = errs
