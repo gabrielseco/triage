@@ -21,7 +21,7 @@ private func detail(
       "author": {"username": "gabriel", "avatarUrl": "/uploads/-/system/user/avatar/1/a.png", "bot": false},
       "approvedBy": {"nodes": [\(approvers)]},
       "reviewers": {"nodes": [{"username": "rita", "mergeRequestInteraction": {"reviewState": "\(reviewState)"}}]},
-      "headPipeline": {"jobs": {"count": 3, "nodes": [
+      "headPipeline": {"status": "FAILED", "path": "/acme/platform/web/-/pipelines/55", "jobs": {"count": 3, "nodes": [
         {"id": "gid://gitlab/Ci::Build/901", "name": "test", "status": "FAILED", "allowFailure": false,
          "webPath": "/acme/platform/web/-/jobs/901"},
         {"id": "gid://gitlab/Ci::Build/902", "name": "lint", "status": "FAILED", "allowFailure": true,
@@ -52,7 +52,7 @@ private func detail(
         {"resolvable": false, "resolved": false, "notes": {"nodes": [
           {"id": "gid://gitlab/Note/105",
            "body": "Coverage dropped 2%", "system": false, "url": null, "createdAt": "2026-09-22T10:00:00Z",
-           "author": {"username": "project_77_bot_3f2a", "bot": false}, "position": null}
+           "author": {"username": "project_77_bot_3f2a", "name": "cursor", "bot": false}, "position": null}
         ]}}\(extraNote)
       ]}
     }}}}
@@ -112,6 +112,7 @@ private func model(_ json: String) throws -> (PullRequest, [String]) {
     // The system note is dropped; the access-token bot's comment stays, flagged as a bot.
     #expect(pr.comments.map(\.body) == ["Coverage dropped 2%"])
     #expect(pr.comments[0].isBot)
+    #expect(pr.comments[0].author == "cursor")  // its display name, not project_77_bot_3f2a
 }
 
 /// Pushes add system notes ("added 3 commits"); they mustn't change item ids, or dismissals would reset.
@@ -152,6 +153,34 @@ private func model(_ json: String) throws -> (PullRequest, [String]) {
     #expect(try model(detail(status: "NEED_REBASE")).0.mergeable == .conflicting)
     #expect(try model(detail(status: "CHECKING")).0.mergeable == .unknown)
     #expect(try model(detail(status: "NOT_APPROVED")).0.mergeable == .mergeable)
+}
+
+/// A pipeline that failed before any job ran (a config error), as seen on gitlab.com: without the pipeline as
+/// a check, an approved MR would read as ready to merge.
+@Test func aPipelineThatFailedWithoutJobsIsAFailingCheck() throws {
+    let noJobs = detail(approved: true, approvalsLeft: 0, approvers: #"{"username": "rita"}"#)
+        .replacingOccurrences(
+            of: #"(?s)"jobs": \{"count": 3, "nodes": \[.*?\]\}"#, with: #""jobs": {"count": 0, "nodes": []}"#,
+            options: .regularExpression)
+    let pr = try model(noJobs).0
+    #expect(pr.checks.map(\.name) == ["Pipeline"])
+    #expect(pr.checks[0].state == .failure)
+    #expect(pr.checks[0].url?.absoluteString == "https://gitlab.com/acme/platform/web/-/pipelines/55")
+    let kinds = Classifier.classify(pr, viewer: "rita").items.map(\.kind)
+    #expect(kinds.contains(.ciFailure))
+    #expect(!kinds.contains(.readyToMerge))
+}
+
+@Test func thePipelineIsOnlyAddedWhenItSaysMoreThanTheJobs() throws {
+    // A failing job already explains the failed pipeline.
+    #expect(try model(detail()).0.checks.map(\.name) == ["test", "lint", "deploy"])
+    // Jobs all green but the pipeline failed (a downstream pipeline): the pipeline shows up.
+    let greenJobs = detail()
+        .replacingOccurrences(
+            of: #""status": "FAILED", "allowFailure": false"#, with: #""status": "SUCCESS", "allowFailure": false"#
+        )
+        .replacingOccurrences(of: #""status": "RUNNING""#, with: #""status": "SUCCESS""#)
+    #expect(try model(greenJobs).0.checks.last?.name == "Pipeline")
 }
 
 @Test func botsIncludeAccessTokenUsers() {

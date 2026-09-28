@@ -133,14 +133,14 @@ public struct GitLabClient: Sendable {
             mergeRequest(iid: $iid) {
               iid title description webUrl draft createdAt updatedAt sourceBranch diffHeadSha
               detailedMergeStatus conflicts approved approvalsLeft
-              author { username avatarUrl bot }
+              author { username name avatarUrl bot }
               approvedBy { nodes { username } }
               reviewers { nodes { username mergeRequestInteraction { reviewState } } }
-              headPipeline { jobs(first: 100) { count nodes { id name status allowFailure webPath } } }
+              headPipeline { status path jobs(first: 100) { count nodes { id name status allowFailure webPath } } }
               discussions(first: 100) { pageInfo { hasNextPage } nodes {
                 resolvable resolved
                 notes(first: 30) { nodes {
-                  id body system url createdAt author { username bot } position { newPath newLine }
+                  id body system url createdAt author { username name bot } position { newPath newLine }
                 } }
               } }
             }
@@ -215,14 +215,16 @@ struct DetailData: Decodable {
 
 struct GLUser: Decodable {
     let username: String
+    var name: String?
     let avatarUrl: String?
     let bot: Bool?
 
-    /// Flagged bots, plus project and group access-token users, which GitLab names `project_<id>_bot…`.
-    var isBot: Bool {
-        if bot == true { return true }
-        return username.wholeMatch(of: /(project|group)_\d+_bot.*/) != nil
-    }
+    /// Project and group access-token users, which GitLab names `project_<id>_bot_<hash>`.
+    var isAccessToken: Bool { username.wholeMatch(of: /(project|group)_\d+_bot.*/) != nil }
+    var isBot: Bool { bot == true || isAccessToken }
+    /// Who a comment is from. An access-token user goes by its display name ("cursor" for Cursor Bugbot, as
+    /// `cursor[bot]` on GitHub), so bot items read well and group with the same bot across projects.
+    var login: String { isAccessToken ? (name.flatMap { $0.isEmpty ? nil : $0 } ?? username) : username }
 }
 
 struct MRNode: Decodable {
@@ -237,7 +239,21 @@ struct MRNode: Decodable {
             let count: Int
             let nodes: [Job]
         }
+        let status: String?
+        let path: String?
         let jobs: Jobs?
+
+        /// The jobs, plus the pipeline itself when its status says more than they do: a pipeline can fail
+        /// before any job runs (a config error), or through a downstream pipeline. Without it that MR would
+        /// look green.
+        func checks(_ hostURL: URL) -> [CheckInfo] {
+            let jobs = jobs?.nodes.map { $0.model(hostURL) } ?? []
+            guard let status, let state = Job.state(status) else { return jobs }
+            let missing = jobs.isEmpty || (state != .success && !jobs.contains { $0.state == state })
+            guard missing else { return jobs }
+            let url = path.flatMap { URL(string: $0, relativeTo: hostURL)?.absoluteURL }
+            return jobs + [CheckInfo(name: "Pipeline", state: state, url: url)]
+        }
     }
     struct Job: Decodable {
         let id: String, name: String?, status: String?, allowFailure: Bool?, webPath: String?
@@ -284,12 +300,12 @@ struct MRNode: Decodable {
                 commentCount: notes.count, replies: notes.dropFirst().map { $0.model(hostURL, mr: webUrl) })
         }
         return PullRequest(
-            repo: repo, number: Int(iid) ?? 0, title: title, url: webUrl, author: author?.username ?? "ghost",
+            repo: repo, number: Int(iid) ?? 0, title: title, url: webUrl, author: author?.login ?? "ghost",
             authorAvatar: author?.avatarUrl.flatMap { URL(string: $0, relativeTo: hostURL)?.absoluteURL },
             isDraft: draft, createdAt: createdAt, updatedAt: updatedAt, headSha: diffHeadSha ?? "",
             headRef: sourceBranch, mergeable: mergeable, reviewDecision: reviewDecision(approvers: approvers),
             approvedBy: approvers,
-            checks: headPipeline?.jobs?.nodes.map { $0.model(hostURL) } ?? [],
+            checks: headPipeline?.checks(hostURL) ?? [],
             threads: threads,
             comments: human.filter { !$0.0.resolvable }.flatMap { $0.1.map { $0.model(hostURL, mr: webUrl) } },
             summary: PRSummary.extract(description))
@@ -327,16 +343,22 @@ struct MRNode: Decodable {
 }
 
 extension MRNode.Job {
+    /// Job and pipeline statuses share these values. Nil when there's no status.
+    static func state(_ status: String?) -> CheckState? {
+        switch status {
+        case nil: nil
+        case "SUCCESS": .success
+        case "FAILED": .failure
+        case "CREATED", "WAITING_FOR_RESOURCE", "PREPARING", "PENDING", "RUNNING", "SCHEDULED",
+            "WAITING_FOR_CALLBACK":
+            .pending
+        default: .neutral  // CANCELED, CANCELING, SKIPPED, MANUAL
+        }
+    }
+
     func model(_ hostURL: URL) -> CheckInfo {
-        let state: CheckState =
-            switch status {
-            case "SUCCESS": .success
-            case "FAILED": allowFailure == true ? .neutral : .failure
-            case "CREATED", "WAITING_FOR_RESOURCE", "PREPARING", "PENDING", "RUNNING", "SCHEDULED",
-                "WAITING_FOR_CALLBACK":
-                .pending
-            default: .neutral  // CANCELED, CANCELING, SKIPPED, MANUAL
-            }
+        var state = Self.state(status) ?? .neutral
+        if state == .failure, allowFailure == true { state = .neutral }
         // "gid://gitlab/Ci::Build/123": the number is the job id, for its log.
         let jobID = id.split(separator: "/").last.flatMap { Int($0) }
         return CheckInfo(
@@ -351,7 +373,7 @@ extension MRNode.Note {
     func model(_ hostURL: URL, mr: URL) -> CommentInfo {
         let anchor = id.split(separator: "/").last.flatMap { URL(string: "\(mr.absoluteString)#note_\($0)") }
         return CommentInfo(
-            author: author?.username ?? "ghost", isBot: author?.isBot ?? false, body: body,
+            author: author?.login ?? "ghost", isBot: author?.isBot ?? false, body: body,
             url: url.flatMap { URL(string: $0, relativeTo: hostURL)?.absoluteURL } ?? anchor, createdAt: createdAt)
     }
 }
