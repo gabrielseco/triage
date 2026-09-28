@@ -98,7 +98,8 @@ public protocol ForgeClient: Sendable {
     /// GitHub: one query per watched repo. GitLab: one "my MRs" query, grouped into snapshots per project.
     func fetch() async -> [RepoResult]
 
-    func ciLog(_ pr: PullRequest, check: CheckRun) async -> String?
+    /// GitHub: the Actions job log, or the check run's output for other checks.
+    func ciLog(_ pr: PullRequest, check: CheckInfo) async -> String?
     func diff(_ pr: PullRequest) async -> String?
     func approve(_ pr: PullRequest) async throws
     func merge(_ pr: PullRequest, method: MergeMethod) async throws
@@ -108,7 +109,9 @@ public protocol ForgeClient: Sendable {
 }
 
 public struct ForgeCapabilities: OptionSet, Sendable {
-    public static let ciLogs, diff, checkout, approve, merge, close
+    public let rawValue: Int
+    public static let ciLogs = Self(rawValue: 1 << 0)
+    // diff, checkout, approve, merge, close likewise
 }
 ```
 
@@ -151,8 +154,8 @@ is slower per refresh. `glab` stays only as an optional checkout command.
 
 ## Phases (one PR each)
 
-1. **`ForgeClient` protocol, GitHub only:** extract the protocol and `ForgeCapabilities`, make `GitHubClient`
-   conform, route AppStore through it, forge-provided wording. No behavior change, GitHub ids byte-for-byte
+1. **`ForgeClient` protocol, GitHub only:** extract the protocol and `ForgeCapabilities`, move `RepoResult`
+   from the app target into `TriageCore`, make `GitHubClient` conform, route AppStore through it, forge-provided wording. No behavior change, GitHub ids byte-for-byte
    unchanged (test).
 2. **Core model:** `Forge.gitlab(host:)` on `RepoRef`, nested paths, host-aware ids for GitLab only, old
    `repos` JSON still decodes (test). No UI.
