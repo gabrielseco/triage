@@ -459,7 +459,7 @@ the environment. It holds:
   - `viewer(for: forge)` and `can(capability, pr)`: who you are on a PR's forge, and what Triage may do.
 - **Actions**: `refresh`, `addRepo`, `removeRepo`, `dismiss`, `snooze`, `restoreHidden`, `explain`,
   `copyPrompt`, `sendDigestIfDue`, `sendDigest`, `showMainWindow`, `saveGitLabToken`. PR actions (approve,
-  merge, close) go through `forgeClient(for:)` (`AppStore+Forge.swift`).
+  merge, close) go through `forgeClient(_:repos:)` (`AppStore+Forge.swift`).
 
 ### 7.2 Views
 
