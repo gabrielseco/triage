@@ -16,11 +16,10 @@ struct ContentView: View {
             if let item = store.selectedItem {
                 ItemDetailView(item: item).id(item.id)
             } else {
-                ContentUnavailableView(
+                EmptyState(
                     "Nothing selected", systemImage: "tray",
-                    description: Text(
-                        store.repos.isEmpty
-                            ? "Add a repo in the sidebar to start watching." : "Pick an item from the inbox."))
+                    description: store.repos.isEmpty
+                        ? "Add a repo in the sidebar to start watching." : "Pick an item from the inbox.")
             }
         }
         .toolbar {
@@ -138,24 +137,18 @@ struct InboxList: View {
         @Bindable var store = store
         Group {
             if store.visibleItems.isEmpty, let repo = selectedRepo {
-                ContentUnavailableView {
-                    Label("Inbox zero", systemImage: "checkmark.circle")
-                } description: {
-                    Text("Nothing in \(repo.fullName) needs you right now.")
-                } actions: {
-                    HStack {
-                        Button("Open pull requests") { openURL(repo.pullsURL) }
-                            .buttonStyle(.borderedProminent)
-                        Button("Repository") { openURL(repo.url) }
-                    }
-                    .fixedSize()
-                    .padding(.top, 8)
+                EmptyState(
+                    "Inbox zero", systemImage: "checkmark.circle",
+                    description: "Nothing in \(repo.fullName) needs you right now."
+                ) {
+                    Button("Open pull requests") { openURL(repo.pullsURL) }
+                        .buttonStyle(.borderedProminent)
+                    Button("Repository") { openURL(repo.url) }
                 }
             } else if store.visibleItems.isEmpty {
-                ContentUnavailableView(
-                    store.prs.isEmpty ? "No open PRs yet" : "Inbox zero",
-                    systemImage: "checkmark.circle",
-                    description: Text(store.prs.isEmpty ? "Add a repo to watch." : "Nothing here needs you right now."))
+                EmptyState(
+                    store.prs.isEmpty ? "No open PRs yet" : "Inbox zero", systemImage: "checkmark.circle",
+                    description: store.prs.isEmpty ? "Add a repo to watch." : "Nothing here needs you right now.")
             } else {
                 List(selection: $store.selection) {
                     ForEach(store.groupedVisible, id: \.pr.id) { group in
@@ -178,6 +171,35 @@ struct InboxList: View {
     private var selectedRepo: RepoRef? {
         guard case .repo(let name) = store.filter else { return nil }
         return RepoRef(string: name)
+    }
+}
+
+/// Like ContentUnavailableView, with the icon closer to the title.
+struct EmptyState<Actions: View>: View {
+    let title: String
+    let systemImage: String
+    let description: String
+    @ViewBuilder let actions: Actions
+
+    init(
+        _ title: String, systemImage: String, description: String,
+        @ViewBuilder actions: () -> Actions = { EmptyView() }
+    ) {
+        self.title = title
+        self.systemImage = systemImage
+        self.description = description
+        self.actions = actions()
+    }
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Image(systemName: systemImage).font(.system(size: 36)).foregroundStyle(.tertiary)
+            Text(title).font(.title2.weight(.semibold)).foregroundStyle(.secondary)
+            Text(description).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            if Actions.self != EmptyView.self { HStack { actions }.fixedSize().padding(.top, 8) }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
