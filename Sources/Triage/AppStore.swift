@@ -208,16 +208,16 @@ final class AppStore {
     }
 
     private func refreshOnce() async {
-        guard let token = await GitHubAuth.resolveToken() else {
-            errors = [GitHubError.noToken.localizedDescription]
+        let client: any ForgeClient
+        do { client = try await forgeClient(.github, repos: repos) } catch {
+            errors = [error.localizedDescription]
             return
         }
-        let gh = GitHubClient(token: token)
-        if viewer == nil { viewer = try? await gh.viewerLogin() }
+        if viewer == nil { viewer = try? await client.viewer() }
 
         // A repo removed while fetching must not bring back its PRs, warnings or errors.
         let watched = Set(repos)
-        let results = await fetchAll(repos, gh: gh).filter { watched.contains($0.repo) }
+        let results = await client.fetch().filter { watched.contains($0.repo) }
         let merged = RepoSnapshot.merging(results.compactMap { try? $0.result.get() })
         let errs = results.compactMap { r -> String? in
             guard case .failure(let e) = r.result else { return nil }
@@ -252,23 +252,6 @@ final class AppStore {
         if !live.contains(selection ?? "") { selection = visibleItems.first?.id }
     }
 
-    /// All repos in parallel. One repo failing doesn't lose the others.
-    private func fetchAll(_ repos: [RepoRef], gh: GitHubClient) async -> [RepoResult] {
-        await withTaskGroup(of: RepoResult.self) { group in
-            for repo in repos {
-                group.addTask {
-                    do { return RepoResult(repo: repo, result: .success(try await gh.openPullRequests(repo))) } catch {
-                        return RepoResult(
-                            repo: repo, result: .failure(RepoError(repo: repo.fullName, underlying: error)))
-                    }
-                }
-            }
-            var results: [RepoResult] = []
-            for await r in group { results.append(r) }
-            return results
-        }
-    }
-
     func startAutoRefresh() {
         guard !autoRefreshStarted else { return }
         autoRefreshStarted = true
@@ -295,16 +278,4 @@ final class AppStore {
     private static func load<T: Decodable>(_ key: String) -> T? {
         UserDefaults.standard.data(forKey: key).flatMap { try? JSONDecoder().decode(T.self, from: $0) }
     }
-}
-
-/// One repo's fetch, tagged so results for a repo removed mid-fetch can be dropped.
-struct RepoResult: Sendable {
-    let repo: RepoRef
-    let result: Result<RepoSnapshot, Error>
-}
-
-struct RepoError: LocalizedError {
-    let repo: String
-    let underlying: Error
-    var errorDescription: String? { "\(repo): \(underlying.localizedDescription)" }
 }

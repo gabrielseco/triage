@@ -1,0 +1,128 @@
+import Foundation
+
+/// Where pull requests come from. GitLab joins in a later step (docs/plans/GITLAB.md).
+public enum Forge: Hashable, Sendable {
+    case github
+
+    /// What Triage can do with this forge's pull requests; views hide what's missing.
+    public var capabilities: ForgeCapabilities {
+        switch self {
+        case .github: .all
+        }
+    }
+}
+
+public struct ForgeCapabilities: OptionSet, Hashable, Sendable {
+    public let rawValue: Int
+    public init(rawValue: Int) { self.rawValue = rawValue }
+
+    /// CI logs in fix prompts.
+    public static let ciLogs = Self(rawValue: 1 << 0)
+    /// The diff in prompts and Explain PR.
+    public static let diff = Self(rawValue: 1 << 1)
+    /// Handoff checks the branch out into a worktree.
+    public static let checkout = Self(rawValue: 1 << 2)
+    public static let approve = Self(rawValue: 1 << 3)
+    public static let merge = Self(rawValue: 1 << 4)
+    public static let close = Self(rawValue: 1 << 5)
+
+    public static let all: Self = [.ciLogs, .diff, .checkout, .approve, .merge, .close]
+}
+
+/// One forge's API, as the app uses it. Everything above it sees only `PullRequest` and `RepoSnapshot`.
+public protocol ForgeClient: Sendable {
+    var forge: Forge { get }
+
+    /// The signed-in user's login, for "Mine" and whose comments are new.
+    func viewer() async throws -> String
+    /// Every watched source's open pull requests. One source failing doesn't lose the others.
+    func fetch() async -> [RepoResult]
+
+    /// The log or output of a failed check, for the fix prompt. Nil if there's none to read.
+    func ciLog(_ pr: PullRequest, checkRunID: Int) async -> String?
+    func diff(_ pr: PullRequest) async -> String?
+
+    /// Approves as the viewer, pinned to `pr.headSha`.
+    func approve(_ pr: PullRequest) async throws
+    /// Merges with `pr.mergeMethod`, only if the head is still `pr.headSha`.
+    func merge(_ pr: PullRequest) async throws
+    /// Closes without merging.
+    func close(_ pr: PullRequest) async throws
+}
+
+/// One repo's fetch, tagged so results for a repo removed mid-fetch can be dropped.
+public struct RepoResult: Sendable {
+    public let repo: RepoRef
+    public let result: Result<RepoSnapshot, Error>
+
+    public init(repo: RepoRef, result: Result<RepoSnapshot, Error>) {
+        self.repo = repo
+        self.result = result
+    }
+
+    /// All repos in parallel, each failure tagged with its repo.
+    static func fetchAll(
+        _ repos: [RepoRef], _ fetch: @escaping @Sendable (RepoRef) async throws -> RepoSnapshot
+    ) async -> [RepoResult] {
+        await withTaskGroup(of: RepoResult.self) { group in
+            for repo in repos {
+                group.addTask {
+                    do { return RepoResult(repo: repo, result: .success(try await fetch(repo))) } catch {
+                        return RepoResult(
+                            repo: repo, result: .failure(RepoError(repo: repo.fullName, underlying: error)))
+                    }
+                }
+            }
+            var results: [RepoResult] = []
+            for await r in group { results.append(r) }
+            return results
+        }
+    }
+}
+
+public struct RepoError: LocalizedError {
+    public let repo: String
+    public let underlying: Error
+    public var errorDescription: String? { "\(repo): \(underlying.localizedDescription)" }
+}
+
+/// GitHub behind `ForgeClient`: one GraphQL query per watched repo, REST for logs, the diff and actions.
+public struct GitHubForge: ForgeClient {
+    let client: GitHubClient
+    let repos: [RepoRef]
+
+    public var forge: Forge { .github }
+
+    /// `repos` is what `fetch()` reads; the other calls don't need it.
+    public init(token: String, repos: [RepoRef] = []) {
+        client = GitHubClient(token: token)
+        self.repos = repos
+    }
+
+    public func viewer() async throws -> String { try await client.viewerLogin() }
+
+    public func fetch() async -> [RepoResult] {
+        let client = client
+        return await RepoResult.fetchAll(repos) { try await client.openPullRequests($0) }
+    }
+
+    /// The Actions job log (check run id == job id), else what a third-party check published.
+    public func ciLog(_ pr: PullRequest, checkRunID: Int) async -> String? {
+        if let log = await client.jobLog(pr.repo, jobID: checkRunID) { return log }
+        return await client.checkRunOutput(pr.repo, id: checkRunID)
+    }
+
+    public func diff(_ pr: PullRequest) async -> String? { await client.diff(pr.repo, number: pr.number) }
+
+    public func approve(_ pr: PullRequest) async throws {
+        try await client.approvePullRequest(pr.repo, number: pr.number, sha: pr.headSha)
+    }
+
+    public func merge(_ pr: PullRequest) async throws {
+        try await client.mergePullRequest(pr.repo, number: pr.number, sha: pr.headSha, method: pr.mergeMethod)
+    }
+
+    public func close(_ pr: PullRequest) async throws {
+        try await client.closePullRequest(pr.repo, number: pr.number)
+    }
+}

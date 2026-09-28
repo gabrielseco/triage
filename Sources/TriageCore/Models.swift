@@ -5,6 +5,8 @@ public struct RepoRef: Hashable, Codable, Sendable, Identifiable {
     public let name: String
 
     public var id: String { fullName }
+    /// Always GitHub until GitLab repos arrive.
+    public var forge: Forge { .github }
     public var fullName: String { "\(owner)/\(name)" }
     /// The repo's page on GitHub.
     public var url: URL {

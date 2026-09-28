@@ -8,20 +8,16 @@ extension AppStore {
 
     func buildPrompt(for item: AttentionItem, mode: PromptMode) async -> String {
         var ctx = PromptContext()
-        if let token = await GitHubAuth.resolveToken() {
-            let gh = GitHubClient(token: token)
-            let repo = item.pr.repo
-            if item.kind == .ciFailure {
+        let pr = item.pr
+        if let client = try? await forgeClient(pr.repo.forge) {
+            let caps = pr.repo.forge.capabilities
+            if item.kind == .ciFailure, caps.contains(.ciLogs) {
                 for e in item.evidence.prefix(3) {
-                    guard let id = e.checkRunID else { continue }
-                    if let log = await gh.jobLog(repo, jobID: id) {
-                        ctx.checkOutputs.append((e.title, log))
-                    } else if let out = await gh.checkRunOutput(repo, id: id) {
-                        ctx.checkOutputs.append((e.title, out))
-                    }
+                    guard let id = e.checkRunID, let log = await client.ciLog(pr, checkRunID: id) else { continue }
+                    ctx.checkOutputs.append((e.title, log))
                 }
             }
-            ctx.diff = await gh.diff(repo, number: item.pr.number)
+            if caps.contains(.diff) { ctx.diff = await client.diff(pr) }
         }
         return PromptBuilder.prompt(for: item, context: ctx, mode: mode)
     }
@@ -29,8 +25,8 @@ extension AppStore {
     /// Explain PR: the PR's description and diff, whatever the item is.
     func buildExplainPRPrompt(for pr: PullRequest, inWorktree: Bool) async -> String {
         var diff: String?
-        if let token = await GitHubAuth.resolveToken() {
-            diff = await GitHubClient(token: token).diff(pr.repo, number: pr.number)
+        if pr.repo.forge.capabilities.contains(.diff), let client = try? await forgeClient(pr.repo.forge) {
+            diff = await client.diff(pr)
         }
         return PromptBuilder.explainPRPrompt(for: pr, diff: diff, inWorktree: inWorktree)
     }
