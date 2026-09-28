@@ -19,20 +19,26 @@ extension AppStore {
     }
 
     func approvePullRequest(_ item: AttentionItem) async {
+        guard await sendApproval(item) else { return }
+        actionStatus[item.id] = "Approved #\(item.pr.number)"
+        await refresh()  // it may be ready to merge now
+    }
+
+    /// Posts the approval, with progress and errors in the item's status. Returns whether it went through.
+    private func sendApproval(_ item: AttentionItem) async -> Bool {
         let pr = item.pr
         actionStatus[item.id] = "Approving #\(pr.number)…"
         guard let token = await GitHubAuth.resolveToken() else {
             actionStatus[item.id] = GitHubError.noToken.localizedDescription
-            return
+            return false
         }
         do {
             try await approve(pr, with: GitHubClient(token: token))
+            return true
         } catch {
             actionStatus[item.id] = "Couldn't approve #\(pr.number): \(error.localizedDescription)"
-            return
+            return false
         }
-        actionStatus[item.id] = "Approved #\(pr.number)"
-        await refresh()  // it may be ready to merge now
     }
 
     /// Hides Approve at once (so it can't be sent twice), and brings it back if GitHub refuses.
@@ -53,11 +59,11 @@ extension AppStore {
     // MARK: - Merge
 
     /// `approvingFirst`: approve as the viewer, then merge, for someone else's PR you haven't approved.
+    /// Two steps, so a failed merge doesn't read as a failed approval.
     func mergePullRequest(_ item: AttentionItem, approvingFirst: Bool = false) async {
+        if approvingFirst, !(await sendApproval(item)) { return }
         let pr = item.pr
-        let (doing, failed) = approvingFirst ? ("Approving and merging", "approve and merge") : ("Merging", "merge")
-        await mutate(item, doing: doing, failed: failed) { gh in
-            if approvingFirst { try await self.approve(pr, with: gh) }
+        await mutate(item, doing: "Merging", failed: "merge") { gh in
             try await gh.mergePullRequest(pr.repo, number: pr.number, sha: pr.headSha, method: pr.mergeMethod)
         }
     }
