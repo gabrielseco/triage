@@ -140,7 +140,7 @@ public struct GitLabClient: Sendable {
               discussions(first: 100) { pageInfo { hasNextPage } nodes {
                 resolvable resolved
                 notes(first: 30) { nodes {
-                  body system url createdAt author { username bot } position { newPath newLine }
+                  id body system url createdAt author { username bot } position { newPath newLine }
                 } }
               } }
             }
@@ -154,10 +154,11 @@ let gitlabDecoder: JSONDecoder = {
     let d = JSONDecoder()
     d.dateDecodingStrategy = .custom { decoder in
         let s = try decoder.singleValueContainer().decode(String.self)
-        let plain = ISO8601DateFormatter()
-        let fractional = ISO8601DateFormatter()
-        fractional.formatOptions.insert(.withFractionalSeconds)
-        guard let date = plain.date(from: s) ?? fractional.date(from: s) else {
+        let plain = Date.ISO8601FormatStyle()
+        guard
+            let date = (try? plain.parse(s))
+                ?? (try? plain.year().month().day().time(includingFractionalSeconds: true).parse(s))
+        else {
             throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "date \(s)"))
         }
         return date
@@ -255,7 +256,7 @@ struct MRNode: Decodable {
             let newPath: String?
             let newLine: Int?
         }
-        let body: String, system: Bool, url: String?, createdAt: Date
+        let id: String, body: String, system: Bool, url: String?, createdAt: Date
         let author: GLUser?
         let position: Position?
     }
@@ -279,8 +280,8 @@ struct MRNode: Decodable {
             ReviewThreadInfo(
                 // GitLab has no simple "outdated" flag; an unresolved thread stays open until someone resolves it.
                 isResolved: d.resolved, isOutdated: false, path: notes[0].position?.newPath,
-                line: notes[0].position?.newLine, firstComment: notes[0].model(hostURL),
-                commentCount: notes.count, replies: notes.dropFirst().map { $0.model(hostURL) })
+                line: notes[0].position?.newLine, firstComment: notes[0].model(hostURL, mr: webUrl),
+                commentCount: notes.count, replies: notes.dropFirst().map { $0.model(hostURL, mr: webUrl) })
         }
         return PullRequest(
             repo: repo, number: Int(iid) ?? 0, title: title, url: webUrl, author: author?.username ?? "ghost",
@@ -290,7 +291,7 @@ struct MRNode: Decodable {
             approvedBy: approvers,
             checks: headPipeline?.jobs?.nodes.map { $0.model(hostURL) } ?? [],
             threads: threads,
-            comments: human.filter { !$0.0.resolvable }.flatMap { $0.1.map { $0.model(hostURL) } },
+            comments: human.filter { !$0.0.resolvable }.flatMap { $0.1.map { $0.model(hostURL, mr: webUrl) } },
             summary: PRSummary.extract(description))
     }
 
@@ -345,9 +346,12 @@ extension MRNode.Job {
 }
 
 extension MRNode.Note {
-    func model(_ hostURL: URL) -> CommentInfo {
-        CommentInfo(
+    /// The URL is what item ids are built from, so a note without one gets its anchor on the MR
+    /// (`#note_<id>`), never nil: a nil URL would keep a dismissed item hidden after a new reply.
+    func model(_ hostURL: URL, mr: URL) -> CommentInfo {
+        let anchor = id.split(separator: "/").last.flatMap { URL(string: "\(mr.absoluteString)#note_\($0)") }
+        return CommentInfo(
             author: author?.username ?? "ghost", isBot: author?.isBot ?? false, body: body,
-            url: url.flatMap { URL(string: $0, relativeTo: hostURL)?.absoluteURL }, createdAt: createdAt)
+            url: url.flatMap { URL(string: $0, relativeTo: hostURL)?.absoluteURL } ?? anchor, createdAt: createdAt)
     }
 }

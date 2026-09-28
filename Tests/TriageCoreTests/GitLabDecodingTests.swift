@@ -31,22 +31,27 @@ private func detail(
       ]}},
       "discussions": {"pageInfo": {"hasNextPage": false}, "nodes": [
         {"resolvable": true, "resolved": false, "notes": {"nodes": [
-          {"body": "Can this be null?", "system": false, "url": "https://gitlab.com/acme/platform/web/-/merge_requests/12#note_1",
+          {"id": "gid://gitlab/Note/101",
+           "body": "Can this be null?", "system": false, "url": "https://gitlab.com/acme/platform/web/-/merge_requests/12#note_1",
            "createdAt": "2026-09-21T10:00:00Z", "author": {"username": "rita", "bot": false},
            "position": {"newPath": "Sources/Export.swift", "newLine": 42}},
-          {"body": "Good point", "system": false, "url": null, "createdAt": "2026-09-21T11:00:00Z",
+          {"id": "gid://gitlab/Note/102",
+           "body": "Good point", "system": false, "url": null, "createdAt": "2026-09-21T11:00:00Z",
            "author": {"username": "gabriel", "bot": false}, "position": null}
         ]}},
         {"resolvable": true, "resolved": true, "notes": {"nodes": [
-          {"body": "Typo", "system": false, "url": null, "createdAt": "2026-09-21T10:00:00Z",
+          {"id": "gid://gitlab/Note/103",
+           "body": "Typo", "system": false, "url": null, "createdAt": "2026-09-21T10:00:00Z",
            "author": {"username": "rita", "bot": false}, "position": null}
         ]}},
         {"resolvable": false, "resolved": false, "notes": {"nodes": [
-          {"body": "added 3 commits", "system": true, "url": null, "createdAt": "2026-09-22T10:00:00Z",
+          {"id": "gid://gitlab/Note/104",
+           "body": "added 3 commits", "system": true, "url": null, "createdAt": "2026-09-22T10:00:00Z",
            "author": {"username": "gabriel", "bot": false}, "position": null}
         ]}},
         {"resolvable": false, "resolved": false, "notes": {"nodes": [
-          {"body": "Coverage dropped 2%", "system": false, "url": null, "createdAt": "2026-09-22T10:00:00Z",
+          {"id": "gid://gitlab/Note/105",
+           "body": "Coverage dropped 2%", "system": false, "url": null, "createdAt": "2026-09-22T10:00:00Z",
            "author": {"username": "project_77_bot_3f2a", "bot": false}, "position": null}
         ]}}\(extraNote)
       ]}
@@ -100,6 +105,10 @@ private func model(_ json: String) throws -> (PullRequest, [String]) {
     #expect(open.isOutdated == false)
     #expect(open.comments.map(\.author) == ["rita", "gabriel"])
     #expect(open.firstComment.url?.absoluteString.hasSuffix("#note_1") == true)
+    // No `url` from GitLab: the anchor built from the note id stands in, so item ids still move on a reply.
+    #expect(
+        open.comments[1].url?.absoluteString
+            == "https://gitlab.com/acme/platform/web/-/merge_requests/12#note_102")
     // The system note is dropped; the access-token bot's comment stays, flagged as a bot.
     #expect(pr.comments.map(\.body) == ["Coverage dropped 2%"])
     #expect(pr.comments[0].isBot)
@@ -110,7 +119,8 @@ private func model(_ json: String) throws -> (PullRequest, [String]) {
     let more = """
         ,
         {"resolvable": false, "resolved": false, "notes": {"nodes": [
-          {"body": "changed the description", "system": true, "url": null, "createdAt": "2026-09-27T10:00:00Z",
+          {"id": "gid://gitlab/Note/106", "body": "changed the description", "system": true, "url": null,
+           "createdAt": "2026-09-27T10:00:00Z",
            "author": {"username": "rita", "bot": false}, "position": null}
         ]}}
         """
