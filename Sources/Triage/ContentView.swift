@@ -57,6 +57,7 @@ struct ContentView: View {
 
 struct Sidebar: View {
     @Environment(AppStore.self) private var store
+    @Environment(\.openURL) private var openURL
     @State private var newRepo = ""
     @State private var addFailed = false
 
@@ -81,6 +82,9 @@ struct Sidebar: View {
                     row(r.fullName, "book.closed", store.count(repo: r.fullName))
                         .tag(SidebarFilter.repo(r.fullName))
                         .contextMenu {
+                            Button("Open Pull Requests on GitHub") { openURL(r.pullsURL) }
+                            Button("Open Repository on GitHub") { openURL(r.url) }
+                            Divider()
                             Button("Set local checkout…") { store.chooseCheckout(for: r) }
                             if let p = store.checkoutPaths[r.fullName] {
                                 Text("Checkout: \((p as NSString).abbreviatingWithTildeInPath)")
@@ -150,6 +154,34 @@ struct InboxList: View {
                 }
             }
         }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if case .repo(let name) = store.filter, let repo = RepoRef(string: name) { RepoLinks(repo: repo) }
+        }
+    }
+}
+
+/// Under a repo's list, so the repo is one click away even when nothing in it needs you.
+struct RepoLinks: View {
+    @Environment(\.openURL) private var openURL
+    let repo: RepoRef
+
+    var body: some View {
+        HStack {
+            Button {
+                openURL(repo.pullsURL)
+            } label: {
+                Label("Pull requests", systemImage: "arrow.triangle.pull")
+            }
+            Button {
+                openURL(repo.url)
+            } label: {
+                Label("Repository", systemImage: "book.closed")
+            }
+            Spacer()
+        }
+        .help("Open \(repo.fullName) on GitHub")
+        .padding(10)
+        .background(.bar)
     }
 }
 
