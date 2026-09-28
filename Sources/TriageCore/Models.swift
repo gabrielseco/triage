@@ -111,6 +111,8 @@ public struct PullRequest: Identifiable, Hashable, Sendable {
     public var headRef: String
     public var mergeable: Mergeable
     public var reviewDecision: ReviewDecision
+    /// Whether the viewer's latest review of this PR is an approval.
+    public var viewerApproved: Bool
     public var checks: [CheckInfo]
     public var threads: [ReviewThreadInfo]
     public var comments: [CommentInfo]
@@ -131,7 +133,8 @@ public struct PullRequest: Identifiable, Hashable, Sendable {
         isDraft: Bool = false, createdAt: Date = .distantPast,
         updatedAt: Date = .now, headSha: String, headRef: String = "branch",
         mergeable: Mergeable = .mergeable, reviewDecision: ReviewDecision = .none,
-        checks: [CheckInfo] = [], threads: [ReviewThreadInfo] = [], comments: [CommentInfo] = [],
+        viewerApproved: Bool = false, checks: [CheckInfo] = [], threads: [ReviewThreadInfo] = [],
+        comments: [CommentInfo] = [],
         summary: String? = nil, mergeMethod: MergeMethod = .merge
     ) {
         self.repo = repo
@@ -147,6 +150,7 @@ public struct PullRequest: Identifiable, Hashable, Sendable {
         self.headRef = headRef
         self.mergeable = mergeable
         self.reviewDecision = reviewDecision
+        self.viewerApproved = viewerApproved
         self.checks = checks
         self.threads = threads
         self.comments = comments

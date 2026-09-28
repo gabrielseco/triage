@@ -1,7 +1,7 @@
 import Foundation
 import TriageCore
 
-/// Merge or close: asked for from the item detail or the Pull Request menu, confirmed in the item detail.
+/// Merge (optionally approving first) or close: asked for from the item detail or the Pull Request menu, confirmed in the item detail.
 struct PRConfirmation: Identifiable {
     enum Action { case merge, close }
     let action: Action
@@ -11,11 +11,53 @@ struct PRConfirmation: Identifiable {
 
 /// Actions on the pull request itself rather than on one attention item.
 extension AppStore {
+    // MARK: - Approve
+
+    /// Someone else's PR you haven't approved, counting approvals sent since the last refresh.
+    func canApprove(_ pr: PullRequest) -> Bool {
+        pr.canBeApproved(by: viewer) && !approvedHeads.contains(Self.approvalKey(pr))
+    }
+
+    func approvePullRequest(_ item: AttentionItem) async {
+        let pr = item.pr
+        actionStatus[item.id] = "Approving #\(pr.number)…"
+        guard let token = await GitHubAuth.resolveToken() else {
+            actionStatus[item.id] = GitHubError.noToken.localizedDescription
+            return
+        }
+        do {
+            try await approve(pr, with: GitHubClient(token: token))
+        } catch {
+            actionStatus[item.id] = "Couldn't approve #\(pr.number): \(error.localizedDescription)"
+            return
+        }
+        actionStatus[item.id] = "Approved #\(pr.number)"
+        await refresh()  // it may be ready to merge now
+    }
+
+    /// Hides Approve at once (so it can't be sent twice), and brings it back if GitHub refuses.
+    private func approve(_ pr: PullRequest, with gh: GitHubClient) async throws {
+        let key = Self.approvalKey(pr)
+        approvedHeads.insert(key)
+        do {
+            try await gh.approvePullRequest(pr.repo, number: pr.number, sha: pr.headSha)
+        } catch {
+            approvedHeads.remove(key)
+            throw error
+        }
+    }
+
+    /// Per head commit: a push after approving asks for a fresh look.
+    private static func approvalKey(_ pr: PullRequest) -> String { "\(pr.id)@\(pr.headSha)" }
+
     // MARK: - Merge
 
-    func mergePullRequest(_ item: AttentionItem) async {
+    /// `approvingFirst`: approve as the viewer, then merge, for someone else's PR you haven't approved.
+    func mergePullRequest(_ item: AttentionItem, approvingFirst: Bool = false) async {
         let pr = item.pr
-        await mutate(item, doing: "Merging", failed: "merge") { gh in
+        let (doing, failed) = approvingFirst ? ("Approving and merging", "approve and merge") : ("Merging", "merge")
+        await mutate(item, doing: doing, failed: failed) { gh in
+            if approvingFirst { try await self.approve(pr, with: gh) }
             try await gh.mergePullRequest(pr.repo, number: pr.number, sha: pr.headSha, method: pr.mergeMethod)
         }
     }

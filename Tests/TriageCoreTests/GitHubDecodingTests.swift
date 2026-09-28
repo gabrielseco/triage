@@ -59,6 +59,7 @@ private let fixture = """
       "mergeable": "CONFLICTING", "reviewDecision": null,
       "headRefName": "renovate/jsdom-30.x",
       "author": {"login": "renovate", "__typename": "Bot", "avatarUrl": "https://avatars.githubusercontent.com/in/2740"},
+      "viewerLatestReview": {"state": "APPROVED"},
       "commits": {"nodes": [{"commit": {"oid": "abc123", "statusCheckRollup": {"contexts": {"totalCount": 4, "nodes": [
         {"__typename": "CheckRun", "name": "Tests with Coverage", "conclusion": "FAILURE", "status": "COMPLETED",
          "detailsUrl": "https://github.com/x/y/actions/runs/1/job/9", "databaseId": 9, "title": "2 failed"},
@@ -102,6 +103,12 @@ private func decodePR() throws -> PullRequest {
     #expect(pr.createdAt == ISO8601DateFormatter().date(from: "2026-09-23T10:00:00Z"))
     #expect(pr.mergeable == .conflicting)
     #expect(pr.reviewDecision == .none)
+    #expect(pr.viewerApproved)
+}
+
+@Test func noReviewFromTheViewerIsNotAnApproval() throws {
+    let node = try #require(try decode(truncated).repository?.pullRequests.nodes.first)
+    #expect(!node.toModel(repo: repo).viewerApproved)
 }
 
 @Test func mapsBothCheckSystemsToOneState() throws {
