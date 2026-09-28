@@ -50,8 +50,10 @@ final class AppStore {
     var harnessCommand: String { didSet { defaults.set(harnessCommand, forKey: "harnessCommand") } }
     /// Per item: what the last Fix in / Copy did, shown under the buttons.
     var actionStatus: [String: String] = [:]
-    /// PRs closed from Triage, hidden until a refresh confirms they're gone from GitHub's open list.
+    /// PRs closed or merged from Triage, hidden until a refresh confirms they're gone from GitHub's open list.
     var closedPRIDs: Set<String> = []
+    /// The merge or close waiting for a yes in the item detail.
+    var confirming: PRConfirmation?
     private var autoRefreshStarted = false
     private var refreshAgain = false
     /// Key read from the key source, held in memory only so it's fetched once per app session.

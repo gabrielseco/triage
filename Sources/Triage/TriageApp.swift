@@ -23,6 +23,13 @@ struct TriageApp: App {
                 Button("Refresh") { Task { await delegate.store.refresh() } }
                     .keyboardShortcut("r")
             }
+            CommandMenu("Pull Request") {
+                if let item = delegate.store.selectedItem {
+                    PullRequestActions(item: item, inMenuBar: true).environment(delegate.store)
+                } else {
+                    Text("Select an item to act on its PR")
+                }
+            }
         }
 
         MenuBarExtra {

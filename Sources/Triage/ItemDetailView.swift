@@ -5,7 +5,6 @@ struct ItemDetailView: View {
     @Environment(AppStore.self) private var store
     @Environment(\.openURL) private var openURL
     let item: AttentionItem
-    @State private var confirmClose = false
 
     var body: some View {
         ScrollView {
@@ -48,6 +47,16 @@ struct ItemDetailView: View {
 
     private var actions: some View {
         HStack {
+            if item.kind == .readyToMerge {
+                Button {
+                    store.confirming = PRConfirmation(action: .merge, item: item)
+                } label: {
+                    Label("Merge", systemImage: "arrow.triangle.merge")
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(item.pr.mergeBlocker != nil)
+                .help("\(item.pr.mergeMethod.title) on GitHub (⇧⌘M)")
+            }
             if item.kind.isFixable {
                 Button {
                     Task { await store.explain(item) }
@@ -103,28 +112,45 @@ struct ItemDetailView: View {
                 Label("Dismiss", systemImage: "checkmark")
             }
             .keyboardShortcut(.delete, modifiers: [])
-            Button(role: .destructive) {
-                confirmClose = true
-            } label: {
-                Label("Close PR", systemImage: "xmark.circle")
-            }
-            .help("Close #\(item.pr.number) on GitHub without merging")
-            .confirmationDialog(
-                "Close \(item.pr.repo.fullName) #\(item.pr.number)?", isPresented: $confirmClose,
-                titleVisibility: .visible
-            ) {
-                Button("Close PR", role: .destructive) { Task { await store.closePullRequest(item) } }
-            } message: {
-                Text(closeMessage)
-            }
-            Button {
-                openURL(item.pr.changesURL)
+            Menu {
+                PullRequestActions(item: item)
             } label: {
                 Label("Open", systemImage: "safari")
+            } primaryAction: {
+                openURL(item.pr.changesURL)
             }
-            .help("Open the PR's changes on GitHub")
-            .keyboardShortcut("o")
+            .fixedSize()
+            .help("Open the PR's changes on GitHub (arrow: merge, close, more)")
         }
+        .confirmationDialog(
+            confirmTitle, isPresented: confirmShown, titleVisibility: .visible, presenting: store.confirming
+        ) { c in
+            switch c.action {
+            case .merge:
+                Button(c.item.pr.mergeMethod.title) { Task { await store.mergePullRequest(c.item) } }
+            case .close:
+                Button("Close PR", role: .destructive) { Task { await store.closePullRequest(c.item) } }
+            }
+        } message: { c in
+            Text(c.action == .merge ? mergeMessage : closeMessage)
+        }
+    }
+
+    /// Only the item on screen answers a confirmation asked for it.
+    private var confirmShown: Binding<Bool> {
+        Binding(
+            get: { store.confirming?.item.id == item.id },
+            set: { if !$0 { store.confirming = nil } })
+    }
+
+    private var confirmTitle: String {
+        let verb = store.confirming?.action == .close ? "Close" : "Merge"
+        return "\(verb) \(item.pr.repo.fullName) #\(item.pr.number)?"
+    }
+
+    private var mergeMessage: String {
+        let warnings = item.pr.mergeWarnings.map { "⚠︎ \($0)" }.joined(separator: "\n")
+        return "\(item.pr.title)\n\n\(item.pr.headRef) → base branch" + (warnings.isEmpty ? "" : "\n\n\(warnings)")
     }
 
     /// Leads with the author when it's someone else's PR, so a teammate's work isn't closed by mistake.
@@ -218,7 +244,46 @@ struct CIBadge: View {
     }
 }
 
+extension View {
+    @ViewBuilder func shortcut(
+        _ key: KeyEquivalent, modifiers: EventModifiers = .command, if enabled: Bool
+    ) -> some View {
+        if enabled { keyboardShortcut(key, modifiers: modifiers) } else { self }
+    }
+}
+
 func markdown(_ s: String) -> AttributedString {
     (try? AttributedString(markdown: s, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
         ?? AttributedString(s)
+}
+
+/// Merge, close and open on GitHub: the item detail's Open menu and the Pull Request menu in the menu bar.
+/// Shortcuts are bound in the menu bar only, so a key press can't fire both copies.
+struct PullRequestActions: View {
+    @Environment(AppStore.self) private var store
+    @Environment(\.openURL) private var openURL
+    let item: AttentionItem
+    var inMenuBar = false
+
+    var body: some View {
+        Button("Merge…") { confirm(.merge) }
+            .shortcut("m", modifiers: [.command, .shift], if: inMenuBar)
+            .disabled(item.pr.mergeBlocker != nil)
+        Button("Close PR…") { confirm(.close) }
+        Divider()
+        Button("Open Changes on GitHub") { openURL(item.pr.changesURL) }
+            .shortcut("o", if: inMenuBar)
+        Button("Open Conversation on GitHub") { openURL(item.pr.url) }
+            .shortcut("o", modifiers: [.command, .shift], if: inMenuBar)
+        if let blocker = item.pr.mergeBlocker {
+            Divider()
+            Text("Can't merge: \(blocker.lowercased())")
+        }
+    }
+
+    /// The dialog lives in the item detail, so bring the window back if it was closed.
+    private func confirm(_ action: PRConfirmation.Action) {
+        store.confirming = PRConfirmation(action: action, item: item)
+        store.showMainWindow()
+    }
 }
