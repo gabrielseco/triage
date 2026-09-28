@@ -8,8 +8,12 @@ struct TriageApp: App {
 
     init() {
         // Running from `swift run` there's no bundle; make it a normal foreground app with a Dock icon.
+        // A bundled app is activated by Launch Services when the user opens it, and stays in the
+        // background for `open -g` (/verify), so only force activation without a bundle.
         NSApplication.shared.setActivationPolicy(.regular)
-        DispatchQueue.main.async { NSApp.activate(ignoringOtherApps: true) }
+        if Bundle.main.bundleIdentifier == nil {
+            DispatchQueue.main.async { NSApp.activate(ignoringOtherApps: true) }
+        }
     }
 
     var body: some Scene {

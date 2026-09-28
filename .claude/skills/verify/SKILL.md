@@ -39,20 +39,25 @@ signed ad hoc, macOS may show a Keychain prompt. If a dialog appears in a screen
 
 ## Step 3: Swap it in
 
-Only one instance per bundle id can run, and `open` would just focus the installed one:
+Only one instance per bundle id can run, and `open` would just focus the installed one. Launch with `open -g` so
+the app starts behind the user's windows instead of taking focus. They keep working while this skill runs:
 
 ```bash
 V=<scratchpad>/verify/Triage.app
 INSTALLED="$HOME/Applications/Triage.app/Contents/MacOS/Triage"
 pgrep -qf "$INSTALLED" && touch "$(dirname "$V")/was-running"   # read back in Step 5
 pkill -f "$INSTALLED" || true
-open "$V"
+open -g "$V"
 ```
 
 Wait for the first refresh (poll `scripts/snap.sh` every few seconds until the list isn't empty/loading,
 up to ~30s) instead of a fixed sleep.
 
 ## Step 4: Drive and capture
+
+Nothing here needs the app in front, so never activate it, click its window or minimize it. `snap.sh` captures the
+window even when other windows cover it, as long as it's on the current Space, and `ax.swift` presses through
+Accessibility without moving the mouse.
 
 - Screenshot: `scripts/snap.sh <scratchpad>/verify/<step>.png`, then `Read` it. For a retina capture, first run
   `sips -Z 1600 <png>` on a copy so it's cheap to read. Look at it. Don't assume the step worked.
@@ -78,7 +83,7 @@ pkill -f "$V/Contents/MacOS/Triage" || true
 rm -rf "$V"                                        # so a notification click can't launch the PR build later
 if [[ -e "$(dirname "$V")/was-running" ]]; then
   rm "$(dirname "$V")/was-running"
-  sleep 1 && open "$HOME/Applications/Triage.app"
+  sleep 1 && open -g "$HOME/Applications/Triage.app"
 fi
 ```
 
