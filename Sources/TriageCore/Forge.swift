@@ -4,12 +4,6 @@ import Foundation
 public enum Forge: Hashable, Sendable {
     case github
 
-    public var name: String {
-        switch self {
-        case .github: "GitHub"
-        }
-    }
-
     /// What Triage can do with this forge's pull requests; views hide what's missing.
     public var capabilities: ForgeCapabilities {
         switch self {

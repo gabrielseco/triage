@@ -5,7 +5,6 @@ import Testing
 
 @Test func githubCanDoEverything() {
     #expect(Forge.github.capabilities == .all)
-    #expect(Forge.github.name == "GitHub")
     #expect(GitHubForge(token: "t").forge == .github)
 }
 
