@@ -1,23 +1,53 @@
 import Foundation
 
-public struct RepoRef: Hashable, Codable, Sendable, Identifiable {
+public struct RepoRef: Hashable, Sendable, Identifiable {
+    public let forge: Forge
+    /// The namespace: a GitHub user or org, or a GitLab group path, which can nest (`group/subgroup`).
     public let owner: String
     public let name: String
 
-    public var id: String { fullName }
-    /// Always GitHub until GitLab repos arrive.
-    public var forge: Forge { .github }
-    public var fullName: String { "\(owner)/\(name)" }
-    /// The repo's page on GitHub.
-    public var url: URL {
-        URL(string: "https://github.com")!.appendingPathComponent(owner).appendingPathComponent(name)
+    /// What dismissals, snoozes and seen PRs are keyed by. GitHub keeps plain `owner/name`, as before forges
+    /// existed; GitLab leads with the host so it can't collide with a GitHub repo of the same name.
+    public var id: String {
+        switch forge {
+        case .github: fullName
+        case .gitlab(let host): "\(host)/\(fullName)"
+        }
     }
-    /// Its open pull requests on GitHub.
-    public var pullsURL: URL { url.appendingPathComponent("pulls") }
+    public var fullName: String { "\(owner)/\(name)" }
+    /// The repo's page.
+    public var url: URL {
+        let base =
+            switch forge {
+            case .github: URL(string: "https://github.com")!
+            // `init(gitlabPath:host:)` checked the host; the fallback is unreachable.
+            case .gitlab(let host): URL(string: "https://\(host)") ?? URL(string: "https://gitlab.com")!
+            }
+        return owner.split(separator: "/").reduce(base) { $0.appendingPathComponent(String($1)) }
+            .appendingPathComponent(name)
+    }
+    /// Its open pull (merge) requests.
+    public var pullsURL: URL {
+        switch forge {
+        case .github: url.appendingPathComponent("pulls")
+        case .gitlab: url.appendingPathComponent("-").appendingPathComponent("merge_requests")
+        }
+    }
 
-    public init(owner: String, name: String) {
+    public init(owner: String, name: String, forge: Forge = .github) {
+        self.forge = forge
         self.owner = owner
         self.name = name
+    }
+
+    /// A GitLab project from its full path, `group/subgroup/project`. Nil without a group, or if `host` isn't
+    /// a bare host name (so `url` can't point somewhere else).
+    public init?(gitlabPath path: String, host: String) {
+        guard URL(string: "https://\(host)")?.host == host, let slash = path.lastIndex(of: "/") else { return nil }
+        let owner = String(path[..<slash])
+        let name = String(path[path.index(after: slash)...])
+        guard !owner.isEmpty, !name.isEmpty else { return nil }
+        self.init(owner: owner, name: name, forge: .gitlab(host: host))
     }
 
     /// Accepts "owner/name" or a github.com URL.
@@ -27,6 +57,27 @@ public struct RepoRef: Hashable, Codable, Sendable, Identifiable {
         let parts = s.split(separator: "/").map(String.init)
         guard parts.count >= 2, !parts[0].isEmpty, !parts[1].isEmpty else { return nil }
         self.init(owner: parts[0], name: parts[1].replacingOccurrences(of: ".git", with: ""))
+    }
+}
+
+/// GitHub repos encode as `{"owner","name"}`, exactly as before forges existed, so saved `repos` keep loading.
+/// GitLab ones add `gitlabHost`.
+extension RepoRef: Codable {
+    enum CodingKeys: String, CodingKey { case owner, name, gitlabHost }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let host = try c.decodeIfPresent(String.self, forKey: .gitlabHost)
+        self.init(
+            owner: try c.decode(String.self, forKey: .owner), name: try c.decode(String.self, forKey: .name),
+            forge: host.map { .gitlab(host: $0) } ?? .github)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(owner, forKey: .owner)
+        try c.encode(name, forKey: .name)
+        if case .gitlab(let host) = forge { try c.encode(host, forKey: .gitlabHost) }
     }
 }
 
@@ -123,7 +174,7 @@ public struct PullRequest: Identifiable, Hashable, Sendable {
     /// The method GitHub's merge button would use for the viewer: their last one, or the repo's default.
     public var mergeMethod: MergeMethod
 
-    public var id: String { "\(repo.fullName)#\(number)" }
+    public var id: String { "\(repo.id)#\(number)" }
     /// The PR's diff on GitHub (the "Files changed" tab).
     public var changesURL: URL { url.appendingPathComponent("changes") }
     /// Where Open goes: your own PR opens on its conversation, to see what reviewers said; anyone else's on the

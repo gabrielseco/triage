@@ -11,9 +11,9 @@ extension AppStore {
 
     /// Remembered path, else auto-detected (`<root>/<repo name>` whose origin is this repo) and remembered.
     func checkoutPath(for repo: RepoRef) async -> String? {
-        if let p = checkoutPaths[repo.fullName], FileManager.default.fileExists(atPath: p) { return p }
+        if let p = checkoutPaths[repo.id], FileManager.default.fileExists(atPath: p) { return p }
         guard let found = await Handoff.findCheckout(repo, roots: Self.checkoutRoots) else { return nil }
-        checkoutPaths[repo.fullName] = found
+        checkoutPaths[repo.id] = found
         return found
     }
 
@@ -26,7 +26,7 @@ extension AppStore {
         panel.message = "Choose your local clone of \(repo.fullName)"
         panel.prompt = "Use this checkout"
         guard panel.runModal() == .OK, let url = panel.url else { return nil }
-        checkoutPaths[repo.fullName] = url.path
+        checkoutPaths[repo.id] = url.path
         return url.path
     }
 
@@ -57,7 +57,9 @@ extension AppStore {
             )
             .appendingPathComponent("dev.rogal.triage/handoffs", isDirectory: true)
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-            let base = "\(repo.owner)-\(repo.name)-\(item.pr.number)-\(name)"
+            // A GitLab owner can nest (`group/sub`); a slash would make it a directory.
+            let owner = repo.owner.replacingOccurrences(of: "/", with: "-")
+            let base = "\(owner)-\(repo.name)-\(item.pr.number)-\(name)"
             let promptURL = dir.appendingPathComponent("\(base).md")
             let scriptURL = dir.appendingPathComponent("\(base).command")
             try prompt.write(to: promptURL, atomically: true, encoding: .utf8)

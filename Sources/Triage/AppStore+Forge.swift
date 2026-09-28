@@ -9,6 +9,7 @@ extension AppStore {
         case .github:
             guard let token = await GitHubAuth.resolveToken() else { throw GitHubError.noToken }
             return GitHubForge(token: token, repos: repos)
+        case .gitlab: throw ForgeError.unsupported(forge)
         }
     }
 }

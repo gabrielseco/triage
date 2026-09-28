@@ -78,14 +78,14 @@ struct Sidebar: View {
             }
             Section("Watching") {
                 ForEach(store.repos) { r in
-                    row(r.fullName, "book.closed", store.count(repo: r.fullName))
-                        .tag(SidebarFilter.repo(r.fullName))
+                    row(r.fullName, "book.closed", store.count(repo: r.id))
+                        .tag(SidebarFilter.repo(r.id))
                         .contextMenu {
                             Button("Open Pull Requests on GitHub") { openURL(r.pullsURL) }
                             Button("Open Repository on GitHub") { openURL(r.url) }
                             Divider()
                             Button("Set local checkout…") { store.chooseCheckout(for: r) }
-                            if let p = store.checkoutPaths[r.fullName] {
+                            if let p = store.checkoutPaths[r.id] {
                                 Text("Checkout: \((p as NSString).abbreviatingWithTildeInPath)")
                             }
                             Divider()

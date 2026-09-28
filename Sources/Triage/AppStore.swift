@@ -118,7 +118,7 @@ final class AppStore {
         case .all: inboxItems
         case .kind(.awaitingReview): activeItems.filter { $0.kind == .awaitingReview }.sortedByCreation()
         case .kind(let k): activeItems.filter { $0.kind == k }
-        case .repo(let r): activeItems.filter { $0.pr.repo.fullName == r }
+        case .repo(let r): activeItems.filter { $0.pr.repo.id == r }
         case .lastDigest: activeItems.filter { lastDigestItemIDs.contains($0.id) }
         }
     }
@@ -144,7 +144,7 @@ final class AppStore {
     }
 
     func count(_ k: AttentionKind) -> Int { activeItems.filter { $0.kind == k }.count }
-    func count(repo: String) -> Int { inboxItems.filter { $0.pr.repo.fullName == repo }.count }
+    func count(repo: String) -> Int { inboxItems.filter { $0.pr.repo.id == repo }.count }
 
     /// Only an item the list is showing, so the detail never shows one hidden by the filter, a dismissal or
     /// "Only mine".
