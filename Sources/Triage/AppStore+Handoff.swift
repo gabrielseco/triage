@@ -31,14 +31,25 @@ extension AppStore {
     }
 
     func fixInTerminal(_ item: AttentionItem) async {
+        await handOff(item, name: item.kind.rawValue) { await self.buildPrompt(for: item, mode: .handoff) }
+    }
+
+    /// Explain PR: the agent starts in the PR's worktree with a read-only walkthrough prompt.
+    func explainPRInTerminal(_ item: AttentionItem) async {
+        await handOff(item, name: "explain") { await self.buildExplainPRPrompt(for: item.pr, inWorktree: true) }
+    }
+
+    /// Writes the prompt and a script that opens the PR's worktree, then runs the script in iTerm.
+    /// `name` keeps each action's files apart (one per PR and action).
+    private func handOff(_ item: AttentionItem, name: String, prompt: () async -> String) async {
         let repo = item.pr.repo
         guard let checkout = await checkoutPath(for: repo) ?? chooseCheckout(for: repo) else {
             actionStatus[item.id] =
                 "No local checkout of \(repo.fullName) — right-click the repo in the sidebar to set one."
             return
         }
-        actionStatus[item.id] = "Fetching logs and diff…"
-        let prompt = await buildPrompt(for: item, mode: .handoff)
+        actionStatus[item.id] = "Preparing the prompt…"
+        let prompt = await prompt()
         do {
             // Caches, not Application Support: iTerm's `command` splits on spaces.
             let dir = try FileManager.default.url(
@@ -46,7 +57,7 @@ extension AppStore {
             )
             .appendingPathComponent("dev.rogal.triage/handoffs", isDirectory: true)
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-            let base = "\(repo.owner)-\(repo.name)-\(item.pr.number)-\(item.kind.rawValue)"
+            let base = "\(repo.owner)-\(repo.name)-\(item.pr.number)-\(name)"
             let promptURL = dir.appendingPathComponent("\(base).md")
             let scriptURL = dir.appendingPathComponent("\(base).command")
             try prompt.write(to: promptURL, atomically: true, encoding: .utf8)
