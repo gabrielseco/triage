@@ -31,6 +31,7 @@ struct ItemDetailView: View {
                     .font(.subheadline.weight(.semibold))
                 Text(item.severity.label).font(.caption).padding(.horizontal, 6).padding(.vertical, 2)
                     .background(item.severity.color.opacity(0.15), in: Capsule())
+                if let ci = item.pr.ciStatus { CIBadge(status: ci, url: item.pr.checksURL) }
             }
             Text(item.headline).font(.title2.weight(.semibold)).textSelection(.enabled)
             Link(String("\(item.pr.repo.fullName) #\(item.pr.number) — \(item.pr.title)"), destination: item.pr.url)
@@ -181,6 +182,39 @@ struct EvidenceCard: View {
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+/// CI at a glance next to the item's kind; opens the PR's Checks tab.
+struct CIBadge: View {
+    let status: CIStatus
+    let url: URL
+
+    var body: some View {
+        Link(destination: url) {
+            Label(status.label, systemImage: symbol)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(color)
+                .padding(.horizontal, 6).padding(.vertical, 2)
+                .background(color.opacity(0.15), in: Capsule())
+        }
+        .help("Open the checks on GitHub")
+    }
+
+    private var symbol: String {
+        switch status.state {
+        case .failing: "xmark.circle.fill"
+        case .running: "clock.fill"
+        case .passed: "checkmark.circle.fill"
+        }
+    }
+
+    private var color: Color {
+        switch status.state {
+        case .failing: .red
+        case .running: .orange
+        case .passed: .green
+        }
     }
 }
 
