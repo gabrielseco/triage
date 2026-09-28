@@ -122,6 +122,9 @@ public struct PullRequest: Identifiable, Hashable, Sendable {
     public var id: String { "\(repo.fullName)#\(number)" }
     /// The PR's diff on GitHub (the "Files changed" tab).
     public var changesURL: URL { url.appendingPathComponent("changes") }
+    /// Where Open goes: your own PR opens on its conversation, to see what reviewers said; anyone else's on the
+    /// diff, since you're there to review it.
+    public func primaryURL(viewer: String?) -> URL { author == viewer ? url : changesURL }
 
     public init(
         repo: RepoRef, number: Int, title: String, url: URL, author: String, authorAvatar: URL? = nil,
