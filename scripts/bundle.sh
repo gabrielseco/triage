@@ -42,7 +42,7 @@ EOF
 # Sign with the stable identity from scripts/setup-signing.sh so Keychain "Always Allow" survives rebuilds.
 # An ad-hoc signature (the fallback) changes with every build, so Keychain asks again each time.
 SIGN_ID="Triage Local Signing"
-if ! security find-certificate -c "$SIGN_ID" >/dev/null 2>&1; then
+if ! security find-identity -p codesigning | grep -qF "\"$SIGN_ID\""; then
   echo "warning: no '$SIGN_ID' certificate, signing ad-hoc (Keychain will re-prompt after each rebuild). Run scripts/setup-signing.sh" >&2
   SIGN_ID="-"
 fi
