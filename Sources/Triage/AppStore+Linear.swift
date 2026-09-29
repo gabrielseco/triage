@@ -11,6 +11,7 @@ struct LinearState {
     /// Read from the Keychain once per session.
     var cachedKey: String?
     var isRefreshing = false
+    var refreshAgain = false
     var loopStarted = false
     /// Nil until the first fetch succeeds, so the list shows progress instead of "Inbox zero".
     var lastRefresh: Date?
@@ -78,10 +79,23 @@ extension AppStore {
         }
     }
 
+    /// Fetches, or if a fetch is already running, makes it go round once more when done, so a key saved
+    /// mid-fetch is used right away rather than on the next tick.
     func refreshLinear() async {
-        guard linearEnabled, !linear.isRefreshing else { return }
+        guard linearEnabled else { return }
+        guard !linear.isRefreshing else {
+            linear.refreshAgain = true
+            return
+        }
         linear.isRefreshing = true
         defer { linear.isRefreshing = false }
+        repeat {
+            linear.refreshAgain = false
+            await refreshLinearOnce()
+        } while linear.refreshAgain && linearEnabled
+    }
+
+    private func refreshLinearOnce() async {
         do {
             let (notifications, warnings) = try await linearClient().notifications()
             // Turned off while fetching: don't bring the pings back.
