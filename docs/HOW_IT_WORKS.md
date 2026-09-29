@@ -43,14 +43,15 @@ Two design rules drive everything:
 | Watch a repo | Type `owner/repo` (or paste a GitHub URL) in the sidebar field → Enter |
 | Stop watching | Right-click the repo in the sidebar → Stop watching |
 | GitLab | Settings → GitLab → Show GitLab merge requests, then paste a `read_api` token (or keep one in the Keychain). Projects appear in the sidebar by themselves |
-| Refresh | ⌘R, or wait. It auto-refreshes every 2 minutes |
+| Linear | Settings → Linear → Show Linear pings, then paste a personal API key with Read access. Mentions and replies in your threads appear under **Linear** in the sidebar until you answer them in Linear |
+| Refresh | ⌘R, or wait. It auto-refreshes every 2 minutes, Linear every 30 seconds |
 | Explain an item | Select it → **Explain & propose fix** (⌘E) |
 | Open PR in browser | **Open** (⌘O) |
 | Hide an item | **Dismiss** (Delete key) or **Snooze** 1h / 4h / until tomorrow |
 | Bring hidden back | "Show N hidden" at the bottom of the sidebar |
 | Only your PRs | Person toggle in the toolbar |
 | Settings | ⌘, → API key, model, digest hours, weekdays only, open at login, GitLab |
-| Menu bar | Tray icon with a count: top items, Send digest now, Refresh, Quit |
+| Menu bar | Tray icon with a count (`3 · @1` when 1 Linear ping is waiting): pings, top items, Send digest now, Refresh, Quit |
 
 **The three columns:**
 
@@ -86,6 +87,8 @@ triage/
 │   │   ├── Forge.swift            ← ForgeClient protocol, what each forge can do, the GitHub/GitLab adapters
 │   │   ├── GitHubClient.swift     ← GraphQL + REST calls, token lookup
 │   │   ├── GitLabClient.swift     ← GitLab GraphQL: your MRs → PullRequest
+│   │   ├── LinearClient.swift     ← Linear GraphQL: your notifications from the last 30 days
+│   │   ├── LinearPings.swift      ← notifications → the mentions and replies still waiting on you
 │   │   ├── Classifier.swift       ← PR snapshot → attention items (the rules)
 │   │   ├── PromptBuilder.swift    ← evidence + logs + diff → one prompt string
 │   │   ├── AnthropicClient.swift  ← Messages API call + Keychain helper
@@ -96,6 +99,7 @@ triage/
 │       ├── AppStore.swift         ← the state store (think Zustand/MobX store)
 │       ├── ContentView.swift      ← sidebar + inbox list
 │       ├── ItemDetailView.swift   ← detail pane + actions
+│       ├── LinearPingViews.swift  ← Linear ping list, row and detail
 │       └── SettingsView.swift     ← ⌘, window
 ├── Tests/TriageCoreTests/         ← Classifier + Digest tests (like ExUnit / Jest)
 ├── Resources/AppIcon.svg|png      ← app icon source + 1024px render

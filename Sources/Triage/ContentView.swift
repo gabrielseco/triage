@@ -15,6 +15,8 @@ struct ContentView: View {
         } detail: {
             if let item = store.selectedItem {
                 ItemDetailView(item: item).id(item.id)
+            } else if let ping = store.selectedPing {
+                PingDetailView(ping: ping).id(ping.id)
             } else {
                 EmptyState(
                     "Nothing selected", systemImage: "tray",
@@ -118,14 +120,23 @@ struct Sidebar: View {
                     }
                 }
             }
-            if !store.errors.isEmpty {
-                Section("Errors") {
-                    ForEach(store.errors, id: \.self) { Text($0).font(.caption).foregroundStyle(.red) }
+            if store.linearEnabled {
+                Section("Linear") {
+                    ForEach(LinearPing.Kind.allCases, id: \.self) { k in
+                        row(k.title, k.symbol, store.count(k)).tag(SidebarFilter.linear(k))
+                    }
                 }
             }
-            if !store.warnings.isEmpty {
+            let errors = store.errors + store.linear.errors
+            if !errors.isEmpty {
+                Section("Errors") {
+                    ForEach(errors, id: \.self) { Text($0).font(.caption).foregroundStyle(.red) }
+                }
+            }
+            let warnings = store.warnings + store.linear.warnings
+            if !warnings.isEmpty {
                 Section("Partial data") {
-                    ForEach(store.warnings, id: \.self) {
+                    ForEach(warnings, id: \.self) {
                         // Sidebar rows truncate to one line; these are sentences, so let them wrap.
                         Text($0).font(.caption).foregroundStyle(.orange).lineLimit(3).help($0)
                     }
@@ -154,7 +165,9 @@ struct InboxList: View {
     var body: some View {
         @Bindable var store = store
         Group {
-            if store.visibleItems.isEmpty, let repo = selectedRepo {
+            if case .linear(let kind) = store.filter {
+                PingList(kind: kind)
+            } else if store.visibleItems.isEmpty, let repo = selectedRepo {
                 EmptyState(
                     "Inbox zero", systemImage: "checkmark.circle",
                     description: "Nothing in \(repo.fullName) needs you right now."

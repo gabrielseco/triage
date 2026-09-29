@@ -14,6 +14,7 @@ enum SidebarFilter: Hashable {
     case kind(AttentionKind)
     case repo(String)
     case lastDigest
+    case linear(LinearPing.Kind)
 }
 
 @MainActor @Observable
@@ -57,6 +58,13 @@ final class AppStore {
             cachedGitLabToken = nil
         }
     }
+    /// Linear pings (mentions and replies in my threads) on their own 30 s loop. The key lives in the Keychain.
+    var linearEnabled: Bool {
+        didSet {
+            defaults.set(linearEnabled, forKey: "linearEnabled")
+            if !linearEnabled { clearLinear() }
+        }
+    }
     /// Per item: what the last Fix in / Copy did, shown under the buttons.
     var actionStatus: [String: String] = [:]
     /// PRs closed or merged from Triage, hidden until a refresh confirms they're gone from GitHub's open list.
@@ -85,9 +93,10 @@ final class AppStore {
     /// Data the last refresh had to leave out (query caps, low rate limit). Unlike errors, doesn't block digests.
     var warnings: [String] = []
     var explanations: [String: ExplainState] = [:]
+    var linear = LinearState()
     var filter: SidebarFilter = .all {
         // The selected item may not be in the new list; move to its first item so the detail matches.
-        didSet { if selectedItem == nil { selection = visibleItems.first?.id } }
+        didSet { if selectedItem == nil, selectedPing == nil { selectFirstVisible() } }
     }
     var selection: String? {
         // A merge or close asked for another item isn't answered by this one, nor later by surprise.
@@ -105,6 +114,7 @@ final class AppStore {
         checkoutPaths = Self.load("checkoutPaths") ?? [:]
         harnessCommand = UserDefaults.standard.string(forKey: "harnessCommand") ?? Handoff.defaultHarnessCommand
         gitlabHost = UserDefaults.standard.string(forKey: "gitlabHost") ?? ""
+        linearEnabled = UserDefaults.standard.bool(forKey: "linearEnabled")
         digestHours = Self.load("digestHours") ?? [12, 18]
         digestWeekdaysOnly = UserDefaults.standard.object(forKey: "digestWeekdaysOnly") as? Bool ?? true
         digestBaseline = Self.load("digestBaseline")
@@ -138,6 +148,7 @@ final class AppStore {
         case .kind(let k): activeItems.filter { $0.kind == k }
         case .repo(let r): activeItems.filter { $0.pr.repo.id == r }
         case .lastDigest: activeItems.filter { lastDigestItemIDs.contains($0.id) }
+        case .linear: []
         }
     }
 
@@ -159,25 +170,6 @@ final class AppStore {
         let waiting = stats.values.filter { $0.pendingChecks > 0 }.count
         let noise = stats.values.reduce(0) { $0 + $1.noiseComments }
         return "\(needs) need you · \(waiting) PRs waiting on CI · \(noise) bot comments muted"
-    }
-
-    /// Who you are on `forge`: "Mine", whose comments are new, what you can approve.
-    func viewer(for forge: Forge) -> String? {
-        switch forge {
-        case .github: viewer
-        case .gitlab: gitlabViewer
-        }
-    }
-
-    /// Whether Triage can do `capability` for this PR yet; views hide what it can't.
-    func can(_ capability: ForgeCapabilities, _ pr: PullRequest) -> Bool {
-        pr.repo.forge.capabilities.contains(capability)
-    }
-
-    /// GitLab projects with an open merge request for you, for the sidebar. They come from the fetch rather
-    /// than a list you keep.
-    var gitlabProjects: [RepoRef] {
-        Set(prs.map(\.repo).filter { $0.forge != .github }).sorted { $0.fullName < $1.fullName }
     }
 
     func count(_ k: AttentionKind) -> Int { activeItems.filter { $0.kind == k }.count }
@@ -238,10 +230,13 @@ final class AppStore {
         }
         isRefreshing = true
         defer { isRefreshing = false }
+        // ⌘R refreshes Linear too, instead of waiting up to 30 s.
+        async let linear: Void = refreshLinear()
         repeat {
             refreshAgain = false
             await refreshOnce()
         } while refreshAgain
+        await linear
     }
 
     private func refreshOnce() async {
@@ -280,12 +275,13 @@ final class AppStore {
         errors = errs
         warnings = merged.allWarnings
         lastRefresh = Date()
-        // Forget dismissals/snoozes for items that no longer exist (new push = new ids).
+        // Forget dismissals/snoozes for items that no longer exist (new push = new ids). Linear pings are
+        // pruned by their own loop, against their own ids.
         let live = Set(newItems.map(\.id))
-        dismissed = dismissed.intersection(live)
+        dismissed = dismissed.filter { live.contains($0) || LinearPing.isPingID($0) }
         closedPRIDs.formIntersection(fetched.map(\.id))
-        snoozed = snoozed.filter { live.contains($0.key) && $0.value > Date() }
-        if !live.contains(selection ?? "") { selection = visibleItems.first?.id }
+        snoozed = snoozed.filter { (live.contains($0.key) || LinearPing.isPingID($0.key)) && $0.value > Date() }
+        if !live.contains(selection ?? ""), selectedPing == nil { selectFirstVisible() }
     }
 
     private struct Fetched {
@@ -317,6 +313,7 @@ final class AppStore {
     func startAutoRefresh() {
         guard !autoRefreshStarted else { return }
         autoRefreshStarted = true
+        startLinearRefresh()
         Task {
             while true {
                 await refresh()

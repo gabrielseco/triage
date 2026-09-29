@@ -62,8 +62,14 @@ struct MenuBarLabel: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        Label("\(store.needsYouCount)", systemImage: store.needsYouCount > 0 ? "tray.full.fill" : "tray")
-            .onAppear { store.openMainWindow = { openWindow(id: "main") } }
+        // Pings get their own count, so "someone's waiting on me in Linear" shows at a glance.
+        let pings = store.activePings.count
+        let busy = store.needsYouCount > 0 || pings > 0
+        Label(
+            pings > 0 ? "\(store.needsYouCount) · @\(pings)" : "\(store.needsYouCount)",
+            systemImage: busy ? "tray.full.fill" : "tray"
+        )
+        .onAppear { store.openMainWindow = { openWindow(id: "main") } }
     }
 }
 
@@ -76,6 +82,15 @@ struct MenuBarContent: View {
             Text("Last digest \(at.formatted(date: .omitted, time: .shortened))")
         }
         Divider()
+        // Someone waiting on an answer comes before PR work.
+        ForEach(store.activePings.prefix(5)) { ping in
+            Button(String("\(ping.issueKey) · \(ping.headline): \(ping.excerpt)")) {
+                store.filter = .linear(ping.kind)
+                store.selection = ping.id
+                store.showMainWindow()
+            }
+        }
+        if !store.activePings.isEmpty { Divider() }
         ForEach(store.activeItems.filter { $0.severity >= .medium }.prefix(10)) { item in
             Button(String("\(item.pr.repo.name)\(item.pr.ref) · \(item.kind.title): \(item.headline)")) {
                 store.filter = .all
