@@ -4,6 +4,8 @@ Status: planned, nothing built. Updated: 2026-09-29.
 
 ## Goal
 
+The case this is for: I commented in a Linear thread, someone answered, and I only noticed 22 hours later.
+
 Show a Linear item in Triage only when someone is waiting on me: they **@mention me** (in an issue or a
 comment), or they **reply in a thread I'm part of**. Everything else Linear notifies about (assignments, status
 changes, new comments on issues I only follow, reactions) stays out. A new ping **notifies me right away**, and
@@ -126,6 +128,26 @@ A macOS banner for each new ping, sent as soon as the 30 s poll sees it:
 "Instant" here means within 30 s. Anything faster needs Linear webhooks, which need a public server to receive
 them. That's out of scope for a local app.
 
+### Hard to miss
+
+A banner that slides away while I'm not looking is how a reply goes unseen for 22 hours. So a ping keeps asking
+until I've answered it or dismissed it:
+
+1. **Reminders.** If a ping is still open 1 hour after its banner, it notifies again ("Still waiting: Bob
+   replied in your thread · ENG-123, 1 h ago"). Then again at 4 h, and after that once a day, at the first
+   digest slot. Answering in Linear, or Dismiss or Snooze in Triage, stops the reminders. Snooze ends with one
+   more reminder. The intervals are a setting (default 1 h, 4 h, daily).
+2. **Always-visible menu bar mark.** While any ping is open, the menu bar icon shows a separate Linear count,
+   apart from the PR count, and the menu lists the open pings first. It's a glance: no count, nothing waiting.
+3. **Notifications that stay on screen.** macOS lets the user, not the app, choose Banners (slide away) or
+   Alerts (stay until clicked) per app. When Linear is turned on, Settings → Linear says so and links to
+   System Settings → Notifications → Triage. Time-sensitive notifications (which get through Focus) need an
+   Apple entitlement that an ad-hoc signed app can't have, so that's out.
+
+Reminder timing is pure logic too (`LinearPings.dueReminders(open:notifiedAt:now:schedule:)`), tested in
+`TriageCore`. The notified-id store keeps the time of the last notification for each ping, so reminders
+survive a restart.
+
 The rule for which pings to notify is pure logic (`LinearPings.newPings(current:notified:isFirstRun:)`), in
 `TriageCore` with tests. Only `Notifier.send` lives in the app.
 
@@ -147,8 +169,9 @@ The rule for which pings to notify is pure logic (`LinearPings.newPings(current:
    debug run against my account records the real `type` strings, and only made-up fixtures get committed.
 2. **App, read-only:** Settings, Keychain, the 30 s loop, sidebar section, row, detail, dismiss and snooze, menu
    bar. `/verify` + `/design-review`, with screenshots of made-up data only.
-3. **Notifications:** `newPings` + tests, a notified-id store, banners, click → Linear, the summary banner. Verified
-   by a real ping from a second account or a teammate.
+3. **Notifications:** `newPings` + `dueReminders` + tests, a store of notified ids and times, banners, reminders,
+   click → Linear, the summary banner, the menu bar Linear count, the Alerts hint in Settings. Verified by a real
+   ping from a second account or a teammate.
 4. **Later, if wanted:** Explain ("what do they need from me?"), a Read+Write key to mark read in Linear on
    Dismiss, and project or document mentions (`ProjectNotification` and others).
 
