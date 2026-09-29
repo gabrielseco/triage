@@ -41,7 +41,7 @@ private func notification(
     """
     {"__typename": "IssueNotification", "id": "\(id)", "type": "issueCommentMention", "category": "\(category)",
      "createdAt": "\(at(hours))", "snoozedUntilAt": \(snoozedFor.map { "\"\(at($0))\"" } ?? "null"),
-     "actor": {"displayName": "Alice", "avatarUrl": null, "isMe": \(actorIsMe)},
+     "actor": {"name": "Alice Smith", "avatarUrl": null, "isMe": \(actorIsMe)},
      "issue": {"identifier": "\(issue)", "title": "Migrate billing", "url": "https://linear.app/acme/issue/\(issue)",
                "state": {"type": "\(state)"}, "comments": \(mine(myIssueComments))},
      "comment": \(comment ?? "null")}
@@ -70,7 +70,7 @@ private func pings(_ nodes: String...) throws -> [LinearPing] {
         #expect(open.first?.id == "linear:ENG-1:c1:c1")
         #expect(open.first?.excerpt == "@me can you confirm the migration order?")
         #expect(open.first?.url.absoluteString == "https://linear.app/acme/issue/ENG-1#comment-c1")
-        #expect(open.first?.author == "Alice")
+        #expect(open.first?.author == "Alice Smith")
 
         #expect(try pings(notification(comment: comment(myReplies: [-0.5]))).isEmpty)
         // A reply of mine from before the ping doesn't answer it.

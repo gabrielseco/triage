@@ -44,7 +44,7 @@ public enum LinearPings {
             return LinearPing(
                 id: "\(LinearPing.idPrefix)\(threadID):\(latest.comment?.id ?? latest.id)", kind: kind,
                 issueKey: latest.issue.identifier, issueTitle: latest.issue.title,
-                author: latest.actor?.displayName, authorAvatar: latest.actor?.avatarUrl,
+                author: latest.actor?.name, authorAvatar: latest.actor?.avatarUrl,
                 excerpt: latest.comment.map { excerpt($0.body) } ?? latest.issue.title,
                 url: latest.comment?.url ?? latest.issue.url, pingedAt: latest.createdAt, threadID: threadID)
         }

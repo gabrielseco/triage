@@ -18,7 +18,7 @@ public enum LinearError: LocalizedError {
 public enum LinearAuth {
     /// Where Settings keeps the key: its own Keychain service, one account.
     public static let keychainService = "dev.rogal.triage.linear"
-    static let keychainAccount = "api.linear.app"
+    public static let keychainAccount = "api.linear.app"
 
     /// LINEAR_API_KEY env var, else the Keychain entry.
     public static func key() -> String? {
@@ -93,7 +93,7 @@ public struct LinearClient: Sendable {
               __typename
               ... on IssueNotification {
                 id type category createdAt snoozedUntilAt
-                actor { displayName avatarUrl isMe }
+                actor { name avatarUrl isMe }
                 issue {
                   identifier title url state { type }
                   comments(first: 20, filter: { user: { isMe: { eq: true } } }) { nodes { createdAt } }
@@ -143,7 +143,7 @@ struct NotificationsData: Decodable {
 /// One issue notification as Linear sends it, trimmed to what `LinearPings` reads.
 public struct LinearNotification: Decodable, Sendable, Hashable {
     public struct Actor: Decodable, Sendable, Hashable {
-        let displayName: String
+        let name: String
         let avatarUrl: URL?
         let isMe: Bool
     }

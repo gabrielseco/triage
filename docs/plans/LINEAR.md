@@ -66,7 +66,7 @@ query Pings($since: DateTimeOrDuration!, $after: String) {
       __typename
       ... on IssueNotification {
         id type category createdAt snoozedUntilAt
-        actor { displayName avatarUrl isMe }
+        actor { name avatarUrl isMe }
         issue {
           identifier title url state { type }
           comments(first: 20, filter: { user: { isMe: { eq: true } } }) { nodes { createdAt } }
