@@ -6,8 +6,9 @@ Status: planned, nothing built. Updated: 2026-09-29.
 
 Show a Linear item in Triage only when someone is waiting on me: they **@mention me** (in an issue or a
 comment), or they **reply in a thread I'm part of**. Everything else Linear notifies about (assignments, status
-changes, new comments on issues I only follow, reactions) stays out. An item leaves the inbox once I've answered,
-not once I've read it.
+changes, new comments on issues I only follow, reactions) stays out. A new ping **notifies me right away**, and
+clicking the notification opens the comment in Linear, where I answer. Triage never replies for me. An item leaves
+the inbox once I've answered, not once I've read it.
 
 ## Decisions
 
@@ -38,14 +39,18 @@ not once I've read it.
    work for pings unchanged. Revisit a shared "subject" type only if a third non-PR source ever shows up.
 6. **Read-only.** A Linear personal API key with **Read** scope, in the Keychain, as the GitLab token is. Replying
    and marking read happen in Linear. Open (⌘O) goes straight to the comment.
-7. **Deterministic.** The rules are plain code in `TriageCore`, with no AI deciding "is this a question?".
+7. **A banner per ping, within about 30 s.** See [Notifications](#notifications). This is the main feature; the
+   sidebar list is where the pings I haven't answered wait.
+8. **Deterministic.** The rules are plain code in `TriageCore`, with no AI deciding "is this a question?".
    An FYI mention stays until dismissed. Explain (⌘E) can come later as an on-demand "what do they need from
    me?"
 
 ## Fetching
 
-`POST https://api.linear.app/graphql`, header `Authorization: <personal key>` (no `Bearer`), one call per
-refresh, every 120 s alongside GitHub and GitLab:
+`POST https://api.linear.app/graphql`, header `Authorization: <personal key>` (no `Bearer`). Linear runs on
+its **own 30 s loop**, not the 120 s PR refresh, because a ping should arrive fast. That's one small query, about
+120 an hour, well under Linear's hourly limit for API keys (check the exact limit in phase 1). ⌘R refreshes it
+too:
 
 ```graphql
 query Pings {
@@ -92,6 +97,38 @@ Tests (Swift Testing, fixtures made up rather than copied from the work workspac
 - Thread resolved, issue done, snoozed in Linear, my own comment → nothing.
 - A mention in the issue description: answered by any comment of mine on the issue after it.
 
+## Notifications
+
+A macOS banner for each new ping, sent as soon as the 30 s poll sees it:
+
+```
+┌───────────────────────────────────────────────┐
+│ Alice mentioned you · ENG-123                 │
+│ "can you confirm the migration order before…" │
+└───────────────────────────────────────────────┘
+  Thread reply: "Bob replied in your thread · ENG-123"
+```
+
+- **New means an id not notified before.** Triage stores the ids of pings it has already notified, so a ping
+  notifies once, even across restarts. A later reply in the same thread is a new id, so it notifies again.
+- **No flood on first run or after being offline.** The first fetch after turning Linear on only records ids.
+  Existing pings show in the list without a banner. After that, a fetch with more than 3 new pings sends one
+  summary banner ("5 new Linear pings") instead of 5.
+- **Click → the comment in Linear.** The notification carries the comment URL, and clicking it opens that URL
+  in the browser (or the Linear app, if it handles `linear.app` links). Today `didReceive` always opens the digest,
+  so it has to branch on a `kind` in `userInfo`. The summary banner opens Triage on the Linear section.
+- **Grouped per issue** in Notification Center (`threadIdentifier = ISSUE-123`).
+- **Sound on**, like the digest. Focus modes and macOS notification settings still apply. The digest's
+  "weekdays only" doesn't, because a ping is time-sensitive.
+- **Setting:** "Notify on every ping" under Settings → Linear, on by default.
+- **Only in the bundled app.** `Notifier` needs a bundle id, like the digest (`scripts/bundle.sh`).
+
+"Instant" here means within 30 s. Anything faster needs Linear webhooks, which need a public server to receive
+them. That's out of scope for a local app.
+
+The rule for which pings to notify is pure logic (`LinearPings.newPings(current:notified:isFirstRun:)`), in
+`TriageCore` with tests. Only `Notifier.send` lives in the app.
+
 ## App
 
 | Area | Change |
@@ -101,15 +138,18 @@ Tests (Swift Testing, fixtures made up rather than copied from the work workspac
 | Sidebar | A **Linear** section: *Mentioned N*, *Thread replies N* |
 | List row | `ENG-123  Alice: "can you confirm the migration order?"`, the time since the ping, Linear's avatar |
 | Detail | Issue title and state, the thread's last few comments with the ping highlighted, then **Open in Linear**, **Dismiss** and **Snooze** |
-| Menu bar + digest | Pings count toward the badge and the "N new since 12:00" digest |
+| Menu bar | Pings count toward the badge and show in the top items |
+| Digest | Leaves pings out, since each one already notified |
 
 ## Phases (one PR each)
 
 1. **Core:** `LinearClient` (query, decode), `LinearPing`, the classification rules and tests. A throwaway
    debug run against my account records the real `type` strings, and only made-up fixtures get committed.
-2. **App, read-only:** Settings, Keychain, refresh, sidebar section, row, detail, dismiss and snooze, menu bar
-   and digest. `/verify` + `/design-review`, with screenshots of made-up data only.
-3. **Later, if wanted:** Explain ("what do they need from me?"), a Read+Write key to mark read in Linear on
+2. **App, read-only:** Settings, Keychain, the 30 s loop, sidebar section, row, detail, dismiss and snooze, menu
+   bar. `/verify` + `/design-review`, with screenshots of made-up data only.
+3. **Notifications:** `newPings` + tests, a notified-id store, banners, click → Linear, the summary banner. Verified
+   by a real ping from a second account or a teammate.
+4. **Later, if wanted:** Explain ("what do they need from me?"), a Read+Write key to mark read in Linear on
    Dismiss, and project or document mentions (`ProjectNotification` and others).
 
 ## Open questions
@@ -118,8 +158,8 @@ Tests (Swift Testing, fixtures made up rather than copied from the work workspac
    **assigned to me** or **created by me** count too, even if I never commented?
 2. **Description mentions:** I get pinged in an issue body and never comment, but I do the work. Should moving
    the issue to done be enough to clear it? (Planned: yes, completed or canceled clears it.)
-3. **Should old pings be backfilled?** On first run, show every unanswered ping Linear still holds, or only
-   pings from the last N days?
+3. **Old pings on first run:** they show in the list without banners (see [Notifications](#notifications)).
+   Should very old ones be cut off, for example anything older than 14 days?
 
 ## Risks
 
