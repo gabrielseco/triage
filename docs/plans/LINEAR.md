@@ -1,6 +1,6 @@
 # Plan: Linear pings that need my answer
 
-Status: planned, nothing built. Open questions settled. Updated: 2026-09-29.
+Status: phase 1 (client and rules in `TriageCore`) in review. Updated: 2026-09-29.
 
 ## Goal
 
@@ -60,27 +60,24 @@ too:
 
 ```graphql
 query Pings($since: DateTimeOrDuration!, $after: String) {
-  viewer { id }
-  notifications(                         # archived are left out by default
-    first: 100, after: $after, orderBy: createdAt,
-    filter: { createdAt: { gt: $since } }  # $since = "-P30D"
-  ) {
+  notifications(first: 50, after: $after, orderBy: createdAt, filter: { createdAt: { gt: $since } }) {
     pageInfo { hasNextPage endCursor }
     nodes {
+      __typename
       ... on IssueNotification {
-        id type category createdAt snoozedUntilAt url
-        actor { id displayName avatarUrl }
+        id type category createdAt snoozedUntilAt
+        actor { displayName avatarUrl isMe }
         issue {
-          identifier title url state { type } team { key }
-          comments(last: 20) { nodes { id createdAt user { id } } }   # answers to description mentions
+          identifier title url state { type }
+          comments(first: 20, filter: { user: { isMe: { eq: true } } }) { nodes { createdAt } }
         }
         comment {
-          id body url createdAt user { id }
+          id body url createdAt resolvedAt
+          children(first: 20, filter: { user: { isMe: { eq: true } } }) { nodes { createdAt } }
           parent {
-            id resolvedAt user { id }
-            children(last: 20) { nodes { id createdAt user { id } } }
+            id resolvedAt user { isMe }
+            children(first: 20, filter: { user: { isMe: { eq: true } } }) { nodes { createdAt } }
           }
-          children(last: 20) { nodes { id createdAt user { id } } }
         }
       }
     }
@@ -88,11 +85,15 @@ query Pings($since: DateTimeOrDuration!, $after: String) {
 }
 ```
 
-`IssueNotification.type` is a free string in the schema, not an enum. Phase 1 logs the real values from my
-account before any rule depends on them, and classification keys off `category` wherever it can.
+The query is in `LinearClient.notificationsQuery`. Instead of reading every comment in a thread and
+comparing user ids, it asks only for **my** comments (`user: { isMe: { eq: true } }`). The rules only need to
+know whether I answered after the ping, and it keeps each page small.
+
+`IssueNotification.type` is a free string in the schema, not an enum, so the rules use only `category` (an
+enum). The real `type` strings from my account are still worth recording, for the server-side filter below.
 
 **Don't miss pings behind other notifications.** The inbox also holds assignments, status changes and followed
-issues. One page of 100 could fill up with those and leave a reply out. So the query only asks for the last
+issues. One page of 50 could fill up with those and leave a reply out. So the query only asks for the last
 30 days and follows `pageInfo` until there are no more pages. That's usually one request, rarely more. Once phase
 1 knows the mention and reply `type` strings, the filter adds `type: { in: [...] }` so the server sends only
 those. Phase 1 also confirms the sort direction of `orderBy: createdAt` and whether `DateTimeOrDuration`
@@ -206,7 +207,7 @@ The rule for which pings to notify is pure logic (`LinearPings.newPings(current:
 
 - **`type` strings aren't documented as an enum.** That's why rules lean on `category` and phase 1 records the
   real values.
-- **Long threads:** `children(last: 20)` and `comments(last: 20)` could miss my reply in a longer thread. That would only make an item
-  show that shouldn't, never hide one. Paginate if it ever happens.
+- **Many replies of mine:** each thread fetches my first 20 comments. With more than 20, a newer one could be
+  missed. That would only make an item show that shouldn't, never hide one. Paginate if it ever happens.
 - **Work data:** the Linear workspace is work data. Issue keys, titles and screenshots stay out of PRs, commits
   and comments (the same rule as GitLab).
