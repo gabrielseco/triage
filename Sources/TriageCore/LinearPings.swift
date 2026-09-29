@@ -1,0 +1,100 @@
+import Foundation
+
+/// A Linear thread where someone is waiting on me: an @-mention, or a reply in a thread I commented in.
+public struct LinearPing: Identifiable, Hashable, Sendable {
+    public enum Kind: String, Sendable, Codable {
+        case mentioned, threadReply
+    }
+
+    /// `linear:<ISSUE-123>:<thread root comment id, or "issue">:<latest ping>`, so a dismissed thread comes back
+    /// only when there's a newer ping.
+    public var id: String
+    public var kind: Kind
+    public var issueKey: String
+    public var issueTitle: String
+    /// Who pinged, or nil for an integration.
+    public var author: String?
+    public var authorAvatar: URL?
+    /// The start of the comment that pinged me, or the issue title for a description mention.
+    public var excerpt: String
+    /// The comment itself, so Open lands on it.
+    public var url: URL
+    public var pingedAt: Date
+    /// Groups a thread's notifications together: `<ISSUE-123>:<thread root comment id, or "issue">`.
+    public var threadID: String
+
+    public static let idPrefix = "linear:"
+}
+
+public enum LinearPings {
+    /// Notifications → the threads still waiting on my answer, newest ping first. `now` is passed in so tests
+    /// can pin the 30-day window and Linear's snoozes.
+    public static func classify(_ notifications: [LinearNotification], now: Date) -> [LinearPing] {
+        let cutoff = now.addingTimeInterval(-LinearClient.window)
+        let open = notifications.filter { n in
+            n.createdAt > cutoff && kind(of: n) != nil && !(n.actor?.isMe ?? false)
+                && !closedStates.contains(n.issue.state.type) && !isResolved(n)
+                && (n.snoozedUntilAt ?? .distantPast) <= now
+        }
+        let threads = Dictionary(grouping: open, by: threadID)
+        return threads.compactMap { threadID, pings -> LinearPing? in
+            guard let latest = pings.max(by: { $0.createdAt < $1.createdAt }), let kind = kind(of: latest),
+                !answered(latest)
+            else { return nil }
+            return LinearPing(
+                id: "\(LinearPing.idPrefix)\(threadID):\(latest.comment?.id ?? latest.id)", kind: kind,
+                issueKey: latest.issue.identifier, issueTitle: latest.issue.title,
+                author: latest.actor?.name, authorAvatar: latest.actor?.avatarUrl,
+                excerpt: latest.comment.map { excerpt($0.body) } ?? latest.issue.title,
+                url: latest.comment?.url ?? latest.issue.url, pingedAt: latest.createdAt, threadID: threadID)
+        }
+        .sorted { ($0.pingedAt, $0.id) > ($1.pingedAt, $1.id) }
+    }
+
+    /// Done, canceled or duplicate: nothing left to answer.
+    static let closedStates: Set = ["completed", "canceled", "duplicate"]
+
+    /// Mentions always count; a reply only in a thread I started or answered in. A new top-level comment on
+    /// an issue I merely follow is dropped.
+    static func kind(of n: LinearNotification) -> LinearPing.Kind? {
+        switch n.category {
+        case "mentions": return .mentioned
+        case "commentsAndReplies":
+            guard let parent = n.comment?.parent else { return nil }
+            let mine = (parent.user?.isMe ?? false) || !parent.children.nodes.isEmpty
+            return mine ? .threadReply : nil
+        default: return nil
+        }
+    }
+
+    /// The thread a ping belongs to: a reply's parent, a top-level comment itself, or the issue description.
+    static func threadID(_ n: LinearNotification) -> String {
+        "\(n.issue.identifier):\(n.comment.map { $0.parent?.id ?? $0.id } ?? "issue")"
+    }
+
+    static func isResolved(_ n: LinearNotification) -> Bool {
+        guard let comment = n.comment else { return false }
+        if let parent = comment.parent { return parent.resolvedAt != nil }
+        return comment.resolvedAt != nil
+    }
+
+    /// I commented in the thread after the ping. A description mention counts any comment of mine on the issue.
+    static func answered(_ n: LinearNotification) -> Bool {
+        let mine: [LinearNotification.Mine]
+        if let comment = n.comment {
+            mine = (comment.parent?.children ?? comment.children).nodes
+        } else {
+            mine = n.issue.comments.nodes
+        }
+        return mine.contains { $0.createdAt > n.createdAt }
+    }
+
+    /// The first non-empty line, short enough for a row or a notification.
+    static func excerpt(_ body: String, limit: Int = 140) -> String {
+        let line =
+            body.split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .first { !$0.isEmpty } ?? ""
+        return line.count > limit ? String(line.prefix(limit - 1)) + "…" : line
+    }
+}

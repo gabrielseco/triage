@@ -1,6 +1,6 @@
 # Plan: Linear pings that need my answer
 
-Status: planned, nothing built. Open questions settled. Updated: 2026-09-29.
+Status: phase 1 (client and rules in `TriageCore`) in review. Updated: 2026-09-29.
 
 ## Goal
 
@@ -59,28 +59,28 @@ its **own 30 s loop**, not the 120 s PR refresh, because a ping should arrive fa
 too:
 
 ```graphql
-query Pings($since: DateTimeOrDuration!, $after: String) {
-  viewer { id }
-  notifications(                         # archived are left out by default
-    first: 100, after: $after, orderBy: createdAt,
-    filter: { createdAt: { gt: $since } }  # $since = "-P30D"
+query Pings($since: DateTimeOrDuration!, $types: [String!]!, $after: String) {
+  notifications(
+    first: 50, after: $after, orderBy: createdAt,
+    filter: { createdAt: { gt: $since }, type: { in: $types } }
   ) {
     pageInfo { hasNextPage endCursor }
     nodes {
+      __typename
       ... on IssueNotification {
-        id type category createdAt snoozedUntilAt url
-        actor { id displayName avatarUrl }
+        id type category createdAt snoozedUntilAt
+        actor { name avatarUrl isMe }
         issue {
-          identifier title url state { type } team { key }
-          comments(last: 20) { nodes { id createdAt user { id } } }   # answers to description mentions
+          identifier title url state { type }
+          comments(first: 20, filter: { user: { isMe: { eq: true } } }) { nodes { createdAt } }
         }
         comment {
-          id body url createdAt user { id }
+          id body url createdAt resolvedAt
+          children(first: 20, filter: { user: { isMe: { eq: true } } }) { nodes { createdAt } }
           parent {
-            id resolvedAt user { id }
-            children(last: 20) { nodes { id createdAt user { id } } }
+            id resolvedAt user { isMe }
+            children(first: 20, filter: { user: { isMe: { eq: true } } }) { nodes { createdAt } }
           }
-          children(last: 20) { nodes { id createdAt user { id } } }
         }
       }
     }
@@ -88,15 +88,28 @@ query Pings($since: DateTimeOrDuration!, $after: String) {
 }
 ```
 
-`IssueNotification.type` is a free string in the schema, not an enum. Phase 1 logs the real values from my
-account before any rule depends on them, and classification keys off `category` wherever it can.
+The query is in `LinearClient.notificationsQuery`. Instead of reading every comment in a thread and
+comparing user ids, it asks only for **my** comments (`user: { isMe: { eq: true } }`). The rules only need to
+know whether I answered after the ping, and it keeps each page small.
 
-**Don't miss pings behind other notifications.** The inbox also holds assignments, status changes and followed
-issues. One page of 100 could fill up with those and leave a reply out. So the query only asks for the last
-30 days and follows `pageInfo` until there are no more pages. That's usually one request, rarely more. Once phase
-1 knows the mention and reply `type` strings, the filter adds `type: { in: [...] }` so the server sends only
-those. Phase 1 also confirms the sort direction of `orderBy: createdAt` and whether `DateTimeOrDuration`
-accepts `-P30D`.
+`IssueNotification.type` is a free string in the schema, not an enum, so the rules use only `category` (an
+enum). The server-side filter uses `type`, because that's what `NotificationFilter` accepts:
+`issueMention`, `issueCommentMention` and `issueNewComment` (`LinearClient.pingTypes`).
+
+The client still follows `pageInfo` (up to 10 pages) so a busy month can't push a ping off the first page.
+
+**Checked against my account (phase 1):**
+
+- 308 notifications in 30 days, 258 of them "issue added to view". Without the type filter that was 7 pages per
+  refresh. At one refresh every 30 s, that would use about 80% of Linear's hourly complexity budget (3,000,000;
+  one page costs about 2,900). With the filter it's 24 notifications, one page, about 11%.
+- Requests: 2,500 an hour per key; 120 an hour is fine.
+- `-P30D` works as `$since`, and `orderBy: createdAt` returns newest first.
+- Seen types: `issueCommentMention` (category `mentions`) and `issueNewComment` (category `commentsAndReplies`,
+  both for thread replies and new top-level comments). `issueMention` wasn't seen; it's Linear's documented name
+  for a mention in the description.
+- The rules left 1 open ping out of 24: a reply in my thread. The others were answered, on closed issues, or
+  not pings.
 
 ## Classifying (`TriageCore/LinearPings.swift`)
 
@@ -206,7 +219,7 @@ The rule for which pings to notify is pure logic (`LinearPings.newPings(current:
 
 - **`type` strings aren't documented as an enum.** That's why rules lean on `category` and phase 1 records the
   real values.
-- **Long threads:** `children(last: 20)` and `comments(last: 20)` could miss my reply in a longer thread. That would only make an item
-  show that shouldn't, never hide one. Paginate if it ever happens.
+- **Many replies of mine:** each thread fetches my first 20 comments. With more than 20, a newer one could be
+  missed. That would only make an item show that shouldn't, never hide one. Paginate if it ever happens.
 - **Work data:** the Linear workspace is work data. Issue keys, titles and screenshots stay out of PRs, commits
   and comments (the same rule as GitLab).
