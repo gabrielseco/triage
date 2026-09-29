@@ -65,6 +65,10 @@ final class AppStore {
             if !linearEnabled { clearLinear() }
         }
     }
+    /// A banner per new ping, then reminders until it's answered. On by default.
+    var notifyPings: Bool { didSet { defaults.set(notifyPings, forKey: "notifyPings") } }
+    /// Which pings were notified and when, so each notifies once, even across restarts.
+    var pingAlerts: PingAlertState { didSet { save(pingAlerts, "pingAlerts") } }
     /// Per item: what the last Fix in / Copy did, shown under the buttons.
     var actionStatus: [String: String] = [:]
     /// PRs closed or merged from Triage, hidden until a refresh confirms they're gone from GitHub's open list.
@@ -115,6 +119,8 @@ final class AppStore {
         harnessCommand = UserDefaults.standard.string(forKey: "harnessCommand") ?? Handoff.defaultHarnessCommand
         gitlabHost = UserDefaults.standard.string(forKey: "gitlabHost") ?? ""
         linearEnabled = UserDefaults.standard.bool(forKey: "linearEnabled")
+        notifyPings = UserDefaults.standard.object(forKey: "notifyPings") as? Bool ?? true
+        pingAlerts = Self.load("pingAlerts") ?? PingAlertState()
         digestHours = Self.load("digestHours") ?? [12, 18]
         digestWeekdaysOnly = UserDefaults.standard.object(forKey: "digestWeekdaysOnly") as? Bool ?? true
         digestBaseline = Self.load("digestBaseline")
@@ -326,15 +332,5 @@ final class AppStore {
     func showMainWindow() {
         openMainWindow?()
         NSApp.activate(ignoringOtherApps: true)
-    }
-
-    // MARK: - Persistence
-
-    func save<T: Encodable>(_ value: T, _ key: String) {
-        defaults.set(try? JSONEncoder().encode(value), forKey: key)
-    }
-
-    private static func load<T: Decodable>(_ key: String) -> T? {
-        UserDefaults.standard.data(forKey: key).flatMap { try? JSONDecoder().decode(T.self, from: $0) }
     }
 }

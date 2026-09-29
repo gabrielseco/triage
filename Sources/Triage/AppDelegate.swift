@@ -28,10 +28,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         _ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
+        // Read here, off the main actor, so only Sendable strings cross into the Task.
+        let info = response.notification.request.content.userInfo
+        let pingURL = (info[Notifier.linearURLKey] as? String).flatMap(URL.init(string:))
+        let pingKind = (info[Notifier.linearKindKey] as? String).flatMap(LinearPing.Kind.init(rawValue:))
         Task { @MainActor in
-            store.filter = .lastDigest
-            store.selection = store.visibleItems.first?.id
-            store.showMainWindow()
+            if let pingURL {
+                // A ping is answered in Linear, so the click goes straight to the comment.
+                NSWorkspace.shared.open(pingURL)
+            } else if let pingKind {
+                store.filter = .linear(pingKind)
+                store.selectFirstVisible()
+                store.showMainWindow()
+            } else {
+                store.filter = .lastDigest
+                store.selection = store.visibleItems.first?.id
+                store.showMainWindow()
+            }
         }
         completionHandler()
     }
@@ -53,6 +66,27 @@ enum Notifier {
         content.sound = .default
         let req = UNNotificationRequest(
             identifier: "digest-\(Date().timeIntervalSince1970)", content: content, trigger: nil)
+        do { try await UNUserNotificationCenter.current().add(req); return true } catch { return false }
+    }
+
+    /// Where a click on a Linear notification goes: the comment for one ping, the Linear list for a summary.
+    static let linearURLKey = "linearURL"
+    static let linearKindKey = "linearKind"
+
+    static func send(_ alert: PingAlert) async -> Bool {
+        guard isAvailable else { return false }
+        let content = UNMutableNotificationContent()
+        content.title = alert.title
+        content.subtitle = alert.subtitle
+        content.body = alert.body
+        content.sound = .default
+        content.threadIdentifier = alert.threadIdentifier
+        if let ping = alert.ping {
+            content.userInfo = [linearURLKey: ping.url.absoluteString]
+        } else if case .summary(_, let newest) = alert {
+            content.userInfo = [linearKindKey: newest.kind.rawValue]
+        }
+        let req = UNNotificationRequest(identifier: "linear-\(UUID().uuidString)", content: content, trigger: nil)
         do { try await UNUserNotificationCenter.current().add(req); return true } catch { return false }
     }
 }

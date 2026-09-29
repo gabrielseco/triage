@@ -43,7 +43,7 @@ Two design rules drive everything:
 | Watch a repo | Type `owner/repo` (or paste a GitHub URL) in the sidebar field → Enter |
 | Stop watching | Right-click the repo in the sidebar → Stop watching |
 | GitLab | Settings → GitLab → Show GitLab merge requests, then paste a `read_api` token (or keep one in the Keychain). Projects appear in the sidebar by themselves |
-| Linear | Settings → Linear → Show Linear pings, then paste a personal API key with Read access. Mentions and replies in your threads appear under **Linear** in the sidebar until you answer them in Linear |
+| Linear | Settings → Linear → Show Linear pings, then paste a personal API key with Read access. Mentions and replies in your threads appear under **Linear** in the sidebar until you answer them in Linear. Each new one sends a notification (click it to open the comment), then reminders after 1 h, 4 h and daily |
 | Refresh | ⌘R, or wait. It auto-refreshes every 2 minutes, Linear every 30 seconds |
 | Explain an item | Select it → **Explain & propose fix** (⌘E) |
 | Open PR in browser | **Open** (⌘O) |
@@ -51,7 +51,7 @@ Two design rules drive everything:
 | Bring hidden back | "Show N hidden" at the bottom of the sidebar |
 | Only your PRs | Person toggle in the toolbar |
 | Settings | ⌘, → API key, model, digest hours, weekdays only, open at login, GitLab |
-| Menu bar | Tray icon with a count (`3 · @1` when 1 Linear ping is waiting): pings, top items, Send digest now, Refresh, Quit |
+| Menu bar | Tray icon, with `@1` next to it when 1 Linear ping is waiting: pings, top items, Send digest now, Refresh, Quit |
 
 **The three columns:**
 
