@@ -12,6 +12,8 @@ struct LinearState {
     var cachedKey: String?
     var isRefreshing = false
     var loopStarted = false
+    /// Nil until the first fetch succeeds, so the list shows progress instead of "Inbox zero".
+    var lastRefresh: Date?
 }
 
 /// Linear pings: mentions and replies in my threads that I haven't answered (docs/plans/LINEAR.md).
@@ -89,6 +91,7 @@ extension AppStore {
             linear.pings = pings
             linear.errors = []
             linear.warnings = warnings
+            linear.lastRefresh = Date()
             dismissed = LinearPings.pruneHidden(dismissed, live: live)
             let now = Date()
             snoozed = snoozed.filter { !LinearPing.isPingID($0.key) || (live.contains($0.key) && $0.value > now) }
@@ -106,6 +109,7 @@ extension AppStore {
         linear.errors = []
         linear.warnings = []
         linear.cachedKey = nil
+        linear.lastRefresh = nil
         if case .linear = filter { filter = .all }
     }
 }

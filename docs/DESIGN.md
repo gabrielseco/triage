@@ -60,7 +60,8 @@ At most three sizes visible in one component. Hierarchy comes from weight and `.
 - **Cards** (`EvidenceCard`): `padding(10)`, `RoundedRectangle(cornerRadius: 8)`, full width.
 - **Buttons:** one `.borderedProminent` primary action per state (Merge, or Explain & propose fix); the rest
   default. Secondary actions sit on the leading side, and state changes (Snooze, Dismiss, Open) sit on the
-  trailing side after a `Spacer()`. Menus that sit in a button row get `.fixedSize()`.
+  trailing side after a `Spacer()`. Menus that sit in a button row get `.fixedSize()`. The one exception is
+  a Linear ping: answering happens in Linear, so **Open in Linear** is its primary action, on the leading side.
 - **Icons:** SF Symbols only, via `Label` where there's text. Filled variants for status (`xmark.circle.fill`),
   outline for actions and navigation.
 - **Empty states:** `ContentUnavailableView` with a symbol, a short title and a sentence that says what to do next.

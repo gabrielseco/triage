@@ -8,7 +8,13 @@ struct PingList: View {
 
     var body: some View {
         @Bindable var store = store
-        if store.visiblePings.isEmpty {
+        if store.visiblePings.isEmpty, let error = store.linear.errors.first {
+            EmptyState("Can't reach Linear", systemImage: "exclamationmark.triangle", description: error) {
+                SettingsLink { Text("Open Settings") }
+            }
+        } else if store.visiblePings.isEmpty, store.linear.lastRefresh == nil {
+            ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if store.visiblePings.isEmpty {
             EmptyState(
                 "Inbox zero", systemImage: "checkmark.circle",
                 description: kind == .mentioned
@@ -75,6 +81,7 @@ struct PingDetailView: View {
                 .font(.subheadline.weight(.semibold))
             Text(ping.headline).font(.title2.weight(.semibold)).textSelection(.enabled)
             Link(String("\(ping.issueKey) — \(ping.issueTitle)"), destination: ping.url)
+                .multilineTextAlignment(.leading)
             Text("Linear · \(ping.pingedAt.formatted(.relative(presentation: .named)))")
                 .font(.caption).foregroundStyle(.secondary)
         }
