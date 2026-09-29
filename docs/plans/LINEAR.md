@@ -1,6 +1,6 @@
 # Plan: Linear pings that need my answer
 
-Status: planned, nothing built. Updated: 2026-09-29.
+Status: planned, nothing built. Open questions settled. Updated: 2026-09-29.
 
 ## Goal
 
@@ -85,7 +85,7 @@ account before any rule depends on them, and classification keys off `category` 
 ```
 notifications
   → keep IssueNotification with category mentions, or commentsAndReplies in a thread I'm in
-  → drop: issue completed/canceled, thread resolved, snoozed in Linear, actor is me
+  → drop: older than 30 days, issue completed/canceled, thread resolved, snoozed in Linear, actor is me
   → group by (issue, thread root)
   → drop the group if I commented in the thread after its latest ping
   → LinearPing { id, kind: .mentioned | .threadReply, issue, author, excerpt, url, pingedAt }
@@ -96,7 +96,7 @@ Tests (Swift Testing, fixtures made up rather than copied from the work workspac
 - A mention in a comment → one Mentioned item. My reply after it → gone.
 - A reply in a thread I started → Thread reply. A top-level comment on a followed issue → nothing.
 - Two replies in one thread → one item, the later one's text, the id changes with the second.
-- Thread resolved, issue done, snoozed in Linear, my own comment → nothing.
+- Thread resolved, issue done, snoozed in Linear, my own comment, a ping 31 days old → nothing.
 - A mention in the issue description: answered by any comment of mine on the issue after it.
 
 ## Notifications
@@ -175,14 +175,14 @@ The rule for which pings to notify is pure logic (`LinearPings.newPings(current:
 4. **Later, if wanted:** Explain ("what do they need from me?"), a Read+Write key to mark read in Linear on
    Dismiss, and project or document mentions (`ProjectNotification` and others).
 
-## Open questions
+## Settled
 
-1. **Which threads count as "mine"?** The plan says threads I commented in. Should threads on issues
-   **assigned to me** or **created by me** count too, even if I never commented?
-2. **Description mentions:** I get pinged in an issue body and never comment, but I do the work. Should moving
-   the issue to done be enough to clear it? (Planned: yes, completed or canceled clears it.)
-3. **Old pings on first run:** they show in the list without banners (see [Notifications](#notifications)).
-   Should very old ones be cut off, for example anything older than 14 days?
+1. **"My" threads are threads I commented in.** Issues assigned to me or created by me don't count on their own.
+2. **A description mention is cleared** by a comment of mine on the issue, or by the issue being completed or
+   canceled.
+3. **Pings older than 30 days are dropped**, always, not only on first run. Long enough that nothing waiting on
+   me is lost over a PTO, short enough that stale pings don't pile up. On first run, pings within the 30 days
+   show in the list without banners.
 
 ## Risks
 
