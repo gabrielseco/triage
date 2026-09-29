@@ -33,12 +33,15 @@ the inbox once I've answered, not once I've read it.
 
    `readAt` is ignored. Reading a ping in Linear doesn't mean I've answered it.
 4. **One item per thread.** Three replies in the same thread are one item that shows the latest reply. The id
-   is `linear:<ISSUE-123>:<thread root comment id, or "issue">:<latest ping comment id>`, so a dismissed thread
-   comes back only when there's a newer ping. This is the rule `AttentionItem.id` already follows for PRs.
+   is `linear:<ISSUE-123>:<thread root comment id, or "issue">:<latest ping comment id, or the notification id
+   for a description mention>`, so a dismissed thread comes back only when there's a newer ping. This is the rule `AttentionItem.id` already follows for PRs.
 5. **Its own model, not a fake PR.** `AttentionItem.pr` is a required `PullRequest`, used in 66 places. A Linear
    thread has no checks, reviews or merge state. A new `LinearPing` model and its own list, section and detail
    view keep the PR code untouched. The existing `dismissed` / `snoozed` sets are keyed by id string, so they
-   work for pings unchanged. Revisit a shared "subject" type only if a third non-PR source ever shows up.
+   can hold ping ids too, **but their pruning has to change**: `refreshOnce` keeps only ids in the live PR items
+   (`AppStore.swift:284-288`), which would delete every Linear dismissal every 2 minutes. Each source prunes only
+   its own ids (`linear:` prefix for Linear, everything else for PRs), and the selection check looks at both
+   lists. Revisit a shared "subject" type only if a third non-PR source ever shows up.
 6. **Read-only.** A Linear personal API key with **Read** scope, in the Keychain, as the GitLab token is. Replying
    and marking read happen in Linear. Open (⌘O) goes straight to the comment.
 7. **A banner per ping, within about 30 s.** See [Notifications](#notifications). This is the main feature; the
@@ -55,14 +58,21 @@ its **own 30 s loop**, not the 120 s PR refresh, because a ping should arrive fa
 too:
 
 ```graphql
-query Pings {
+query Pings($since: DateTimeOrDuration!, $after: String) {
   viewer { id }
-  notifications(first: 100) {            # archived are left out by default
+  notifications(                         # archived are left out by default
+    first: 100, after: $after, orderBy: createdAt,
+    filter: { createdAt: { gt: $since } }  # $since = "-P30D"
+  ) {
+    pageInfo { hasNextPage endCursor }
     nodes {
       ... on IssueNotification {
         id type category createdAt snoozedUntilAt url
         actor { id displayName avatarUrl }
-        issue { identifier title url state { type } team { key } }
+        issue {
+          identifier title url state { type } team { key }
+          comments(last: 20) { nodes { id createdAt user { id } } }   # answers to description mentions
+        }
         comment {
           id body url createdAt user { id }
           parent {
@@ -79,6 +89,13 @@ query Pings {
 
 `IssueNotification.type` is a free string in the schema, not an enum. Phase 1 logs the real values from my
 account before any rule depends on them, and classification keys off `category` wherever it can.
+
+**Don't miss pings behind other notifications.** The inbox also holds assignments, status changes and followed
+issues. One page of 100 could fill up with those and leave a reply out. So the query only asks for the last
+30 days and follows `pageInfo` until there are no more pages. That's usually one request, rarely more. Once phase
+1 knows the mention and reply `type` strings, the filter adds `type: { in: [...] }` so the server sends only
+those. Phase 1 also confirms the sort direction of `orderBy: createdAt` and whether `DateTimeOrDuration`
+accepts `-P30D`.
 
 ## Classifying (`TriageCore/LinearPings.swift`)
 
@@ -160,7 +177,7 @@ The rule for which pings to notify is pure logic (`LinearPings.newPings(current:
 | Sidebar | A **Linear** section: *Mentioned N*, *Thread replies N* |
 | List row | `ENG-123  Alice: "can you confirm the migration order?"`, the time since the ping, Linear's avatar |
 | Detail | Issue title and state, the thread's last few comments with the ping highlighted, then **Open in Linear**, **Dismiss** and **Snooze** |
-| Menu bar | Pings count toward the badge and show in the top items |
+| Menu bar | A separate Linear count next to the PR count (see [Hard to miss](#hard-to-miss)), and open pings first in the menu |
 | Digest | Leaves pings out, since each one already notified |
 
 ## Phases (one PR each)
@@ -188,7 +205,7 @@ The rule for which pings to notify is pure logic (`LinearPings.newPings(current:
 
 - **`type` strings aren't documented as an enum.** That's why rules lean on `category` and phase 1 records the
   real values.
-- **Long threads:** `children(last: 20)` could miss my reply in a longer thread. That would only make an item
+- **Long threads:** `children(last: 20)` and `comments(last: 20)` could miss my reply in a longer thread. That would only make an item
   show that shouldn't, never hide one. Paginate if it ever happens.
 - **Work data:** the Linear workspace is work data. Issue keys, titles and screenshots stay out of PRs, commits
   and comments (the same rule as GitLab).
