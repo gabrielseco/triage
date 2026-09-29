@@ -34,7 +34,8 @@ the inbox once I've answered, not once I've read it.
    `readAt` is ignored. Reading a ping in Linear doesn't mean I've answered it.
 4. **One item per thread.** Three replies in the same thread are one item that shows the latest reply. The id
    is `linear:<ISSUE-123>:<thread root comment id, or "issue">:<latest ping comment id, or the notification id
-   for a description mention>`, so a dismissed thread comes back only when there's a newer ping. This is the rule `AttentionItem.id` already follows for PRs.
+   for a description mention>`, so a dismissed thread comes back only when there's a newer ping. This is the
+   rule `AttentionItem.id` already follows for PRs.
 5. **Its own model, not a fake PR.** `AttentionItem.pr` is a required `PullRequest`, used in 66 places. A Linear
    thread has no checks, reviews or merge state. A new `LinearPing` model and its own list, section and detail
    view keep the PR code untouched. The existing `dismissed` / `snoozed` sets are keyed by id string, so they
