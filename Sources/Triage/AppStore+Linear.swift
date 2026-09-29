@@ -110,11 +110,22 @@ extension AppStore {
             let now = Date()
             snoozed = snoozed.filter { !LinearPing.isPingID($0.key) || (live.contains($0.key) && $0.value > now) }
             if case .linear = filter, selectedPing == nil { selectFirstVisible() }
+            await notifyPingAlerts(now: now)
         } catch {
             guard linearEnabled else { return }
             // Keep the last pings on screen; a failed poll every 30 s shouldn't empty the list.
             linear.errors = ["Linear: \(error.localizedDescription)"]
         }
+    }
+
+    /// Banners for new pings and reminders for open ones. The state is saved before sending, so a slow send
+    /// can't make the next poll notify the same ping again. With notifications off it's still recorded, so
+    /// turning them on doesn't announce everything that's already waiting.
+    private func notifyPingAlerts(now: Date) async {
+        let (alerts, state) = PingAlerts.plan(open: linear.pings, active: activePings, state: pingAlerts, now: now)
+        if state != pingAlerts { pingAlerts = state }
+        guard notifyPings else { return }
+        for alert in alerts { _ = await Notifier.send(alert) }
     }
 
     /// Linear turned off: its pings, errors and cached key go; dismissals stay for when it's back on.

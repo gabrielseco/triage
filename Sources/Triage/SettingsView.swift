@@ -13,9 +13,6 @@ struct SettingsView: View {
     @State private var gitlabToken = ""
     @State private var gitlabStatus: String?
     @State private var gitlabFailed = false
-    @State private var linearKey = ""
-    @State private var linearStatus: String?
-    @State private var linearFailed = false
 
     static let keySourceHelp = """
         Key source is a 1Password secret reference (item → field menu → Copy Secret Reference) \
@@ -117,7 +114,7 @@ struct SettingsView: View {
                 Button("Send a digest now") { Task { await store.sendDigest(force: true) } }
             }
             gitlab
-            linear
+            LinearSettings()
             Section("GitHub") {
                 Text(
                     ProcessInfo.processInfo.environment["GITHUB_TOKEN"] != nil
@@ -191,58 +188,6 @@ struct SettingsView: View {
         } footer: {
             Text(Self.gitlabHelp).font(.caption).foregroundStyle(.secondary)
         }
-    }
-
-    static let linearHelp = """
-        Mentions of you, and replies in threads you commented in, until you answer them in Linear. Create a \
-        personal API key with Read access under Linear → Settings → Security & access. It's kept in the Keychain \
-        (or set LINEAR_API_KEY).
-        """
-
-    private var linear: some View {
-        @Bindable var store = store
-        return Section {
-            Toggle("Show Linear pings", isOn: $store.linearEnabled)
-                .onChange(of: store.linearEnabled) { _, on in
-                    reportLinear(nil)
-                    if on { Task { await store.refreshLinear() } }
-                }
-            if store.linearEnabled {
-                SecureField("API key", text: $linearKey, prompt: Text("Paste a new key"))
-                HStack {
-                    Button("Save key") {
-                        do {
-                            try store.saveLinearKey(linearKey)
-                            linearKey = ""
-                            reportLinear("Saved to Keychain")
-                        } catch { reportLinear(error.localizedDescription, failed: true) }
-                    }
-                    .disabled(linearKey.isEmpty)
-                    Button("Test") {
-                        reportLinear("Checking…")
-                        Task {
-                            do {
-                                let (notifications, _) = try await store.linearClient().notifications()
-                                let open = LinearPings.classify(notifications, now: Date()).count
-                                reportLinear("✓ Connected · \(open) waiting on you")
-                            } catch { reportLinear(error.localizedDescription, failed: true) }
-                        }
-                    }
-                    if let linearStatus {
-                        Text(linearStatus).font(.caption).foregroundStyle(linearFailed ? .red : .secondary)
-                    }
-                }
-            }
-        } header: {
-            Text("Linear")
-        } footer: {
-            Text(Self.linearHelp).font(.caption).foregroundStyle(.secondary)
-        }
-    }
-
-    private func reportLinear(_ status: String?, failed: Bool = false) {
-        linearStatus = status
-        linearFailed = failed
     }
 
     private func report(_ status: String?, failed: Bool = false) {
