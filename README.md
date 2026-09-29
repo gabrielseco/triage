@@ -5,6 +5,7 @@ threads into a short list of things that actually need you, and turns each one i
 can explain or fix.
 
 ```bash
+scripts/setup-signing.sh  # one-time: stable signing identity so Keychain "Always Allow" survives rebuilds
 scripts/bundle.sh    # build ~/Applications/Triage.app (the `triage` zsh function does this + launches)
 swift test           # classifier, prompt builder, digest
 ```
