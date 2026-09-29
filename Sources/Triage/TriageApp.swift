@@ -62,13 +62,17 @@ struct MenuBarLabel: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        // Pings get their own count, so "someone's waiting on me in Linear" shows at a glance.
+        // The menu bar draws a Label as its icon only, so the ping count goes in a Text with the icon inline:
+        // "someone's waiting on me in Linear" shows at a glance, and nothing extra when no one is.
         let pings = store.activePings.count
-        let busy = store.needsYouCount > 0 || pings > 0
-        Label(
-            pings > 0 ? "\(store.needsYouCount) · @\(pings)" : "\(store.needsYouCount)",
-            systemImage: busy ? "tray.full.fill" : "tray"
-        )
+        let icon = Image(systemName: store.needsYouCount > 0 || pings > 0 ? "tray.full.fill" : "tray")
+        Group {
+            if pings > 0 {
+                Text("\(icon) @\(pings)")
+            } else {
+                Label("\(store.needsYouCount)", systemImage: store.needsYouCount > 0 ? "tray.full.fill" : "tray")
+            }
+        }
         .onAppear { store.openMainWindow = { openWindow(id: "main") } }
     }
 }
