@@ -1,6 +1,6 @@
 # Plan: Linear pings that need my answer
 
-Status: phase 1 (client and rules in `TriageCore`) in review. Updated: 2026-09-29.
+Status: phase 1 shipped (#42); phase 2 (app, read-only) in review. Updated: 2026-09-29.
 
 ## Goal
 

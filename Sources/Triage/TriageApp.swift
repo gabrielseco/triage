@@ -62,8 +62,18 @@ struct MenuBarLabel: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        Label("\(store.needsYouCount)", systemImage: store.needsYouCount > 0 ? "tray.full.fill" : "tray")
-            .onAppear { store.openMainWindow = { openWindow(id: "main") } }
+        // The menu bar draws a Label as its icon only, so the ping count goes in a Text with the icon inline:
+        // "someone's waiting on me in Linear" shows at a glance, and nothing extra when no one is.
+        let pings = store.activePings.count
+        let icon = Image(systemName: store.needsYouCount > 0 || pings > 0 ? "tray.full.fill" : "tray")
+        Group {
+            if pings > 0 {
+                Text("\(icon) @\(pings)")
+            } else {
+                Label("\(store.needsYouCount)", systemImage: store.needsYouCount > 0 ? "tray.full.fill" : "tray")
+            }
+        }
+        .onAppear { store.openMainWindow = { openWindow(id: "main") } }
     }
 }
 
@@ -76,6 +86,15 @@ struct MenuBarContent: View {
             Text("Last digest \(at.formatted(date: .omitted, time: .shortened))")
         }
         Divider()
+        // Someone waiting on an answer comes before PR work.
+        ForEach(store.activePings.prefix(5)) { ping in
+            Button(String("\(ping.issueKey) · \(ping.headline): \(ping.excerpt)")) {
+                store.filter = .linear(ping.kind)
+                store.selection = ping.id
+                store.showMainWindow()
+            }
+        }
+        if !store.activePings.isEmpty { Divider() }
         ForEach(store.activeItems.filter { $0.severity >= .medium }.prefix(10)) { item in
             Button(String("\(item.pr.repo.name)\(item.pr.ref) · \(item.kind.title): \(item.headline)")) {
                 store.filter = .all

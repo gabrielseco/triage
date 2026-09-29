@@ -2,8 +2,31 @@ import Foundation
 
 /// A Linear thread where someone is waiting on me: an @-mention, or a reply in a thread I commented in.
 public struct LinearPing: Identifiable, Hashable, Sendable {
-    public enum Kind: String, Sendable, Codable {
+    public enum Kind: String, CaseIterable, Sendable, Codable {
         case mentioned, threadReply
+
+        /// For the sidebar row, which lists many.
+        public var title: String {
+            switch self {
+            case .mentioned: "Mentioned"
+            case .threadReply: "Thread replies"
+            }
+        }
+
+        public var symbol: String {
+            switch self {
+            case .mentioned: "at"
+            case .threadReply: "arrowshape.turn.up.left"
+            }
+        }
+
+        /// What happened, after the person's name: "Alice mentioned you".
+        public var verb: String {
+            switch self {
+            case .mentioned: "mentioned you"
+            case .threadReply: "replied in your thread"
+            }
+        }
     }
 
     /// `linear:<ISSUE-123>:<thread root comment id, or "issue">:<latest ping>`, so a dismissed thread comes back
@@ -17,13 +40,21 @@ public struct LinearPing: Identifiable, Hashable, Sendable {
     public var authorAvatar: URL?
     /// The start of the comment that pinged me, or the issue title for a description mention.
     public var excerpt: String
+    /// The whole comment, for the detail view; the issue title for a description mention.
+    public var body: String
     /// The comment itself, so Open lands on it.
     public var url: URL
     public var pingedAt: Date
     /// Groups a thread's notifications together: `<ISSUE-123>:<thread root comment id, or "issue">`.
     public var threadID: String
 
+    /// "Alice mentioned you", or "Someone" for an integration.
+    public var headline: String { "\(author ?? "Someone") \(kind.verb)" }
+
     public static let idPrefix = "linear:"
+
+    /// Dismissed and snoozed ids are shared with PR items; each source prunes only its own.
+    public static func isPingID(_ id: String) -> Bool { id.hasPrefix(idPrefix) }
 }
 
 public enum LinearPings {
@@ -46,9 +77,16 @@ public enum LinearPings {
                 issueKey: latest.issue.identifier, issueTitle: latest.issue.title,
                 author: latest.actor?.name, authorAvatar: latest.actor?.avatarUrl,
                 excerpt: latest.comment.map { excerpt($0.body) } ?? latest.issue.title,
+                body: latest.comment?.body ?? latest.issue.title,
                 url: latest.comment?.url ?? latest.issue.url, pingedAt: latest.createdAt, threadID: threadID)
         }
         .sorted { ($0.pingedAt, $0.id) > ($1.pingedAt, $1.id) }
+    }
+
+    /// After a Linear fetch, forgets hidden pings that are no longer open (answered, or a newer ping replaced
+    /// them). PR item ids are left alone: the PR refresh prunes those.
+    public static func pruneHidden(_ ids: Set<String>, live: Set<String>) -> Set<String> {
+        ids.filter { !LinearPing.isPingID($0) || live.contains($0) }
     }
 
     /// Done, canceled or duplicate: nothing left to answer.

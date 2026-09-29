@@ -71,6 +71,7 @@ private func pings(_ nodes: String...) throws -> [LinearPing] {
         #expect(open.first?.excerpt == "@me can you confirm the migration order?")
         #expect(open.first?.url.absoluteString == "https://linear.app/acme/issue/ENG-1#comment-c1")
         #expect(open.first?.author == "Alice Smith")
+        #expect(open.first?.headline == "Alice Smith mentioned you")
 
         #expect(try pings(notification(comment: comment(myReplies: [-0.5]))).isEmpty)
         // A reply of mine from before the ping doesn't answer it.
@@ -110,6 +111,7 @@ private func pings(_ nodes: String...) throws -> [LinearPing] {
         let both = try pings(first, second)
         #expect(both.count == 1)
         #expect(both.first?.excerpt == "second")
+        #expect(both.first?.body == "second")
         #expect(both.first?.threadID == "ENG-1:root")
         // A new reply changes the id, so a dismissed thread comes back.
         #expect(one.first?.id == "linear:ENG-1:root:c1")
@@ -171,6 +173,15 @@ private func pings(_ nodes: String...) throws -> [LinearPing] {
         let older = notification(id: "n1", hours: -5, issue: "ENG-1", comment: comment(id: "a"))
         let newer = notification(id: "n2", hours: -1, issue: "ENG-2", comment: comment(id: "b"))
         #expect(try pings(older, newer).map(\.issueKey) == ["ENG-2", "ENG-1"])
+    }
+
+    @Test func pruningKeepsPRItemsAndOpenPings() {
+        let hidden: Set = ["acme/web#1|ciFailure|abc", "linear:ENG-1:root:c1", "linear:ENG-2:issue:n9"]
+        #expect(
+            LinearPings.pruneHidden(hidden, live: ["linear:ENG-1:root:c1"])
+                == ["acme/web#1|ciFailure|abc", "linear:ENG-1:root:c1"])
+        #expect(LinearPing.isPingID("linear:ENG-1:root:c1"))
+        #expect(!LinearPing.isPingID("acme/web#1|ciFailure|abc"))
     }
 
     @Test func excerptIsTheFirstNonEmptyLineCapped() {
