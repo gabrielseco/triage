@@ -38,16 +38,22 @@ public struct LinearClient: Sendable {
 
     /// Pings older than this are dropped, long enough to cover a PTO.
     public static let window: TimeInterval = 30 * 24 * 3600
-    /// A backstop against paging forever; 50 per page, so 500 notifications in 30 days.
+    /// A backstop against paging forever; 50 per page, so 500 pings in 30 days.
     static let maxPages = 10
 
-    /// Every unarchived notification from the last 30 days, following pages so the pings aren't lost behind
-    /// assignments and status changes. Warns, rather than fails, if it stopped at `maxPages`.
+    /// The notification types that can be a ping, filtered on the server. Without it, "issue added to view"
+    /// alone filled 7 pages per refresh on a real account, most of Linear's hourly complexity budget at one
+    /// refresh every 30 s. `LinearPings` still decides by `category`; these only narrow what's sent.
+    /// `issueMention` (a mention in the description) is Linear's documented name; the other two were seen live.
+    static let pingTypes = ["issueMention", "issueCommentMention", "issueNewComment"]
+
+    /// Every unarchived possible ping from the last 30 days, following pages. Warns, rather than fails, if it
+    /// stopped at `maxPages`.
     public func notifications() async throws -> (notifications: [LinearNotification], warnings: [String]) {
         var all: [LinearNotification] = []
         var after: String?
         for _ in 0..<Self.maxPages {
-            var variables = ["since": "-P30D"]
+            var variables: [String: Any] = ["since": "-P30D", "types": Self.pingTypes]
             if let after { variables["after"] = after }
             let data: NotificationsData = try await graphql(Self.notificationsQuery, variables: variables)
             all += data.notifications.nodes.compactMap(\.issueNotification)
@@ -56,12 +62,12 @@ public struct LinearClient: Sendable {
             }
             after = next
         }
-        return (all, ["Linear: more than \(all.count) notifications in 30 days; older pings may be missing"])
+        return (all, ["Linear: more than \(all.count) mentions and replies in 30 days; older ones may be missing"])
     }
 
     // MARK: - Plumbing
 
-    func graphql<T: Decodable>(_ query: String, variables: [String: String]) async throws -> T {
+    func graphql<T: Decodable>(_ query: String, variables: [String: Any]) async throws -> T {
         guard let url = URL(string: "https://api.linear.app/graphql") else { throw LinearError.graphql("bad URL") }
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
@@ -86,8 +92,11 @@ public struct LinearClient: Sendable {
     /// Only the viewer's own comments are fetched in each thread (`isMe`): all the rules need is whether I
     /// answered after the ping, and it keeps the query small.
     static let notificationsQuery = """
-        query Pings($since: DateTimeOrDuration!, $after: String) {
-          notifications(first: 50, after: $after, orderBy: createdAt, filter: { createdAt: { gt: $since } }) {
+        query Pings($since: DateTimeOrDuration!, $types: [String!]!, $after: String) {
+          notifications(
+            first: 50, after: $after, orderBy: createdAt,
+            filter: { createdAt: { gt: $since }, type: { in: $types } }
+          ) {
             pageInfo { hasNextPage endCursor }
             nodes {
               __typename

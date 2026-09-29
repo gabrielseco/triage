@@ -197,6 +197,13 @@ private func pings(_ nodes: String...) throws -> [LinearPing] {
         }
     }
 
+    /// "Issue added to view" alone filled 7 pages a refresh on a real account; only possible pings are fetched.
+    @Test func queryAsksOnlyForPingTypes() {
+        #expect(LinearClient.notificationsQuery.contains("type: { in: $types }"))
+        #expect(!LinearClient.pingTypes.contains("issueAddedToView"))
+        #expect(LinearClient.pingTypes.contains("issueCommentMention"))
+    }
+
     @Test func unauthorizedSaysToMakeANewKey() {
         #expect(LinearError.http(401, "").localizedDescription.contains("Read access"))
     }
