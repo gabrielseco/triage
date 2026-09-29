@@ -537,7 +537,7 @@ every refresh (2 min):
 | Command | What it does |
 |---|---|
 | `triage` | `scripts/bundle.sh` + quit the running app + `open ~/Applications/Triage.app` |
-| `scripts/bundle.sh` | `swift build -c release` → creates `Triage.app/Contents/{MacOS,Resources,Info.plist}`, builds `AppIcon.icns` from the PNG with `sips` + `iconutil`, ad-hoc codesigns, migrates old settings once |
+| `scripts/bundle.sh` | `swift build -c release` → creates `Triage.app/Contents/{MacOS,Resources,Info.plist}`, builds `AppIcon.icns` from the PNG with `sips` + `iconutil`, codesigns with the stable `Triage Local Signing` identity from `scripts/setup-signing.sh` (ad-hoc fallback), migrates old settings once |
 | `scripts/render-icon.sh` | Renders `Resources/AppIcon.svg` → `AppIcon.png` (1024px, transparent) with headless Chrome |
 | `swift run Triage` | Quick dev run, no bundle (no notifications or login item) |
 | `swift test` | Swift Testing suite: classifier rules, dedup ids, bot severity, prompt assembly, digest diff and schedule, GitHub and GitLab decoding (fixtures, no network), forge ids and wording |

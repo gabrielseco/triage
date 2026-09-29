@@ -39,7 +39,14 @@ cat > "$APP/Contents/Info.plist" <<EOF
 </dict>
 </plist>
 EOF
-codesign --force --sign - "$APP" >/dev/null 2>&1
+# Sign with the stable identity from scripts/setup-signing.sh so Keychain "Always Allow" survives rebuilds.
+# An ad-hoc signature (the fallback) changes with every build, so Keychain asks again each time.
+SIGN_ID="Triage Local Signing"
+if ! security find-certificate -c "$SIGN_ID" >/dev/null 2>&1; then
+  echo "warning: no '$SIGN_ID' certificate, signing ad-hoc (Keychain will re-prompt after each rebuild). Run scripts/setup-signing.sh" >&2
+  SIGN_ID="-"
+fi
+codesign --force --sign "$SIGN_ID" "$APP" >/dev/null
 
 # One-time: carry over settings saved by the unbundled binary (domain "Triage").
 if ! defaults read "$BUNDLE_ID" repos >/dev/null 2>&1 && defaults read Triage repos >/dev/null 2>&1; then
