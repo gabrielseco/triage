@@ -30,7 +30,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     ) {
         // Read here, off the main actor, so only Sendable strings cross into the Task.
         let info = response.notification.request.content.userInfo
-        let pingURL = (info[Notifier.linearURLKey] as? String).flatMap(URL.init(string:))
+        // Only web links: the URL comes from Linear's API, and any other scheme could launch another app.
+        let pingURL = (info[Notifier.linearURLKey] as? String).flatMap(URL.init(string:)).flatMap {
+            $0.scheme == "https" ? $0 : nil
+        }
         let pingKind = (info[Notifier.linearKindKey] as? String).flatMap(LinearPing.Kind.init(rawValue:))
         Task { @MainActor in
             if let pingURL {

@@ -123,7 +123,7 @@ extension AppStore {
     /// turning them on doesn't announce everything that's already waiting.
     private func notifyPingAlerts(now: Date) async {
         let (alerts, state) = PingAlerts.plan(open: linear.pings, active: activePings, state: pingAlerts, now: now)
-        pingAlerts = state
+        if state != pingAlerts { pingAlerts = state }
         guard notifyPings else { return }
         for alert in alerts { _ = await Notifier.send(alert) }
     }
