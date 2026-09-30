@@ -30,10 +30,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     ) {
         // Read here, off the main actor, so only Sendable strings cross into the Task.
         let info = response.notification.request.content.userInfo
-        // Only web links: the URL comes from Linear's API, and any other scheme could launch another app.
-        let pingURL = (info[Notifier.linearURLKey] as? String).flatMap(URL.init(string:)).flatMap {
-            $0.scheme == "https" ? $0 : nil
-        }
+        // Only web links: the URL comes from Linear's or GitLab's API, and any other scheme could launch another app.
+        let link = (info[Notifier.linearURLKey] as? String) ?? (info[Notifier.mentionURLKey] as? String)
+        let pingURL = link.flatMap(URL.init(string:)).flatMap { $0.scheme == "https" ? $0 : nil }
         let pingKind = (info[Notifier.linearKindKey] as? String).flatMap(LinearPing.Kind.init(rawValue:))
         let reviewRequest = info[Notifier.reviewRequestKey] as? Bool ?? false
         let itemID = info[Notifier.itemIDKey] as? String
@@ -96,6 +95,22 @@ enum Notifier {
         content.threadIdentifier = "review-requests"
         content.userInfo = [reviewRequestKey: true, itemIDKey: alert.item?.id ?? ""]
         let req = UNNotificationRequest(identifier: "review-\(UUID().uuidString)", content: content, trigger: nil)
+        do { try await UNUserNotificationCenter.current().add(req); return true } catch { return false }
+    }
+
+    /// Where a click on a GitLab mention goes: the comment.
+    static let mentionURLKey = "mentionURL"
+
+    static func send(_ alert: MentionAlert) async -> Bool {
+        guard isAvailable else { return false }
+        let content = UNMutableNotificationContent()
+        content.title = alert.title
+        content.subtitle = alert.subtitle
+        content.body = alert.body
+        content.sound = .default
+        content.threadIdentifier = "gitlab-mentions"
+        content.userInfo = [mentionURLKey: alert.url.absoluteString]
+        let req = UNNotificationRequest(identifier: "mention-\(UUID().uuidString)", content: content, trigger: nil)
         do { try await UNUserNotificationCenter.current().add(req); return true } catch { return false }
     }
 

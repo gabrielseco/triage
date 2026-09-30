@@ -1,6 +1,46 @@
 import SwiftUI
 import TriageCore
 
+/// What the ping list and detail show: a Linear ping or a GitLab mention, both answered elsewhere.
+protocol PingDisplay: Identifiable where ID == String {
+    var symbol: String { get }
+    /// "Mentioned" or "Thread reply".
+    var label: String { get }
+    /// "ENG-123" or "tiger !96285".
+    var reference: String { get }
+    var referenceTitle: String { get }
+    var headline: String { get }
+    var excerpt: String { get }
+    var body: String { get }
+    var url: URL { get }
+    var date: Date { get }
+    /// "Linear" or "GitLab", where the answer happens.
+    var sourceName: String { get }
+    /// What brings a dismissed one back.
+    var dismissHelp: String { get }
+}
+
+extension LinearPing: PingDisplay {
+    var symbol: String { kind.symbol }
+    var label: String { kind == .mentioned ? "Mentioned" : "Thread reply" }
+    var reference: String { issueKey }
+    var referenceTitle: String { issueTitle }
+    var date: Date { pingedAt }
+    var sourceName: String { "Linear" }
+    var dismissHelp: String { "Hide it without answering. A newer reply in this thread brings it back." }
+}
+
+extension GitLabMention: PingDisplay {
+    var symbol: String { "at" }
+    var label: String { "Mentioned" }
+    var reference: String { target }
+    var referenceTitle: String { targetTitle }
+    var headline: String { "\(author) mentioned you" }
+    var date: Date { createdAt }
+    var sourceName: String { "GitLab" }
+    var dismissHelp: String { "Hide it without answering. A new mention brings it back." }
+}
+
 /// The inbox column for a Linear sidebar row.
 struct PingList: View {
     @Environment(AppStore.self) private var store
@@ -27,18 +67,38 @@ struct PingList: View {
     }
 }
 
-struct PingRow: View {
-    let ping: LinearPing
+/// The inbox column for GitLab › Mentioned.
+struct MentionList: View {
+    @Environment(AppStore.self) private var store
+
+    var body: some View {
+        @Bindable var store = store
+        if store.visibleMentions.isEmpty, store.gitlabMentions.lastRefresh == nil {
+            ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if store.visibleMentions.isEmpty {
+            EmptyState(
+                "Inbox zero", systemImage: "checkmark.circle",
+                description: "No GitLab mentions waiting on your reply.")
+        } else {
+            List(selection: $store.selection) {
+                ForEach(store.visibleMentions) { PingRow(ping: $0).tag($0.id) }
+            }
+        }
+    }
+}
+
+struct PingRow<Ping: PingDisplay>: View {
+    let ping: Ping
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
-            Image(systemName: ping.kind.symbol)
+            Image(systemName: ping.symbol)
                 .foregroundStyle(.orange)
                 .frame(width: 18)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(verbatim: ping.issueKey).font(.caption.monospaced())
-                    Text(ping.pingedAt, format: .relative(presentation: .named)).font(.caption)
+                    Text(verbatim: ping.reference).font(.caption.monospaced())
+                    Text(ping.date, format: .relative(presentation: .named)).font(.caption)
                 }
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
@@ -47,14 +107,14 @@ struct PingRow: View {
             }
         }
         .padding(.vertical, 2)
-        .help(ping.issueTitle)
+        .help(ping.referenceTitle)
     }
 }
 
-struct PingDetailView: View {
+struct PingDetailView<Ping: PingDisplay>: View {
     @Environment(AppStore.self) private var store
     @Environment(\.openURL) private var openURL
-    let ping: LinearPing
+    let ping: Ping
 
     var body: some View {
         ScrollView {
@@ -76,13 +136,13 @@ struct PingDetailView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Label(ping.kind == .mentioned ? "Mentioned" : "Thread reply", systemImage: ping.kind.symbol)
+            Label(ping.label, systemImage: ping.symbol)
                 .foregroundStyle(.orange)
                 .font(.subheadline.weight(.semibold))
             Text(ping.headline).font(.title2.weight(.semibold)).textSelection(.enabled)
-            Link(String("\(ping.issueKey) — \(ping.issueTitle)"), destination: ping.url)
+            Link(String("\(ping.reference) — \(ping.referenceTitle)"), destination: ping.url)
                 .multilineTextAlignment(.leading)
-            Text("Linear · \(ping.pingedAt.formatted(.relative(presentation: .named)))")
+            Text("\(ping.sourceName) · \(ping.date.formatted(.relative(presentation: .named)))")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }
@@ -92,27 +152,27 @@ struct PingDetailView: View {
             Button {
                 openURL(ping.url)
             } label: {
-                Label("Open in Linear", systemImage: "arrow.up.right.square")
+                Label("Open in \(ping.sourceName)", systemImage: "arrow.up.right.square")
             }
             .buttonStyle(.borderedProminent)
             .keyboardShortcut("o")
-            .help("Answer in Linear (⌘O). It leaves Triage once you've replied.")
+            .help("Answer in \(ping.sourceName) (⌘O). It leaves Triage once you've replied.")
             Spacer()
             Menu {
-                Button("1 hour") { store.snooze(ping, for: 3600) }
-                Button("4 hours") { store.snooze(ping, for: 4 * 3600) }
-                Button("Until tomorrow") { store.snooze(ping, for: 24 * 3600) }
+                Button("1 hour") { store.snoozePing(ping.id, for: 3600) }
+                Button("4 hours") { store.snoozePing(ping.id, for: 4 * 3600) }
+                Button("Until tomorrow") { store.snoozePing(ping.id, for: 24 * 3600) }
             } label: {
                 Label("Snooze", systemImage: "moon.zzz")
             }
             .fixedSize()
             Button {
-                store.dismiss(ping)
+                store.dismissPing(ping.id)
             } label: {
                 Label("Dismiss", systemImage: "checkmark")
             }
             .keyboardShortcut(.delete, modifiers: [])
-            .help("Hide it without answering. A newer reply in this thread brings it back.")
+            .help(ping.dismissHelp)
         }
     }
 }

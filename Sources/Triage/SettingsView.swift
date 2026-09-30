@@ -136,7 +136,8 @@ struct SettingsView: View {
         approve, merge and close them on GitLab; Fix in iTerm isn't available for them yet. The token needs the \
         read_api scope. Token source is a 1Password secret reference or a helper script that prints the token; \
         it's read once per session, and the Keychain isn't used, so rebuilds don't ask for your password. \
-        Otherwise a pasted token is kept in the Keychain (or set GITLAB_TOKEN).
+        Otherwise a pasted token is kept in the Keychain (or set GITLAB_TOKEN). \
+        Mentions come from your GitLab To-Do list, checked every 30 s; bots' mentions don't notify.
         """
 
     private var gitlab: some View {
@@ -195,6 +196,7 @@ struct SettingsView: View {
                         Text("Signed in as \(me)").font(.caption).foregroundStyle(.secondary)
                     }
                 }
+                Toggle("Notify when someone mentions me", isOn: $store.notifyGitLabMentions)
             }
         } header: {
             Text("GitLab")
