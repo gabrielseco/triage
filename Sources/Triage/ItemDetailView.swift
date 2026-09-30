@@ -241,8 +241,10 @@ struct EvidenceCard: View {
                 if let url = evidence.url { Link(destination: url) { Image(systemName: "arrow.up.right.square") } }
             }
             if let d = evidence.detail, !d.isEmpty {
-                Text(markdown(String(d.prefix(1500)))).font(.callout).foregroundStyle(.secondary).textSelection(
-                    .enabled)
+                // Readable first, so a bot's HTML boilerplate doesn't use up the 1500 characters.
+                Text(markdown(String(CommentText.readable(d).prefix(1500)))).font(.callout).foregroundStyle(.secondary)
+                    .textSelection(
+                        .enabled)
             }
         }
         .padding(10)

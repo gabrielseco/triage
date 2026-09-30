@@ -254,12 +254,15 @@ public enum Classifier {
     /// First markdown heading (or failing that, first line) of a bot comment, e.g. Bugbot's
     /// "### GBR schema pin exceeds latest version".
     static func findingTitle(_ body: String) -> String? {
-        let lines = body.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter {
-            !$0.isEmpty && !$0.hasPrefix("<!--")
-        }
+        // A line of only symbols (a table's lone ⚠️ cell) says nothing on its own.
+        let lines = CommentText.readable(body).split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { $0.unicodeScalars.contains { $0.properties.isAlphabetic || $0.properties.numericType != nil } }
         let line = lines.first { $0.hasPrefix("#") } ?? lines.first
         guard let line else { return nil }
-        let cleaned = line.trimmingCharacters(in: CharacterSet(charactersIn: "#* ").union(.whitespaces))
+        // Headlines are plain text: Markdown's code ticks, bold and link syntax would show as written.
+        let plain = line.replacingOccurrences(of: #"\[([^\]]*)\]\([^)]*\)"#, with: "$1", options: .regularExpression)
+            .replacingOccurrences(of: "`", with: "").replacingOccurrences(of: "**", with: "")
+        let cleaned = plain.trimmingCharacters(in: CharacterSet(charactersIn: "#* ").union(.whitespaces))
         return cleaned.isEmpty ? nil : String(cleaned.prefix(90))
     }
 
