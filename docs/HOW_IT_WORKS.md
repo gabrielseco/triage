@@ -535,7 +535,8 @@ every refresh (2 min):
 - **Review requests** don't wait for a digest: each refresh, `ReviewRequestAlerts.plan` banners every
   Review requested item it hasn't announced yet (more than 3 at once → one summary), once per request. The
   first refresh only records what's already there. A request that's reviewed or withdrawn is forgotten, so
-  being asked again notifies again, but not after a refresh where a repo failed. Click → the Review requested
+  being asked again notifies again. A PR missing from one refresh (its repo or merge request failed) keeps
+  its request remembered for a day, and a refresh with no known login for a forge is skipped. Click → the Review requested
   filter with that item selected. Off with Settings → "Notify as soon as my review is requested".
   GitHub team requests aren't expanded to their members.
 - Notifications require the **bundled** app (see §10). A bare `swift run` binary has no bundle id, so

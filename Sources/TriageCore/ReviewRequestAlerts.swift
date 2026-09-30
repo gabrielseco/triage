@@ -37,9 +37,16 @@ public enum ReviewRequestAlert: Hashable, Sendable {
 
 /// Which review requests were notified, persisted so a request notifies once, even across restarts.
 public struct ReviewRequestAlertState: Codable, Sendable, Equatable {
-    /// False until the first refresh, which only records what's already there.
+    public struct Notified: Codable, Sendable, Equatable {
+        /// `PullRequest.id`, to tell "reviewed" (its PR came back without the request) from "not fetched".
+        public var prID: String
+        public var lastSeen: Date
+    }
+
+    /// False until the first complete refresh, which only records what's already there.
     public var started = false
-    public var notified: Set<String> = []
+    /// By item id.
+    public var notified: [String: Notified] = [:]
 
     public init() {}
 }
@@ -47,30 +54,50 @@ public struct ReviewRequestAlertState: Codable, Sendable, Equatable {
 public enum ReviewRequestAlerts {
     /// More new requests than this at once become one summary banner.
     public static let summaryThreshold = 3
+    /// A request whose PR hasn't been fetched for this long is gone (merged, closed, repo removed).
+    public static let forgetAfter: TimeInterval = 24 * 3600
 
-    /// - Parameters:
-    ///   - open: every review-requested item from the last refresh, hidden ones included, so a dismissed request
-    ///     isn't forgotten and then announced again when it's restored.
-    ///   - active: the ones not dismissed or snoozed in Triage: only these notify.
-    ///   - complete: whether every repo fetched. A repo that failed drops its items for one refresh; forgetting
-    ///     them then would announce them all again on the next one.
+    /// What one refresh saw.
+    public struct Refresh: Sendable {
+        /// Every review-requested item, hidden ones included, so a dismissed request is remembered and isn't
+        /// announced when it's shown again.
+        public var open: [AttentionItem]
+        /// The ones not dismissed or snoozed in Triage: only these notify.
+        public var active: [AttentionItem]
+        /// Ids of the PRs returned. One that's missing (a failed repo or merge request) keeps its request
+        /// remembered, or the next refresh would announce it again.
+        public var fetched: Set<String>
+        /// Whether every repo fetched; the first run waits for one.
+        public var complete: Bool
+
+        public init(open: [AttentionItem], active: [AttentionItem], fetched: Set<String>, complete: Bool) {
+            self.open = open
+            self.active = active
+            self.fetched = fetched
+            self.complete = complete
+        }
+    }
+
     public static func plan(
-        open: [AttentionItem], active: [AttentionItem], state: ReviewRequestAlertState, complete: Bool
+        _ refresh: Refresh, state: ReviewRequestAlertState, now: Date
     ) -> (alerts: [ReviewRequestAlert], state: ReviewRequestAlertState) {
+        let (open, active, fetched, complete) = (refresh.open, refresh.active, refresh.fetched, refresh.complete)
         var next = state
+        let openIDs = Set(open.map(\.id))
         // Reviewed (or the request withdrawn): forget it, so being asked again notifies again.
-        if complete { next.notified.formIntersection(open.map(\.id)) }
+        next.notified = next.notified.filter { id, n in
+            openIDs.contains(id) || (!fetched.contains(n.prID) && now.timeIntervalSince(n.lastSeen) < forgetAfter)
+        }
+        for item in open { next.notified[item.id] = .init(prID: item.pr.id, lastSeen: now) }
 
         guard state.started else {
             // First run: what's already waiting shows in the list, without a flood of banners. Not started until
             // a complete refresh, or a repo that failed this time would announce everything it has next time.
-            next.notified.formUnion(open.map(\.id))
             next.started = complete
             return ([], next)
         }
 
-        let fresh = active.filter { !next.notified.contains($0.id) }
-        next.notified.formUnion(fresh.map(\.id))
+        let fresh = active.filter { state.notified[$0.id] == nil }
         let alerts: [ReviewRequestAlert] =
             fresh.count > summaryThreshold ? [.summary(count: fresh.count)] : fresh.map(ReviewRequestAlert.new)
         return (alerts, next)

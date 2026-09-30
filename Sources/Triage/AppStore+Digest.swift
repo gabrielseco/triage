@@ -38,10 +38,13 @@ extension AppStore {
     /// refresh notify the same request again. With banners off it's still recorded, so turning them on doesn't
     /// announce everything that's already waiting.
     func notifyReviewRequests(complete: Bool) async {
+        // Without my login no request can be matched to me; that must not read as "all reviewed".
+        guard prs.allSatisfy({ viewer(for: $0.repo.forge) != nil }) else { return }
         let open = items.filter { $0.kind == .reviewRequested }
         let active = activeItems.filter { $0.kind == .reviewRequested }
-        let (alerts, state) = ReviewRequestAlerts.plan(
-            open: open, active: active, state: reviewRequestAlerts, complete: complete)
+        let refresh = ReviewRequestAlerts.Refresh(
+            open: open, active: active, fetched: Set(prs.map(\.id)), complete: complete)
+        let (alerts, state) = ReviewRequestAlerts.plan(refresh, state: reviewRequestAlerts, now: Date())
         if state != reviewRequestAlerts { reviewRequestAlerts = state }
         guard notifyReviewRequests else { return }
         for alert in alerts { _ = await Notifier.send(alert) }
