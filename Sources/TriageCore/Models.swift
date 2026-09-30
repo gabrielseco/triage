@@ -244,7 +244,7 @@ public enum AttentionKind: String, CaseIterable, Sendable, Codable {
 
     public var symbol: String {
         switch self {
-        case .reviewRequested: "eyes"
+        case .reviewRequested: "person.badge.clock.fill"
         case .ciFailure: "xmark.octagon.fill"
         case .mergeConflict: "arrow.triangle.merge"
         case .changesRequested: "hand.raised.fill"
