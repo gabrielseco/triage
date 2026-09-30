@@ -19,6 +19,8 @@ It describes the UI as it is today; when a PR deliberately changes a rule, updat
 
 - Three columns: sidebar (min 200, ideal 230), inbox (min 340, ideal 420), detail (the rest). The window's
   minimum is 1000×600, and everything must still fit, truncating without clipping, at that size.
+- Status that isn't a control (the "18 need you · …" summary) goes in the window subtitle
+  (`navigationSubtitle`), never in a toolbar item: toolbar items get a capsule and read as buttons.
 - Detail view: `padding(20)`, sections stacked with `spacing: 16`, inner groups with `spacing: 6`.
 - Rows: `spacing: 2` between stacked lines, `8` between icon and text, `padding(.vertical, 2)`.
 - Spacing values come from this set: **2, 4, 5, 6, 8, 10, 16, 20**. A new value needs a reason.
@@ -34,7 +36,7 @@ Text styles only, never `.font(.system(size:))`, so it scales with the system.
 | Section title ("Evidence") | `.headline` |
 | PR title in a row, card title, item kind in detail | `.subheadline.weight(.semibold)` |
 | Body, headline in a row | default (`.body`) |
-| Summaries, evidence detail, toolbar summary | `.callout` + `.secondary` |
+| Summaries, evidence detail | `.callout` + `.secondary` |
 | Metadata, kind label in a row, errors | `.caption` |
 | Pills, counts in headers | `.caption2` |
 | Repo `name #number` | `.caption.monospaced()` |
