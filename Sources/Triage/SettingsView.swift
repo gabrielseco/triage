@@ -134,11 +134,14 @@ struct SettingsView: View {
     static let gitlabHelp = """
         Merge requests assigned to you or waiting for your review, across your projects. Read-only for now: \
         approve, merge and close them on GitLab; Fix in iTerm isn't available for them yet. The token needs the \
-        read_api scope and is kept in the Keychain (or set GITLAB_TOKEN).
+        read_api scope. Token source is a 1Password secret reference or a helper script that prints the token; \
+        it's read once per session, and the Keychain isn't used, so rebuilds don't ask for your password. \
+        Otherwise a pasted token is kept in the Keychain (or set GITLAB_TOKEN).
         """
 
     private var gitlab: some View {
-        Section {
+        @Bindable var store = store
+        return Section {
             Toggle(
                 "Show GitLab merge requests",
                 isOn: Binding(
@@ -158,18 +161,27 @@ struct SettingsView: View {
                         report(nil)
                         Task { await store.refresh() }
                     }
-                SecureField("Token", text: $gitlabToken, prompt: Text("Paste a new token"))
+                TextField(
+                    "Token source", text: $store.gitlabTokenRef, prompt: Text("op://Vault/GitLab/token (optional)")
+                )
+                .font(.body.monospaced())
+                if store.gitlabTokenRef.isEmpty {
+                    SecureField("Token", text: $gitlabToken, prompt: Text("Paste a new token"))
+                }
                 HStack {
-                    Button("Save token") {
-                        do {
-                            try store.saveGitLabToken(gitlabToken)
-                            gitlabToken = ""
-                            report("Saved to Keychain")
-                        } catch { report(error.localizedDescription, failed: true) }
+                    if store.gitlabTokenRef.isEmpty {
+                        Button("Save token") {
+                            do {
+                                try store.saveGitLabToken(gitlabToken)
+                                gitlabToken = ""
+                                report("Saved to Keychain")
+                            } catch { report(error.localizedDescription, failed: true) }
+                        }
+                        .disabled(gitlabToken.isEmpty)
                     }
-                    .disabled(gitlabToken.isEmpty)
                     Button("Test") {
                         report("Signing in…")
+                        store.gitlabKeyFailure = nil
                         Task {
                             do {
                                 let client = try await store.forgeClient(.gitlab(host: store.gitlabHost))

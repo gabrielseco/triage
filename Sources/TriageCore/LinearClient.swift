@@ -15,18 +15,6 @@ public enum LinearError: LocalizedError {
     }
 }
 
-public enum LinearAuth {
-    /// Where Settings keeps the key: its own Keychain service, one account.
-    public static let keychainService = "dev.rogal.triage.linear"
-    public static let keychainAccount = "api.linear.app"
-
-    /// LINEAR_API_KEY env var, else the Keychain entry.
-    public static func key() -> String? {
-        if let k = ProcessInfo.processInfo.environment["LINEAR_API_KEY"], !k.isEmpty { return k }
-        return Keychain.get(keychainAccount, service: keychainService)
-    }
-}
-
 /// Linear's API for the viewer's notifications, read-only. `LinearPings` decides which of them need an answer
 /// (docs/plans/LINEAR.md).
 public struct LinearClient: Sendable {

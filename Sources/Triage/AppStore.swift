@@ -62,6 +62,24 @@ final class AppStore {
             cachedGitLabToken = nil
         }
     }
+    /// Where the GitLab token comes from instead of the Keychain: `op://…` or a helper script. Only the reference
+    /// is stored, never the token.
+    var gitlabTokenRef: String {
+        didSet {
+            defaults.set(gitlabTokenRef, forKey: "gitlabTokenRef")
+            gitlabViewer = nil
+            cachedGitLabToken = nil
+            gitlabKeyFailure = nil
+        }
+    }
+    /// The same for the Linear API key.
+    var linearKeyRef: String {
+        didSet {
+            defaults.set(linearKeyRef, forKey: "linearKeyRef")
+            linear.cachedKey = nil
+            linear.keyFailure = nil
+        }
+    }
     /// Linear pings (mentions and replies in my threads) on their own 30 s loop. The key lives in the Keychain.
     var linearEnabled: Bool {
         didSet {
@@ -87,6 +105,9 @@ final class AppStore {
     var cachedOnePasswordKey: String?
     /// The GitLab token, read from the Keychain once per session rather than on every refresh.
     var cachedGitLabToken: String?
+    /// Why the GitLab key source last failed. Kept so the refresh loop doesn't ask for Touch ID every
+    /// 2 minutes; cleared by editing the reference or pressing Test.
+    var gitlabKeyFailure: (any Error)?
 
     var prs: [PullRequest] = []
     var items: [AttentionItem] = []
@@ -122,6 +143,8 @@ final class AppStore {
         checkoutPaths = Self.load("checkoutPaths") ?? [:]
         harnessCommand = UserDefaults.standard.string(forKey: "harnessCommand") ?? Handoff.defaultHarnessCommand
         gitlabHost = UserDefaults.standard.string(forKey: "gitlabHost") ?? ""
+        gitlabTokenRef = UserDefaults.standard.string(forKey: "gitlabTokenRef") ?? ""
+        linearKeyRef = UserDefaults.standard.string(forKey: "linearKeyRef") ?? ""
         linearEnabled = UserDefaults.standard.bool(forKey: "linearEnabled")
         notifyPings = UserDefaults.standard.object(forKey: "notifyPings") as? Bool ?? true
         pingAlerts = Self.load("pingAlerts") ?? PingAlertState()
@@ -193,30 +216,6 @@ final class AppStore {
     /// Only an item the list is showing, so the detail never shows one hidden by the filter, a dismissal or
     /// "Only mine".
     var selectedItem: AttentionItem? { visibleItems.first { $0.id == selection } }
-
-    // MARK: - Actions
-
-    func dismiss(_ item: AttentionItem) {
-        dismissed.insert(item.id)
-        if item.kind == .newPR { seenPRs.dismiss(item.pr) }
-        advanceSelection(from: item)
-    }
-
-    func snooze(_ item: AttentionItem, for interval: TimeInterval) {
-        snoozed[item.id] = Date().addingTimeInterval(interval)
-        advanceSelection(from: item)
-    }
-
-    func restoreHidden() {
-        dismissed = []
-        snoozed = [:]
-        seenPRs.undismissAll()
-    }
-
-    func advanceSelection(from item: AttentionItem) {
-        let list = visibleItems
-        selection = list.first { $0.id != item.id && $0.pr.id == item.pr.id }?.id ?? list.first?.id
-    }
 
     /// Refreshes, or if one is already running, makes it go round once more when done so a repo added
     /// mid-fetch doesn't wait for the next tick.
@@ -304,6 +303,8 @@ final class AppStore {
             if gitlabViewer == nil { gitlabViewer = try? await client.viewer() }
             return Fetched(results: try await client.fetch())
         } catch {
+            // A token rotated in 1Password is read again on the next refresh.
+            if case GitLabError.http(401, _) = error { cachedGitLabToken = nil }
             return Fetched(errors: ["GitLab: \(error.localizedDescription)"])
         }
     }
@@ -346,5 +347,31 @@ extension AppStore {
         let isAbout = { (line: String) in line.hasPrefix("\(r.fullName):") || line.hasPrefix("\(r.fullName)#") }
         warnings.removeAll(where: isAbout)
         errors.removeAll(where: isAbout)
+    }
+}
+
+// MARK: - Actions
+
+extension AppStore {
+    func dismiss(_ item: AttentionItem) {
+        dismissed.insert(item.id)
+        if item.kind == .newPR { seenPRs.dismiss(item.pr) }
+        advanceSelection(from: item)
+    }
+
+    func snooze(_ item: AttentionItem, for interval: TimeInterval) {
+        snoozed[item.id] = Date().addingTimeInterval(interval)
+        advanceSelection(from: item)
+    }
+
+    func restoreHidden() {
+        dismissed = []
+        snoozed = [:]
+        seenPRs.undismissAll()
+    }
+
+    func advanceSelection(from item: AttentionItem) {
+        let list = visibleItems
+        selection = list.first { $0.id != item.id && $0.pr.id == item.pr.id }?.id ?? list.first?.id
     }
 }
