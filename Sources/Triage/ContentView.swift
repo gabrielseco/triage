@@ -24,10 +24,11 @@ struct ContentView: View {
                         ? "Add a repo in the sidebar to start watching." : "Pick an item from the inbox.")
             }
         }
+        // Status, not a control: as the window subtitle it sits under the title, like Mail's message count,
+        // instead of in a toolbar capsule that reads as a button.
+        .navigationTitle("Triage")
+        .navigationSubtitle(store.summaryLine)
         .toolbar {
-            ToolbarItem(placement: .navigation) {
-                Text(store.summaryLine).font(.callout).foregroundStyle(.secondary)
-            }
             ToolbarItemGroup {
                 Toggle(isOn: $store.onlyMine) {
                     Label(
