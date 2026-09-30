@@ -17,6 +17,8 @@ struct ContentView: View {
                 ItemDetailView(item: item).id(item.id)
             } else if let ping = store.selectedPing {
                 PingDetailView(ping: ping).id(ping.id)
+            } else if let mention = store.selectedMention {
+                PingDetailView(ping: mention).id(mention.id)
             } else {
                 EmptyState(
                     "Nothing selected", systemImage: "tray",
@@ -106,6 +108,7 @@ struct Sidebar: View {
             if !store.gitlabHost.isEmpty {
                 // Projects come and go with your merge requests; there's nothing to add or stop watching.
                 Section("GitLab") {
+                    row("Mentioned", "at", store.activeMentions.count).tag(SidebarFilter.gitlabMentions)
                     ForEach(store.gitlabProjects) { r in
                         // Group paths are long and shared (`org/team/…`), so the name is what tells them apart.
                         row(r.name, "book.closed", store.count(repo: r.id))
@@ -168,6 +171,8 @@ struct InboxList: View {
         Group {
             if case .linear(let kind) = store.filter {
                 PingList(kind: kind)
+            } else if store.filter == .gitlabMentions {
+                MentionList()
             } else if store.visibleItems.isEmpty, let repo = selectedRepo {
                 EmptyState(
                     "Inbox zero", systemImage: "checkmark.circle",

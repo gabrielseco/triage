@@ -2,22 +2,74 @@ import Foundation
 
 /// Someone @mentioned the viewer on GitLab, from their To-Do list. Pending or done doesn't matter: GitLab marks a
 /// to-do done when you open or react to it, and most people never clear the list, so neither says "answered".
+/// A reply from you in the mention's thread does (`GitLabMentions.waiting`).
 public struct GitLabMention: Identifiable, Hashable, Sendable {
-    /// The to-do's id, which is per mention.
+    /// Who wrote in the mention's thread, and when: to tell whether you've replied since.
+    public struct Reply: Hashable, Sendable {
+        public var author: String
+        public var createdAt: Date
+    }
+
+    /// `gitlab-mention:` + the to-do's id, which is per mention.
     public var id: String
     public var author: String
     public var isBot: Bool
     /// "tiger !96285": the project's name and the MR or issue reference.
     public var target: String
     public var targetTitle: String
+    /// The MR or issue is still open. Merged or closed, there's nothing left to answer.
+    public var targetOpen: Bool
     /// The comment itself, else the MR or issue.
     public var url: URL
+    /// The comment's first line or so, for rows and banners.
     public var excerpt: String
+    /// The whole comment, for the detail view.
+    public var body: String
     public var createdAt: Date
+    /// The last notes in the thread, the mention's own included.
+    public var thread: [Reply]
+
+    public static let idPrefix = "gitlab-mention:"
+
+    /// Dismissed and snoozed ids are shared with PR items and Linear pings; each source prunes only its own.
+    public static func isMentionID(_ id: String) -> Bool { id.hasPrefix(idPrefix) }
+
+    public init(
+        id: String, author: String, isBot: Bool = false, target: String, targetTitle: String,
+        targetOpen: Bool = true, url: URL, excerpt: String, body: String? = nil, createdAt: Date,
+        thread: [Reply] = []
+    ) {
+        self.id = id
+        self.author = author
+        self.isBot = isBot
+        self.target = target
+        self.targetTitle = targetTitle
+        self.targetOpen = targetOpen
+        self.url = url
+        self.excerpt = excerpt
+        self.body = body ?? excerpt
+        self.createdAt = createdAt
+        self.thread = thread
+    }
+}
+
+public enum GitLabMentions {
+    /// Mentions older than this are dropped, as for Linear pings.
+    public static let window: TimeInterval = 30 * 24 * 3600
+
+    /// The mentions still waiting on you, newest first: from a person, not yourself, on an open MR or issue,
+    /// within the window, and with no reply from you in the thread since.
+    public static func waiting(_ mentions: [GitLabMention], viewer: String, now: Date) -> [GitLabMention] {
+        mentions.filter { m in
+            !m.isBot && m.author != viewer && m.targetOpen && now.timeIntervalSince(m.createdAt) < window
+                && !m.thread.contains { $0.author == viewer && $0.createdAt > m.createdAt }
+        }
+        .sorted { $0.createdAt > $1.createdAt }
+    }
 }
 
 extension GitLabClient {
-    /// The newest mentions, newest first. The page only needs to cover what can arrive between two polls.
+    /// The newest mentions, newest first, with their threads' last notes.
     public func mentions() async throws -> [GitLabMention] {
         let data: MentionsData = try await graphql(Self.mentionsQuery, variables: [:])
         return data.mentions()
@@ -26,14 +78,14 @@ extension GitLabClient {
     static let mentionsQuery = """
         query {
           currentUser {
-            todos(action: [mentioned, directly_addressed], state: [pending, done], first: 20) { nodes {
+            todos(action: [mentioned, directly_addressed], state: [pending, done], first: 50) { nodes {
               id createdAt body targetUrl
               author { username name bot }
-              note { url body }
+              note { url body discussion { notes(last: 20) { nodes { createdAt author { username } } } } }
               target {
                 __typename
-                ... on MergeRequest { reference(full: true) title }
-                ... on Issue { reference(full: true) title }
+                ... on MergeRequest { state reference(full: true) title }
+                ... on Issue { state reference(full: true) title }
               }
             } }
           }
@@ -41,13 +93,25 @@ extension GitLabClient {
         """
 }
 
+/// The last notes of a mention's thread, to see whether you've replied since.
+struct MentionThread: Decodable {
+    struct Note: Decodable {
+        struct Author: Decodable { let username: String }
+        let createdAt: Date
+        let author: Author?
+    }
+    let notes: Conn<Note>
+}
+
 struct MentionsData: Decodable {
     struct Todo: Decodable {
         struct Note: Decodable {
             let url: String?
             let body: String?
+            let discussion: MentionThread?
         }
         struct Target: Decodable {
+            let state: String?
             let reference: String?
             let title: String?
         }
@@ -64,15 +128,21 @@ struct MentionsData: Decodable {
 
     func mentions() -> [GitLabMention] {
         (currentUser?.todos.nodes ?? []).compactMap { t in
-            // Only web links: the URL is what a notification click opens.
+            // Only web links: the URL is what a click opens.
             let link = [t.note?.url, t.targetUrl].compactMap { $0.flatMap(URL.init(string:)) }
                 .first { $0.scheme == "https" }
             guard let url = link, let author = t.author else { return nil }
-            let text = (t.note?.body ?? t.body ?? "").split(whereSeparator: \.isNewline).joined(separator: " ")
+            let body = t.note?.body ?? t.body ?? ""
+            let thread = t.note?.discussion?.notes.nodes.compactMap { n in
+                n.author.map { GitLabMention.Reply(author: $0.username, createdAt: n.createdAt) }
+            }
             return GitLabMention(
-                id: t.id, author: author.login, isBot: author.isBot,
+                id: GitLabMention.idPrefix + t.id, author: author.login, isBot: author.isBot,
                 target: Self.shortReference(t.target?.reference ?? ""), targetTitle: t.target?.title ?? "",
-                url: url, excerpt: String(text.prefix(200)), createdAt: t.createdAt)
+                // Nil (a target type not asked for) counts as open rather than hiding the mention.
+                targetOpen: t.target?.state.map { $0 == "opened" } ?? true, url: url,
+                excerpt: String(body.split(whereSeparator: \.isNewline).joined(separator: " ").prefix(200)),
+                body: body, createdAt: t.createdAt, thread: thread ?? [])
         }
     }
 
