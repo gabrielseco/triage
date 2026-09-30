@@ -122,7 +122,7 @@ struct PingDetailView<Ping: PingDisplay>: View {
                 header
                 actions
                 Divider()
-                Text(markdown(ping.body))
+                Text(markdown(CommentText.readable(ping.body)))
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(10)
