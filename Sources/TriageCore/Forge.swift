@@ -42,7 +42,7 @@ public enum Forge: Hashable, Sendable {
         switch self {
         case .github: .all
         // Each GitLab capability is turned on as it's built.
-        case .gitlab: []
+        case .gitlab: [.approve]
         }
     }
 }
@@ -175,8 +175,8 @@ public struct GitHubForge: ForgeClient {
     }
 }
 
-/// GitLab behind `ForgeClient`, read-only for now: the merge requests assigned to the viewer or waiting on
-/// their review, across projects. Actions throw until their capability is turned on.
+/// GitLab behind `ForgeClient`: the merge requests assigned to the viewer or waiting on their review, across
+/// projects. Approve works; the other actions throw until their capability is turned on.
 public struct GitLabForge: ForgeClient {
     let client: GitLabClient
 
@@ -202,7 +202,7 @@ public struct GitLabForge: ForgeClient {
 
     public func ciLog(_ pr: PullRequest, checkRunID: Int) async -> String? { nil }
     public func diff(_ pr: PullRequest) async -> String? { nil }
-    public func approve(_ pr: PullRequest) async throws { throw ForgeError.unsupported(forge) }
+    public func approve(_ pr: PullRequest) async throws { try await client.approve(pr) }
     /// The viewer's newest @mentions, from their To-Do list.
     public func mentions() async throws -> [GitLabMention] { try await client.mentions() }
     public func merge(_ pr: PullRequest) async throws { throw ForgeError.unsupported(forge) }

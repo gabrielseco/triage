@@ -4,11 +4,15 @@ public enum GitLabError: LocalizedError {
     case noToken
     case http(Int, String)
     case graphql(String)
+    case cannotApprove
 
     public var errorDescription: String? {
         switch self {
         case .noToken: "No GitLab token. Add one in Settings → GitLab."
         case .http(401, _): "GitLab rejected the token (expired or revoked?). Create a new one with read_api."
+        case .http(403, let body) where Self.message(in: body) == "insufficient_scope":
+            "The GitLab token is read-only. Approving needs a token with the api scope."
+        case .cannotApprove: "GitLab didn't let you approve it: already approved, or you aren't an eligible approver."
         case .http(let code, let body): "GitLab HTTP \(code): \(Self.message(in: body) ?? String(body.prefix(300)))"
         case .graphql(let msg): "GitLab GraphQL: \(msg)"
         }

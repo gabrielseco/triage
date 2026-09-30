@@ -19,8 +19,8 @@ import Testing
     #expect(try JSONDecoder().decode(RepoRef.self, from: Data(#"{"owner":"acme","name":"web"}"#.utf8)) == r)
 }
 
-@Test func gitlabCanDoNothingYet() {
-    #expect(Forge.gitlab(host: "gitlab.com").capabilities.isEmpty)
+@Test func gitlabCanApproveButNothingElseYet() {
+    #expect(Forge.gitlab(host: "gitlab.com").capabilities == [.approve])
     #expect(ForgeError.unsupported(.gitlab(host: "gitlab.com")).localizedDescription.contains("gitlab.com"))
 }
 
@@ -143,12 +143,11 @@ private func mr(_ path: String, _ number: Int, host: String = "gitlab.com") thro
     #expect(GitLabForge.results(RepoSnapshot(pullRequests: [])).isEmpty)
 }
 
-@Test func gitlabActionsAreNotSupportedYet() async throws {
+@Test func gitlabActionsOtherThanApproveAreNotSupportedYet() async throws {
     let forge = GitLabForge(host: "gitlab.com", token: "t")
     let pr = try mr("acme/web", 1)
     #expect(forge.forge == .gitlab(host: "gitlab.com"))
     await #expect(throws: ForgeError.self) { try await forge.merge(pr) }
-    await #expect(throws: ForgeError.self) { try await forge.approve(pr) }
     await #expect(throws: ForgeError.self) { try await forge.close(pr) }
     #expect(await forge.diff(pr) == nil)
     #expect(await forge.ciLog(pr, checkRunID: 1) == nil)
