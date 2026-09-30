@@ -15,6 +15,7 @@ enum SidebarFilter: Hashable {
     case repo(String)
     case lastDigest
     case linear(LinearPing.Kind)
+    case gitlabMentions
 }
 
 @MainActor @Observable
@@ -60,6 +61,7 @@ final class AppStore {
             defaults.set(gitlabHost, forKey: "gitlabHost")
             gitlabViewer = nil
             cachedGitLabToken = nil
+            clearGitLabMentions()
         }
     }
     /// Where the GitLab token comes from instead of the Keychain: `op://…` or a helper script. Only the reference
@@ -91,6 +93,10 @@ final class AppStore {
     var notifyPings: Bool { didSet { defaults.set(notifyPings, forKey: "notifyPings") } }
     /// Which pings were notified and when, so each notifies once, even across restarts.
     var pingAlerts: PingAlertState { didSet { save(pingAlerts, "pingAlerts") } }
+    /// A banner when someone @mentions me on GitLab. On by default.
+    var notifyGitLabMentions: Bool { didSet { defaults.set(notifyGitLabMentions, forKey: "notifyGitLabMentions") } }
+    var mentionAlerts: MentionAlertState { didSet { save(mentionAlerts, "gitlabMentionAlerts") } }
+    var gitlabMentions = GitLabMentionsState()
     /// Per item: what the last Fix in / Copy did, shown under the buttons.
     var actionStatus: [String: String] = [:]
     /// PRs closed or merged from Triage, hidden until a refresh confirms they're gone from GitHub's open list.
@@ -125,7 +131,7 @@ final class AppStore {
     var linear = LinearState()
     var filter: SidebarFilter = .all {
         // The selected item may not be in the new list; move to its first item so the detail matches.
-        didSet { if selectedItem == nil, selectedPing == nil { selectFirstVisible() } }
+        didSet { if selectedItem == nil, !isPingSelected { selectFirstVisible() } }
     }
     var selection: String? {
         // A merge or close asked for another item isn't answered by this one, nor later by surprise.
@@ -148,6 +154,8 @@ final class AppStore {
         linearEnabled = UserDefaults.standard.bool(forKey: "linearEnabled")
         notifyPings = UserDefaults.standard.object(forKey: "notifyPings") as? Bool ?? true
         pingAlerts = Self.load("pingAlerts") ?? PingAlertState()
+        notifyGitLabMentions = UserDefaults.standard.object(forKey: "notifyGitLabMentions") as? Bool ?? true
+        mentionAlerts = Self.load("gitlabMentionAlerts") ?? MentionAlertState()
         digestHours = Self.load("digestHours") ?? [12, 18]
         digestWeekdaysOnly = UserDefaults.standard.object(forKey: "digestWeekdaysOnly") as? Bool ?? true
         digestBaseline = Self.load("digestBaseline")
@@ -186,7 +194,7 @@ final class AppStore {
         case .kind(let k): activeItems.filter { $0.kind == k }
         case .repo(let r): activeItems.filter { $0.pr.repo.id == r }
         case .lastDigest: activeItems.filter { lastDigestItemIDs.contains($0.id) }
-        case .linear: []
+        case .linear, .gitlabMentions: []
         }
     }
 
@@ -274,10 +282,10 @@ final class AppStore {
         // Forget dismissals/snoozes for items that no longer exist (new push = new ids). Linear pings are
         // pruned by their own loop, against their own ids.
         let live = Set(newItems.map(\.id))
-        dismissed = dismissed.filter { live.contains($0) || LinearPing.isPingID($0) }
+        dismissed = dismissed.filter { live.contains($0) || Self.isPingOrMentionID($0) }
         closedPRIDs.formIntersection(fetched.map(\.id))
-        snoozed = snoozed.filter { (live.contains($0.key) || LinearPing.isPingID($0.key)) && $0.value > Date() }
-        if !live.contains(selection ?? ""), selectedPing == nil { selectFirstVisible() }
+        snoozed = snoozed.filter { (live.contains($0.key) || Self.isPingOrMentionID($0.key)) && $0.value > Date() }
+        if !live.contains(selection ?? ""), !isPingSelected { selectFirstVisible() }
         await notifyReviewRequests(complete: errs.isEmpty)
     }
 
@@ -313,6 +321,7 @@ final class AppStore {
         guard !autoRefreshStarted else { return }
         autoRefreshStarted = true
         startLinearRefresh()
+        startGitLabMentions()
         Task {
             while true {
                 await refresh()

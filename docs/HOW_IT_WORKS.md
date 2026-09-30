@@ -540,6 +540,12 @@ every refresh (2 min):
   its request remembered for a day, and a refresh with no known login for a forge is skipped. Click → the Review requested
   filter with that item selected. Off with Settings → "Notify as soon as my review is requested".
   GitHub team requests aren't expanded to their members.
+- **GitLab mentions** notify on their own 30 s poll (`AppStore+GitLabMentions`, `MentionAlerts`): the newest 20
+  `mentioned`/`directly_addressed` items of your GitLab To-Do list, **pending or done**, since GitLab marks one done
+  when you open or react to it. Each new one from a person gets a banner (more than 3 at once → one summary);
+  bots (`bot: true`, `project_<id>_bot*`) and yourself don't. The first poll only records what's there, and it
+  starts 30 s after launch so the first PR refresh reads the token alone. Click → the comment in the browser
+  (https only). Off with Settings → GitLab → "Notify when someone mentions me". Needs only `read_api`.
 - Notifications require the **bundled** app (see §10). A bare `swift run` binary has no bundle id, so
   `Notifier.isAvailable` is false and they're skipped rather than crashing.
 

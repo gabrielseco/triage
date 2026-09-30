@@ -22,10 +22,16 @@ struct LinearState {
 
 /// Linear pings: mentions and replies in my threads that I haven't answered (docs/plans/LINEAR.md).
 extension AppStore {
-    /// The first row of whatever list is showing, PR items or Linear pings.
+    /// The first row of whatever list is showing: PR items, Linear pings or GitLab mentions.
     func selectFirstVisible() {
-        selection = visibleItems.first?.id ?? visiblePings.first?.id
+        selection = visibleItems.first?.id ?? visiblePingIDs.first
     }
+
+    /// The ping or mention list's rows, whichever is showing.
+    var visiblePingIDs: [String] { visiblePings.map(\.id) + visibleMentions.map(\.id) }
+
+    /// A Linear ping or GitLab mention is selected: a PR refresh mustn't move the selection off it.
+    var isPingSelected: Bool { selectedPing != nil || selectedMention != nil }
 
     /// Open pings minus the ones dismissed or snoozed in Triage, newest first.
     var activePings: [LinearPing] {
@@ -43,18 +49,19 @@ extension AppStore {
 
     func count(_ kind: LinearPing.Kind) -> Int { activePings.filter { $0.kind == kind }.count }
 
-    func dismiss(_ ping: LinearPing) {
-        dismissed.insert(ping.id)
-        advanceSelection(from: ping)
+    /// A Linear ping or a GitLab mention, by id.
+    func dismissPing(_ id: String) {
+        dismissed.insert(id)
+        advancePingSelection(from: id)
     }
 
-    func snooze(_ ping: LinearPing, for interval: TimeInterval) {
-        snoozed[ping.id] = Date().addingTimeInterval(interval)
-        advanceSelection(from: ping)
+    func snoozePing(_ id: String, for interval: TimeInterval) {
+        snoozed[id] = Date().addingTimeInterval(interval)
+        advancePingSelection(from: id)
     }
 
-    private func advanceSelection(from ping: LinearPing) {
-        selection = visiblePings.first { $0.id != ping.id }?.id
+    private func advancePingSelection(from id: String) {
+        selection = visiblePingIDs.first { $0 != id }
     }
 
     /// Saves a pasted key, or removes it when empty, and fetches with it.

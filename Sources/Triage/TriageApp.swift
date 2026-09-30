@@ -63,8 +63,8 @@ struct MenuBarLabel: View {
 
     var body: some View {
         // The menu bar draws a Label as its icon only, so the ping count goes in a Text with the icon inline:
-        // "someone's waiting on me in Linear" shows at a glance, and nothing extra when no one is.
-        let pings = store.activePings.count
+        // "someone's waiting on me in Linear or GitLab" shows at a glance, and nothing extra when no one is.
+        let pings = store.activePings.count + store.activeMentions.count
         let icon = Image(systemName: store.needsYouCount > 0 || pings > 0 ? "tray.full.fill" : "tray")
         Group {
             if pings > 0 {
@@ -94,7 +94,14 @@ struct MenuBarContent: View {
                 store.showMainWindow()
             }
         }
-        if !store.activePings.isEmpty { Divider() }
+        ForEach(store.activeMentions.prefix(5)) { mention in
+            Button(String("\(mention.target) · \(mention.headline): \(mention.excerpt)")) {
+                store.filter = .gitlabMentions
+                store.selection = mention.id
+                store.showMainWindow()
+            }
+        }
+        if !store.activePings.isEmpty || !store.activeMentions.isEmpty { Divider() }
         ForEach(store.activeItems.filter { $0.severity >= .medium }.prefix(10)) { item in
             Button(String("\(item.pr.repo.name)\(item.pr.ref) · \(item.kind.title): \(item.headline)")) {
                 store.filter = .all
