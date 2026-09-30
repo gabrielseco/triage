@@ -29,8 +29,16 @@ extension AppStore {
             guard let token = await GitHubAuth.resolveToken() else { throw GitHubError.noToken }
             return GitHubForge(token: token, repos: repos)
         case .gitlab(let host):
-            guard let token = cachedGitLabToken ?? GitLabAuth.token(host: host) else { throw GitLabError.noToken }
-            cachedGitLabToken = token
+            if cachedGitLabToken == nil {
+                if let gitlabKeyFailure { throw gitlabKeyFailure }
+                do {
+                    cachedGitLabToken = try await GitLabAuth.token(host: host, reference: gitlabTokenRef)
+                } catch {
+                    gitlabKeyFailure = error
+                    throw error
+                }
+            }
+            guard let token = cachedGitLabToken else { throw GitLabError.noToken }
             return GitLabForge(host: host, token: token)
         }
     }

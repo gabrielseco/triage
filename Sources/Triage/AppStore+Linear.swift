@@ -10,6 +10,9 @@ struct LinearState {
     var warnings: [String] = []
     /// Read from the Keychain once per session.
     var cachedKey: String?
+    /// Why the key source last failed. Kept so the 30 s poll doesn't ask for Touch ID every time; cleared by
+    /// editing the reference or pressing Test.
+    var keyFailure: (any Error)?
     var isRefreshing = false
     var refreshAgain = false
     var loopStarted = false
@@ -61,9 +64,17 @@ extension AppStore {
         Task { await refreshLinear() }
     }
 
-    func linearClient() throws -> LinearClient {
-        guard let key = linear.cachedKey ?? LinearAuth.key() else { throw LinearError.noKey }
-        linear.cachedKey = key
+    func linearClient() async throws -> LinearClient {
+        if linear.cachedKey == nil {
+            if let failure = linear.keyFailure { throw failure }
+            do {
+                linear.cachedKey = try await LinearAuth.key(reference: linearKeyRef)
+            } catch {
+                linear.keyFailure = error
+                throw error
+            }
+        }
+        guard let key = linear.cachedKey else { throw LinearError.noKey }
         return LinearClient(key: key)
     }
 
@@ -113,6 +124,8 @@ extension AppStore {
             await notifyPingAlerts(now: now)
         } catch {
             guard linearEnabled else { return }
+            // A key rotated in 1Password is read again on the next poll.
+            if case LinearError.http(401, _) = error { linear.cachedKey = nil }
             // Keep the last pings on screen; a failed poll every 30 s shouldn't empty the list.
             linear.errors = ["Linear: \(error.localizedDescription)"]
         }

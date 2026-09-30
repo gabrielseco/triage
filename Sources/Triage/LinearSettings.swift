@@ -17,8 +17,10 @@ struct LinearSettings: View {
     static let linearHelp = """
         Mentions of you, and replies in threads you commented in, until you answer them in Linear. Each new \
         one notifies, then reminds you after 1 hour, 4 hours and once a day while it's waiting. Create a \
-        personal API key with Read access under Linear → Settings → Security & access. It's kept in the Keychain \
-        (or set LINEAR_API_KEY).
+        personal API key with Read access under Linear → Settings → Security & access. Key source is a 1Password \
+        secret reference or a helper script that prints the key; it's read once per session, and the Keychain \
+        isn't used, so rebuilds don't ask for your password. Otherwise a pasted key is kept in the Keychain (or \
+        set LINEAR_API_KEY).
         """
 
     var body: some View {
@@ -30,18 +32,27 @@ struct LinearSettings: View {
                     if on { Task { await store.refreshLinear() } }
                 }
             if store.linearEnabled {
-                SecureField("API key", text: $linearKey, prompt: Text("Paste a new key"))
+                TextField(
+                    "Key source", text: $store.linearKeyRef, prompt: Text("op://Vault/Linear/credential (optional)")
+                )
+                .font(.body.monospaced())
+                if store.linearKeyRef.isEmpty {
+                    SecureField("API key", text: $linearKey, prompt: Text("Paste a new key"))
+                }
                 HStack {
-                    Button("Save key") {
-                        do {
-                            try store.saveLinearKey(linearKey)
-                            linearKey = ""
-                            reportLinear("Saved to Keychain")
-                        } catch { reportLinear(error.localizedDescription, failed: true) }
+                    if store.linearKeyRef.isEmpty {
+                        Button("Save key") {
+                            do {
+                                try store.saveLinearKey(linearKey)
+                                linearKey = ""
+                                reportLinear("Saved to Keychain")
+                            } catch { reportLinear(error.localizedDescription, failed: true) }
+                        }
+                        .disabled(linearKey.isEmpty)
                     }
-                    .disabled(linearKey.isEmpty)
                     Button("Test") {
                         reportLinear("Checking…")
+                        store.linear.keyFailure = nil
                         Task {
                             do {
                                 let (notifications, _) = try await store.linearClient().notifications()

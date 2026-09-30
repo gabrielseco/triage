@@ -25,17 +25,6 @@ public enum GitLabError: LocalizedError {
     }
 }
 
-public enum GitLabAuth {
-    /// Where Settings keeps a host's token: its own Keychain service, with the host as the account.
-    public static let keychainService = "dev.rogal.triage.gitlab"
-
-    /// GITLAB_TOKEN env var, else the Keychain entry for `host`.
-    public static func token(host: String) -> String? {
-        if let t = ProcessInfo.processInfo.environment["GITLAB_TOKEN"], !t.isEmpty { return t }
-        return Keychain.get(host, service: keychainService)
-    }
-}
-
 /// GitLab's API for the merge requests assigned to the viewer or waiting on their review, across all projects.
 /// Read-only for now: actions arrive with the capabilities that allow them (docs/plans/GITLAB.md).
 public struct GitLabClient: Sendable {

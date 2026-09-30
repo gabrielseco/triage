@@ -170,7 +170,7 @@ This works like an Elixir umbrella where `core` doesn't depend on `web`.
      2. viewer = login (once, for "Only my PRs")                              │
      3. for each watched repo, in parallel: 1 GraphQL query per repo          │
    GitLab (if on in Settings):                                                │
-     1. token  = GITLAB_TOKEN or the Keychain (read once per session)         │
+     1. token  = GITLAB_TOKEN, key source, or the Keychain (once per session)         │
      2. viewer = username (once; it's usually not your GitHub login)          │
      3. 1 list query (your MRs), then 1 detail query per MR, in parallel      │
    4. for each PR: Classifier.classify(pr, viewer for its forge) → items      │
@@ -277,7 +277,7 @@ type plus a mapper function, so the rest of the app never sees GitHub's shape.
 
 ### 6.4 GitLab client (`GitLabClient.swift`)
 
-**Auth:** a personal access token with the `read_api` scope, from `$GITLAB_TOKEN` or the Keychain
+**Auth:** a personal access token with the `read_api` scope, from `$GITLAB_TOKEN`, a token source (`op://…` or a helper script, see `SecretSource`) or the Keychain
 (service `dev.rogal.triage.gitlab`, account = host), pasted in Settings → GitLab. The app reads it once per
 session and keeps it in memory.
 
@@ -508,7 +508,8 @@ separators (`#1.392`). Use `Text(verbatim:)` or `String(…)` for ids.
 | Anthropic API key (if pasted in Settings) | Keychain, service `dev.rogal.triage` | Encrypted by macOS |
 | GitHub token | Not stored; read from `$GITHUB_TOKEN` / `gh` each refresh | |
 | GitLab host | `UserDefaults` key `gitlabHost` | Empty means GitLab is off |
-| GitLab token | Keychain, service `dev.rogal.triage.gitlab`, account = host (or `$GITLAB_TOKEN`) | Read once per app session, then kept in memory. macOS may ask once to let Triage use it |
+| GitLab token | `$GITLAB_TOKEN`, else the token source in Settings (1Password `op://…` or a helper script; only the reference is saved, as `gitlabTokenRef`), else Keychain service `dev.rogal.triage.gitlab`, account = host | Read once per app session, then kept in memory. With a token source the Keychain isn't touched. Triage's certificate has no Team ID, so Keychain access is tied to each build's hash and every rebuild asks again |
+| Linear API key | `$LINEAR_API_KEY`, else the key source (`linearKeyRef`), else Keychain service `dev.rogal.triage.linear` | Same as GitLab. A failed key source isn't retried by the 30 s poll (no Touch ID loop) until the reference changes or Test is pressed |
 | PRs, items, Claude answers | Memory only | Refetched on launch; answers are lost on quit |
 
 Stale dismissals are cleaned up on each refresh: once an item id no longer exists, it's dropped.

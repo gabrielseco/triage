@@ -9,7 +9,7 @@ public enum OnePasswordError: LocalizedError {
         switch self {
         case .cliMissing: "1Password CLI (`op`) not found. Install it with `brew install 1password-cli`."
         case .badReference: "The 1Password reference should look like op://Vault/Item/field."
-        case .failed(let msg): "API key: \(msg)"
+        case .failed(let msg): "Key source: \(msg)"
         }
     }
 }
