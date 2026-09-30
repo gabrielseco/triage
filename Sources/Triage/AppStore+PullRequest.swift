@@ -38,7 +38,7 @@ extension AppStore {
         }
     }
 
-    /// Hides Approve at once (so it can't be sent twice), and brings it back if GitHub refuses.
+    /// Hides Approve at once (so it can't be sent twice), and brings it back if the forge refuses.
     private func approve(_ pr: PullRequest, with client: any ForgeClient) async throws {
         let key = Self.approvalKey(pr)
         approvedHeads.insert(key)
