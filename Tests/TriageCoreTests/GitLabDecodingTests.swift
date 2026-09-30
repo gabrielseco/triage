@@ -148,6 +148,20 @@ private func model(_ json: String) throws -> (PullRequest, [String]) {
     #expect(try model(detail(approved: true, approvalsLeft: 0)).0.reviewDecision == ReviewDecision.none)
 }
 
+@Test func reviewersStillToReviewAreRequested() throws {
+    for state in ["UNREVIEWED", "REVIEW_STARTED"] {
+        #expect(try model(detail(reviewState: state)).0.requestedReviewers == ["rita"])
+    }
+    for state in ["REVIEWED", "APPROVED", "REQUESTED_CHANGES"] {
+        #expect(try model(detail(reviewState: state)).0.requestedReviewers.isEmpty)
+    }
+}
+
+@Test func aRequestedReviewerGetsAReviewRequestedItem() throws {
+    let items = Classifier.classify(try model(detail()).0, viewer: "rita").items
+    #expect(items.map(\.kind).contains(.reviewRequested))
+}
+
 @Test func mergeStatusMapsOntoMergeable() throws {
     #expect(try model(detail(status: "CONFLICT")).0.mergeable == .conflicting)
     #expect(try model(detail(status: "NEED_REBASE")).0.mergeable == .conflicting)

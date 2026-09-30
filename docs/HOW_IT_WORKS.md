@@ -322,6 +322,7 @@ the piece most likely to move to the backend later.
 | Unresolved, not outdated thread started by a **human** | Unresolved review (all threads → one item) | medium | `pr\|threads\|<latest thread url>` |
 | Comment or unresolved thread by a **non-noise bot** | Bot finding (one item **per bot**) | from the bot's own label, see below | `pr\|bot\|<login>\|<latest url>` |
 | Nothing else open + approved + mergeable + all checks green + not draft | Ready to merge | info | `pr\|ready\|<headSha>` |
+| You're a reviewer who hasn't reviewed yet (GitHub review request for your login, GitLab reviewer `UNREVIEWED`/`REVIEW_STARTED`) on someone else's PR | Review requested (next to any problem; replaces the quiet item and New PR). Shown even with "Only mine" | medium | `pr\|review-requested` |
 | Opened by someone else after the repo was first fetched, not dismissed yet (`SeenPRs`) | New PR (next to any other item) | low | `pr\|new` |
 
 **Noise bots** are counted in `PRStats.noiseComments` and never become items: `codecov`, `vercel`,
@@ -531,6 +532,12 @@ every refresh (2 min):
 - **Click** → app opens on the "New at 12:00" sidebar filter.
 - **Send digest now** (menu bar or Settings) refreshes and sends immediately. It also resets the
   baseline, so it's safe for testing.
+- **Review requests** don't wait for a digest: each refresh, `ReviewRequestAlerts.plan` banners every
+  Review requested item it hasn't announced yet (more than 3 at once → one summary), once per request. The
+  first refresh only records what's already there. A request that's reviewed or withdrawn is forgotten, so
+  being asked again notifies again, but not after a refresh where a repo failed. Click → the Review requested
+  filter with that item selected. Off with Settings → "Notify as soon as my review is requested".
+  GitHub team requests aren't expanded to their members.
 - Notifications require the **bundled** app (see §10). A bare `swift run` binary has no bundle id, so
   `Notifier.isAvailable` is false and they're skipped rather than crashing.
 

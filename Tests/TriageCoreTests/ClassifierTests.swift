@@ -8,12 +8,12 @@ private let repo = RepoRef(owner: "acme", name: "web")
 private func pr(
     checks: [CheckInfo] = [], threads: [ReviewThreadInfo] = [], comments: [CommentInfo] = [],
     mergeable: Mergeable = .mergeable, review: ReviewDecision = .none, sha: String = "abc123",
-    draft: Bool = false
+    draft: Bool = false, requested: Set<String> = []
 ) -> PullRequest {
     PullRequest(
         repo: repo, number: 1020, title: "Add thing", url: URL(string: "https://github.com/acme/web/pull/1020")!,
         author: "gabriel", isDraft: draft, headSha: sha, mergeable: mergeable, reviewDecision: review,
-        checks: checks, threads: threads, comments: comments)
+        requestedReviewers: requested, checks: checks, threads: threads, comments: comments)
 }
 
 private func comment(_ author: String, bot: Bool, _ body: String = "hi", url: String? = nil) -> CommentInfo {
@@ -230,4 +230,36 @@ private func threadsID(_ threads: [ReviewThreadInfo]) -> String? {
     bump.author = "renovate[bot]"
     let (items, _) = Classifier.classify(bump, viewer: "someone-else", isNew: true)
     #expect(items.first { $0.kind == .newPR }?.headline == "Opened by renovate[bot]")
+}
+
+@Test func aReviewAskedOfTheViewerIsAnItemInTheInbox() throws {
+    let (items, _) = Classifier.classify(pr(requested: ["me", "rita"]), viewer: "me")
+    let item = try #require(items.first)
+    #expect(items.map(\.kind) == [.reviewRequested])  // instead of "waiting for review"
+    #expect(!item.kind.isPassive)
+    #expect(item.severity == .medium)
+    #expect(item.headline == "gabriel is waiting on your review")
+    #expect(item.evidence.first?.url?.lastPathComponent == "changes")
+}
+
+@Test func aReviewRequestTakesTheNewPRsPlaceButNotAProblems() {
+    #expect(
+        Classifier.classify(pr(requested: ["me"]), viewer: "me", isNew: true).items.map(\.kind) == [.reviewRequested])
+    let failing = pr(checks: [CheckInfo(name: "test", state: .failure)], requested: ["me"])
+    #expect(Classifier.classify(failing, viewer: "me").items.map(\.kind) == [.ciFailure, .reviewRequested])
+}
+
+@Test func onlyTheViewersOwnRequestCounts() {
+    #expect(!Classifier.classify(pr(requested: ["rita"]), viewer: "me").items.map(\.kind).contains(.reviewRequested))
+    #expect(!Classifier.classify(pr(requested: ["me"])).items.map(\.kind).contains(.reviewRequested))
+    // Your own PR: GitHub won't let you request yourself, but don't trust it.
+    #expect(
+        !Classifier.classify(pr(requested: ["gabriel"]), viewer: "gabriel").items.map(\.kind).contains(.reviewRequested)
+    )
+}
+
+@Test func aPushDoesntBringBackADismissedReviewRequest() {
+    let a = Classifier.classify(pr(sha: "aaa", requested: ["me"]), viewer: "me").items[0].id
+    let b = Classifier.classify(pr(sha: "bbb", requested: ["me"]), viewer: "me").items[0].id
+    #expect(a == b)
 }

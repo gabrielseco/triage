@@ -44,6 +44,10 @@ final class AppStore {
     /// Item ids the last digest reported as new — what a notification click shows.
     var lastDigestItemIDs: Set<String> { didSet { save(lastDigestItemIDs, "lastDigestItemIDs") } }
     var lastDigestAt: Date? { didSet { save(lastDigestAt, "lastDigestAt") } }
+    /// A banner as soon as someone asks for my review, instead of waiting for the digest. On by default.
+    var notifyReviewRequests: Bool { didSet { defaults.set(notifyReviewRequests, forKey: "notifyReviewRequests") } }
+    /// Which review requests were notified, so each notifies once, even across restarts.
+    var reviewRequestAlerts: ReviewRequestAlertState { didSet { save(reviewRequestAlerts, "reviewRequestAlerts") } }
     var openMainWindow: (() -> Void)?
 
     // Fix in iTerm: repo full name → local clone, and the harness command template.
@@ -126,6 +130,8 @@ final class AppStore {
         digestBaseline = Self.load("digestBaseline")
         lastDigestItemIDs = Self.load("lastDigestItemIDs") ?? []
         lastDigestAt = Self.load("lastDigestAt")
+        notifyReviewRequests = UserDefaults.standard.object(forKey: "notifyReviewRequests") as? Bool ?? true
+        reviewRequestAlerts = Self.load("reviewRequestAlerts") ?? ReviewRequestAlertState()
     }
 
     // MARK: - Derived
@@ -138,7 +144,10 @@ final class AppStore {
             .filter { !dismissed.contains($0.id) && (snoozed[$0.id] ?? .distantPast) < now }
             .filter { !closedPRIDs.contains($0.pr.id) }
             .filter { item in
-                guard onlyMine, let me = viewer(for: item.pr.repo.forge) else { return true }
+                // A review asked of me is mine to do, whoever wrote the PR.
+                guard onlyMine, item.kind != .reviewRequested, let me = viewer(for: item.pr.repo.forge) else {
+                    return true
+                }
                 return item.pr.author == me
             }
             .sorted { ($0.severity, $0.pr.updatedAt) > ($1.severity, $1.pr.updatedAt) }
@@ -186,24 +195,6 @@ final class AppStore {
     var selectedItem: AttentionItem? { visibleItems.first { $0.id == selection } }
 
     // MARK: - Actions
-
-    func addRepo(_ text: String) -> Bool {
-        guard let r = RepoRef(string: text), !repos.contains(r) else { return false }
-        repos.append(r)
-        Task { await refresh() }
-        return true
-    }
-
-    func removeRepo(_ r: RepoRef) {
-        repos.removeAll { $0 == r }
-        items.removeAll { $0.pr.repo == r }
-        prs.removeAll { $0.repo == r }
-        seenPRs.stopWatching(r)
-        // Warnings and errors are strings led by the repo ("owner/name: …", "owner/name#7: …").
-        let isAbout = { (line: String) in line.hasPrefix("\(r.fullName):") || line.hasPrefix("\(r.fullName)#") }
-        warnings.removeAll(where: isAbout)
-        errors.removeAll(where: isAbout)
-    }
 
     func dismiss(_ item: AttentionItem) {
         dismissed.insert(item.id)
@@ -288,6 +279,7 @@ final class AppStore {
         closedPRIDs.formIntersection(fetched.map(\.id))
         snoozed = snoozed.filter { (live.contains($0.key) || LinearPing.isPingID($0.key)) && $0.value > Date() }
         if !live.contains(selection ?? ""), selectedPing == nil { selectFirstVisible() }
+        await notifyReviewRequests(complete: errs.isEmpty)
     }
 
     private struct Fetched {
@@ -332,5 +324,27 @@ final class AppStore {
     func showMainWindow() {
         openMainWindow?()
         NSApp.activate(ignoringOtherApps: true)
+    }
+}
+
+// MARK: - Repos
+
+extension AppStore {
+    func addRepo(_ text: String) -> Bool {
+        guard let r = RepoRef(string: text), !repos.contains(r) else { return false }
+        repos.append(r)
+        Task { await refresh() }
+        return true
+    }
+
+    func removeRepo(_ r: RepoRef) {
+        repos.removeAll { $0 == r }
+        items.removeAll { $0.pr.repo == r }
+        prs.removeAll { $0.repo == r }
+        seenPRs.stopWatching(r)
+        // Warnings and errors are strings led by the repo ("owner/name: …", "owner/name#7: …").
+        let isAbout = { (line: String) in line.hasPrefix("\(r.fullName):") || line.hasPrefix("\(r.fullName)#") }
+        warnings.removeAll(where: isAbout)
+        errors.removeAll(where: isAbout)
     }
 }

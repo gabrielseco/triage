@@ -64,6 +64,11 @@ private let fixture = """
         {"state": "CHANGES_REQUESTED", "author": {"login": "bob", "__typename": "User"}},
         {"state": "APPROVED", "author": null}
       ]},
+      "reviewRequests": {"nodes": [
+        {"requestedReviewer": {"login": "gabriel"}},
+        {"requestedReviewer": {}},
+        {"requestedReviewer": null}
+      ]},
       "commits": {"nodes": [{"commit": {"oid": "abc123", "statusCheckRollup": {"contexts": {"totalCount": 4, "nodes": [
         {"__typename": "CheckRun", "name": "Tests with Coverage", "conclusion": "FAILURE", "status": "COMPLETED",
          "detailsUrl": "https://github.com/x/y/actions/runs/1/job/9", "databaseId": 9, "title": "2 failed"},
@@ -108,11 +113,14 @@ private func decodePR() throws -> PullRequest {
     #expect(pr.mergeable == .conflicting)
     #expect(pr.reviewDecision == .none)
     #expect(pr.approvedBy == ["alice"])
+    // A team request has no login, and a deleted user no reviewer: only people count.
+    #expect(pr.requestedReviewers == ["gabriel"])
 }
 
 @Test func noReviewsMeansNoApprovals() throws {
     let node = try #require(try decode(truncated).repository?.pullRequests.nodes.first)
     #expect(node.toModel(repo: repo).approvedBy.isEmpty)
+    #expect(node.toModel(repo: repo).requestedReviewers.isEmpty)
 }
 
 @Test func mapsBothCheckSystemsToOneState() throws {

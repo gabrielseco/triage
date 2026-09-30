@@ -317,7 +317,7 @@ struct MRNode: Decodable {
             authorAvatar: author?.avatarUrl.flatMap { URL(string: $0, relativeTo: hostURL)?.absoluteURL },
             isDraft: draft, createdAt: createdAt, updatedAt: updatedAt, headSha: diffHeadSha ?? "",
             headRef: sourceBranch, mergeable: mergeable, reviewDecision: reviewDecision(approvers: approvers),
-            approvedBy: approvers,
+            approvedBy: approvers, requestedReviewers: requestedReviewers,
             checks: headPipeline?.checks(hostURL) ?? [],
             threads: threads,
             comments: human.filter { !$0.0.resolvable }.flatMap { $0.1.map { $0.model(hostURL, mr: webUrl) } },
@@ -342,6 +342,14 @@ struct MRNode: Decodable {
         case "CHECKING", "UNCHECKED", "PREPARING", nil: return .unknown
         default: return .mergeable
         }
+    }
+
+    /// Reviewers who haven't reviewed yet, or were asked again since. No state at all (an older GitLab) counts as
+    /// asked: being a reviewer is the request.
+    var requestedReviewers: Set<String> {
+        let pending: Set<String?> = [nil, "UNREVIEWED", "REVIEW_STARTED"]
+        return Set(
+            reviewers?.nodes.filter { pending.contains($0.mergeRequestInteraction?.reviewState) }.map(\.username) ?? [])
     }
 
     /// A reviewer asking for changes wins, as on GitHub. "Approved" needs a real approval: with no approval
