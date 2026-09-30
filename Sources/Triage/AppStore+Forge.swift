@@ -29,16 +29,19 @@ extension AppStore {
             guard let token = await GitHubAuth.resolveToken() else { throw GitHubError.noToken }
             return GitHubForge(token: token, repos: repos)
         case .gitlab(let host):
-            if cachedGitLabToken == nil {
-                if let gitlabKeyFailure { throw gitlabKeyFailure }
-                do {
-                    cachedGitLabToken = try await GitLabAuth.token(host: host, reference: gitlabTokenRef)
-                } catch {
-                    gitlabKeyFailure = error
-                    throw error
-                }
+            if let cachedGitLabToken { return GitLabForge(host: host, token: cachedGitLabToken) }
+            if let gitlabKeyFailure { throw gitlabKeyFailure }
+            // The read can wait on Touch ID; only keep what it returns if the reference wasn't edited meanwhile.
+            let ref = gitlabTokenRef
+            let token: String?
+            do {
+                token = try await GitLabAuth.token(host: host, reference: ref)
+            } catch {
+                if ref == gitlabTokenRef { gitlabKeyFailure = error }
+                throw error
             }
-            guard let token = cachedGitLabToken else { throw GitLabError.noToken }
+            guard let token else { throw GitLabError.noToken }
+            if ref == gitlabTokenRef { cachedGitLabToken = token }
             return GitLabForge(host: host, token: token)
         }
     }

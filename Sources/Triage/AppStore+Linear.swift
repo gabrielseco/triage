@@ -65,16 +65,19 @@ extension AppStore {
     }
 
     func linearClient() async throws -> LinearClient {
-        if linear.cachedKey == nil {
-            if let failure = linear.keyFailure { throw failure }
-            do {
-                linear.cachedKey = try await LinearAuth.key(reference: linearKeyRef)
-            } catch {
-                linear.keyFailure = error
-                throw error
-            }
+        if let key = linear.cachedKey { return LinearClient(key: key) }
+        if let failure = linear.keyFailure { throw failure }
+        // The read can wait on Touch ID; only keep what it returns if the reference wasn't edited meanwhile.
+        let ref = linearKeyRef
+        let key: String?
+        do {
+            key = try await LinearAuth.key(reference: ref)
+        } catch {
+            if ref == linearKeyRef { linear.keyFailure = error }
+            throw error
         }
-        guard let key = linear.cachedKey else { throw LinearError.noKey }
+        guard let key else { throw LinearError.noKey }
+        if ref == linearKeyRef { linear.cachedKey = key }
         return LinearClient(key: key)
     }
 
