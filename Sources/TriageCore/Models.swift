@@ -166,6 +166,8 @@ public struct PullRequest: Identifiable, Hashable, Sendable {
     public var reviewDecision: ReviewDecision
     /// Logins whose latest approve-or-request-changes review is an approval.
     public var approvedBy: Set<String>
+    /// Logins asked for a review they haven't given yet. People only: GitHub team requests aren't expanded.
+    public var requestedReviewers: Set<String>
     public var checks: [CheckInfo]
     public var threads: [ReviewThreadInfo]
     public var comments: [CommentInfo]
@@ -193,7 +195,8 @@ public struct PullRequest: Identifiable, Hashable, Sendable {
         isDraft: Bool = false, createdAt: Date = .distantPast,
         updatedAt: Date = .now, headSha: String, headRef: String = "branch",
         mergeable: Mergeable = .mergeable, reviewDecision: ReviewDecision = .none,
-        approvedBy: Set<String> = [], checks: [CheckInfo] = [], threads: [ReviewThreadInfo] = [],
+        approvedBy: Set<String> = [], requestedReviewers: Set<String> = [], checks: [CheckInfo] = [],
+        threads: [ReviewThreadInfo] = [],
         comments: [CommentInfo] = [],
         summary: String? = nil, mergeMethod: MergeMethod = .merge
     ) {
@@ -211,6 +214,7 @@ public struct PullRequest: Identifiable, Hashable, Sendable {
         self.mergeable = mergeable
         self.reviewDecision = reviewDecision
         self.approvedBy = approvedBy
+        self.requestedReviewers = requestedReviewers
         self.checks = checks
         self.threads = threads
         self.comments = comments
@@ -220,11 +224,12 @@ public struct PullRequest: Identifiable, Hashable, Sendable {
 }
 
 public enum AttentionKind: String, CaseIterable, Sendable, Codable {
-    case ciFailure, mergeConflict, changesRequested, reviewThreads, botFinding, readyToMerge, awaitingChecks,
-        awaitingReview, newPR
+    case reviewRequested, ciFailure, mergeConflict, changesRequested, reviewThreads, botFinding, readyToMerge,
+        awaitingChecks, awaitingReview, newPR
 
     public var title: String {
         switch self {
+        case .reviewRequested: "Review requested"
         case .ciFailure: "CI failing"
         case .mergeConflict: "Merge conflict"
         case .changesRequested: "Changes requested"
@@ -239,6 +244,7 @@ public enum AttentionKind: String, CaseIterable, Sendable, Codable {
 
     public var symbol: String {
         switch self {
+        case .reviewRequested: "person.badge.clock.fill"
         case .ciFailure: "xmark.octagon.fill"
         case .mergeConflict: "arrow.triangle.merge"
         case .changesRequested: "hand.raised.fill"
@@ -255,7 +261,7 @@ public enum AttentionKind: String, CaseIterable, Sendable, Codable {
     public var isFixable: Bool {
         switch self {
         case .ciFailure, .mergeConflict, .changesRequested, .reviewThreads, .botFinding: true
-        case .readyToMerge, .awaitingChecks, .awaitingReview, .newPR: false
+        case .reviewRequested, .readyToMerge, .awaitingChecks, .awaitingReview, .newPR: false
         }
     }
 
@@ -264,7 +270,8 @@ public enum AttentionKind: String, CaseIterable, Sendable, Codable {
     public var isPassive: Bool {
         switch self {
         case .awaitingChecks, .awaitingReview: true
-        case .ciFailure, .mergeConflict, .changesRequested, .reviewThreads, .botFinding, .readyToMerge, .newPR:
+        case .reviewRequested, .ciFailure, .mergeConflict, .changesRequested, .reviewThreads, .botFinding,
+            .readyToMerge, .newPR:
             false
         }
     }

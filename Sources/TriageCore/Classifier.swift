@@ -29,10 +29,15 @@ public enum Classifier {
         ]
         .compactMap { $0 }
         items += botFindings(pr, open: open, noise: &stats.noiseComments)
-        if items.isEmpty, let quiet = readyToMerge(pr) ?? awaitingChecks(pr) ?? awaitingReview(pr) {
+        let request = reviewRequested(pr, viewer: viewer)
+        if items.isEmpty, request == nil, let quiet = readyToMerge(pr) ?? awaitingChecks(pr) ?? awaitingReview(pr) {
             items.append(quiet)
         }
-        if isNew, let new = newPR(pr, viewer: viewer) { items.append(new) }
+        if let request {
+            items.append(request)
+        } else if isNew, let new = newPR(pr, viewer: viewer) {
+            items.append(new)
+        }
         return (items, stats)
     }
 
@@ -143,6 +148,21 @@ public enum Classifier {
                 evidence: sorted.map(\.evidence)
             )
         }
+    }
+
+    /// Someone asked the viewer for a review they haven't given yet. It says more than "waiting for review" or
+    /// "new PR", so it takes their place. Keyed on the PR alone: a push doesn't bring back a dismissed request,
+    /// but asking again after a review does, since the item goes away in between.
+    static func reviewRequested(_ pr: PullRequest, viewer: String?) -> AttentionItem? {
+        guard let viewer, pr.author != viewer, pr.requestedReviewers.contains(viewer) else { return nil }
+        return AttentionItem(
+            id: "\(pr.id)|review-requested",
+            kind: .reviewRequested,
+            severity: .medium,
+            pr: pr,
+            headline: "\(pr.author) is waiting on your review",
+            evidence: [Evidence(title: pr.title, detail: pr.summary, url: pr.changesURL)]
+        )
     }
 
     /// Someone else opened a PR: news even when nothing is wrong with it, since otherwise it would only show up

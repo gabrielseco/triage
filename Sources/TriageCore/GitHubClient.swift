@@ -185,6 +185,7 @@ public struct GitHubClient: Sendable {
                 number title body url isDraft createdAt updatedAt mergeable reviewDecision headRefName
                 author { login __typename avatarUrl(size: 64) }
                 latestOpinionatedReviews(first: 30) { nodes { state author { login } } }
+                reviewRequests(first: 30) { nodes { requestedReviewer { ... on User { login } } } }
                 commits(last: 1) { nodes { commit { oid statusCheckRollup { contexts(first: 100) { totalCount nodes {
                   __typename
                   ... on CheckRun { name conclusion status detailsUrl databaseId title }
@@ -306,10 +307,17 @@ struct PRNode: Decodable {
         let author: ActorNode?
     }
 
+    /// A pending review request. `requestedReviewer` has no login for a team (or a bot).
+    struct ReviewRequestNode: Decodable {
+        struct Reviewer: Decodable { let login: String? }
+        let requestedReviewer: Reviewer?
+    }
+
     let number: Int, title: String, body: String?, url: URL, isDraft: Bool, createdAt: Date, updatedAt: Date
     let mergeable: String, reviewDecision: String?, headRefName: String
     let author: ActorNode?
     let latestOpinionatedReviews: Conn<ReviewNode>?
+    let reviewRequests: Conn<ReviewRequestNode>?
     let commits: Conn<CommitNode>
     let reviewThreads: CountedConn<ThreadNode>
     let comments: Conn<CommentNode>
@@ -344,6 +352,7 @@ struct PRNode: Decodable {
             reviewDecision: reviewDecision.flatMap(ReviewDecision.init(rawValue:)) ?? .none,
             approvedBy: Set(
                 latestOpinionatedReviews?.nodes.filter { $0.state == "APPROVED" }.compactMap(\.author?.login) ?? []),
+            requestedReviewers: Set(reviewRequests?.nodes.compactMap(\.requestedReviewer?.login) ?? []),
             checks: head?.statusCheckRollup?.contexts.nodes.map(\.model) ?? [],
             threads: threads,
             comments: comments.nodes.map(\.model),

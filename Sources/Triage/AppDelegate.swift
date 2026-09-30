@@ -35,8 +35,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             $0.scheme == "https" ? $0 : nil
         }
         let pingKind = (info[Notifier.linearKindKey] as? String).flatMap(LinearPing.Kind.init(rawValue:))
+        let reviewRequest = info[Notifier.reviewRequestKey] as? Bool ?? false
+        let itemID = info[Notifier.itemIDKey] as? String
         Task { @MainActor in
-            if let pingURL {
+            if reviewRequest {
+                store.filter = .kind(.reviewRequested)
+                store.selection = store.visibleItems.first { $0.id == itemID }?.id ?? store.visibleItems.first?.id
+                store.showMainWindow()
+            } else if let pingURL {
                 // A ping is answered in Linear, so the click goes straight to the comment.
                 NSWorkspace.shared.open(pingURL)
             } else if let pingKind {
@@ -75,6 +81,23 @@ enum Notifier {
     /// Where a click on a Linear notification goes: the comment for one ping, the Linear list for a summary.
     static let linearURLKey = "linearURL"
     static let linearKindKey = "linearKind"
+
+    /// Which item a click on a review-request notification selects; a summary has none and shows them all.
+    static let itemIDKey = "itemID"
+    static let reviewRequestKey = "reviewRequest"
+
+    static func send(_ alert: ReviewRequestAlert) async -> Bool {
+        guard isAvailable else { return false }
+        let content = UNMutableNotificationContent()
+        content.title = alert.title
+        content.subtitle = alert.subtitle
+        content.body = alert.body
+        content.sound = .default
+        content.threadIdentifier = "review-requests"
+        content.userInfo = [reviewRequestKey: true, itemIDKey: alert.item?.id ?? ""]
+        let req = UNNotificationRequest(identifier: "review-\(UUID().uuidString)", content: content, trigger: nil)
+        do { try await UNUserNotificationCenter.current().add(req); return true } catch { return false }
+    }
 
     static func send(_ alert: PingAlert) async -> Bool {
         guard isAvailable else { return false }

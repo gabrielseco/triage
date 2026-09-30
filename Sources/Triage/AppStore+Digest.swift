@@ -31,4 +31,22 @@ extension AppStore {
         digestBaseline = digest.trackedIDs
         lastDigestAt = now
     }
+
+    // MARK: - Review requests
+
+    /// A banner per new review request. The state is saved before sending, so a slow send can't make the next
+    /// refresh notify the same request again. With banners off it's still recorded, so turning them on doesn't
+    /// announce everything that's already waiting.
+    func notifyReviewRequests(complete: Bool) async {
+        // Without my login no request can be matched to me; that must not read as "all reviewed".
+        guard prs.allSatisfy({ viewer(for: $0.repo.forge) != nil }) else { return }
+        let open = items.filter { $0.kind == .reviewRequested }
+        let active = activeItems.filter { $0.kind == .reviewRequested }
+        let refresh = ReviewRequestAlerts.Refresh(
+            open: open, active: active, fetched: Set(prs.map(\.id)), complete: complete)
+        let (alerts, state) = ReviewRequestAlerts.plan(refresh, state: reviewRequestAlerts, now: Date())
+        if state != reviewRequestAlerts { reviewRequestAlerts = state }
+        guard notifyReviewRequests else { return }
+        for alert in alerts { _ = await Notifier.send(alert) }
+    }
 }

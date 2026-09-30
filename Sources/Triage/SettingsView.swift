@@ -95,6 +95,7 @@ struct SettingsView: View {
                         }
                     ))
                 Toggle("Weekdays only", isOn: $store.digestWeekdaysOnly)
+                Toggle("Notify as soon as my review is requested", isOn: $store.notifyReviewRequests)
                 Toggle(
                     "Open Triage at login",
                     isOn: Binding(
