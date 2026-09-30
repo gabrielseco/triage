@@ -91,6 +91,9 @@ final class AppStore {
     var notifyPings: Bool { didSet { defaults.set(notifyPings, forKey: "notifyPings") } }
     /// Which pings were notified and when, so each notifies once, even across restarts.
     var pingAlerts: PingAlertState { didSet { save(pingAlerts, "pingAlerts") } }
+    /// A banner when someone @mentions me on GitLab. On by default.
+    var notifyGitLabMentions: Bool { didSet { defaults.set(notifyGitLabMentions, forKey: "notifyGitLabMentions") } }
+    var mentionAlerts: MentionAlertState { didSet { save(mentionAlerts, "gitlabMentionAlerts") } }
     /// Per item: what the last Fix in / Copy did, shown under the buttons.
     var actionStatus: [String: String] = [:]
     /// PRs closed or merged from Triage, hidden until a refresh confirms they're gone from GitHub's open list.
@@ -148,6 +151,8 @@ final class AppStore {
         linearEnabled = UserDefaults.standard.bool(forKey: "linearEnabled")
         notifyPings = UserDefaults.standard.object(forKey: "notifyPings") as? Bool ?? true
         pingAlerts = Self.load("pingAlerts") ?? PingAlertState()
+        notifyGitLabMentions = UserDefaults.standard.object(forKey: "notifyGitLabMentions") as? Bool ?? true
+        mentionAlerts = Self.load("gitlabMentionAlerts") ?? MentionAlertState()
         digestHours = Self.load("digestHours") ?? [12, 18]
         digestWeekdaysOnly = UserDefaults.standard.object(forKey: "digestWeekdaysOnly") as? Bool ?? true
         digestBaseline = Self.load("digestBaseline")
@@ -313,6 +318,7 @@ final class AppStore {
         guard !autoRefreshStarted else { return }
         autoRefreshStarted = true
         startLinearRefresh()
+        startGitLabMentions()
         Task {
             while true {
                 await refresh()
