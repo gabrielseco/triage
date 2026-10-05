@@ -92,7 +92,7 @@ public struct LinearClient: Sendable {
                 id type category createdAt snoozedUntilAt
                 actor { name avatarUrl isMe }
                 issue {
-                  identifier title url state { type }
+                  identifier title url state { type } completedAt canceledAt
                   comments(first: 20, filter: { user: { isMe: { eq: true } } }) { nodes { createdAt } }
                 }
                 comment {
@@ -150,6 +150,9 @@ public struct LinearNotification: Decodable, Sendable, Hashable {
         let title: String
         let url: URL
         let state: State
+        /// When it was closed, so a ping after that still counts.
+        let completedAt: Date?
+        let canceledAt: Date?
         /// Only mine.
         let comments: Mine.Conn
     }
