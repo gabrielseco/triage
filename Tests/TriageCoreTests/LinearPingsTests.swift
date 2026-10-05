@@ -35,7 +35,8 @@ private func parent(byMe: Bool = false, resolved: Bool = false, myReplies: [Doub
 
 private func notification(
     id: String = "n1", category: String = "mentions", hours: Double = -1, snoozedFor: Double? = nil,
-    actorIsMe: Bool = false, issue: String = "ENG-1", state: String = "started", myIssueComments: [Double] = [],
+    actorIsMe: Bool = false, issue: String = "ENG-1", state: String = "started", closedAt: Double? = nil,
+    myIssueComments: [Double] = [],
     comment: String? = comment()
 ) -> String {
     """
@@ -43,7 +44,8 @@ private func notification(
      "createdAt": "\(at(hours))", "snoozedUntilAt": \(snoozedFor.map { "\"\(at($0))\"" } ?? "null"),
      "actor": {"name": "Alice Smith", "avatarUrl": null, "isMe": \(actorIsMe)},
      "issue": {"identifier": "\(issue)", "title": "Migrate billing", "url": "https://linear.app/acme/issue/\(issue)",
-               "state": {"type": "\(state)"}, "comments": \(mine(myIssueComments))},
+               "state": {"type": "\(state)"}, "completedAt": \(closedAt.map { "\"\(at($0))\"" } ?? "null"),
+               "canceledAt": null, "comments": \(mine(myIssueComments))},
      "comment": \(comment ?? "null")}
     """
 }
@@ -130,6 +132,13 @@ private func pings(_ nodes: String...) throws -> [LinearPing] {
     @Test(arguments: ["completed", "canceled", "duplicate"])
     func closedIssueClearsIt(state: String) throws {
         #expect(try pings(notification(state: state)).isEmpty)
+    }
+
+    @Test func pingAfterTheIssueClosedStillCounts() throws {
+        #expect(try pings(notification(state: "completed", closedAt: -2)).count == 1)
+        #expect(try pings(notification(state: "completed", closedAt: -0.5)).isEmpty)
+        // Reopened: the old close time doesn't matter.
+        #expect(try pings(notification(state: "started", closedAt: -0.5)).count == 1)
     }
 
     @Test func resolvedThreadClearsIt() throws {

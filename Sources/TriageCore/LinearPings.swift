@@ -64,7 +64,7 @@ public enum LinearPings {
         let cutoff = now.addingTimeInterval(-LinearClient.window)
         let open = notifications.filter { n in
             n.createdAt > cutoff && kind(of: n) != nil && !(n.actor?.isMe ?? false)
-                && !closedStates.contains(n.issue.state.type) && !isResolved(n)
+                && !closedBefore(n) && !isResolved(n)
                 && (n.snoozedUntilAt ?? .distantPast) <= now
         }
         let threads = Dictionary(grouping: open, by: threadID)
@@ -91,6 +91,14 @@ public enum LinearPings {
 
     /// Done, canceled or duplicate: nothing left to answer.
     static let closedStates: Set = ["completed", "canceled", "duplicate"]
+
+    /// The issue was closed after the ping, which settles it. A ping that comes after the close (someone
+    /// following up on a Done issue) is new and still waits on me. No close time: treat it as closed before.
+    static func closedBefore(_ n: LinearNotification) -> Bool {
+        guard closedStates.contains(n.issue.state.type) else { return false }
+        guard let closedAt = n.issue.completedAt ?? n.issue.canceledAt else { return true }
+        return n.createdAt <= closedAt
+    }
 
     /// Mentions always count; a reply only in a thread I started or answered in. A new top-level comment on
     /// an issue I merely follow is dropped.

@@ -26,7 +26,8 @@ the inbox once I've answered, not once I've read it.
 3. **Open until answered, not until read.** An item stays until one of these happens:
    - I comment in that thread (or on the issue, for a description mention) after the ping
    - the thread is resolved (`Comment.resolvedAt`)
-   - the issue is completed or canceled (`issue.state.type`)
+   - the issue is completed or canceled (`issue.state.type`) after the ping. A ping that arrives after the
+     close (`completedAt` / `canceledAt`), like a follow-up on a Done issue, still waits on me
    - I archive the notification in Linear (the query leaves archived ones out), or it's snoozed there
      (`snoozedUntilAt` in the future)
    - I dismiss or snooze it in Triage
@@ -116,7 +117,7 @@ The client still follows `pageInfo` (up to 10 pages) so a busy month can't push 
 ```
 notifications
   → keep IssueNotification with category mentions, or commentsAndReplies in a thread I'm in
-  → drop: older than 30 days, issue completed/canceled, thread resolved, snoozed in Linear, actor is me
+  → drop: older than 30 days, issue completed/canceled after the ping, thread resolved, snoozed in Linear, actor is me
   → group by (issue, thread root)
   → drop the group if I commented in the thread after its latest ping
   → LinearPing { id, kind: .mentioned | .threadReply, issue, author, excerpt, url, pingedAt }
@@ -209,7 +210,7 @@ restart. Only `Notifier.send` lives in the app.
 
 1. **"My" threads are threads I commented in.** Issues assigned to me or created by me don't count on their own.
 2. **A description mention is cleared** by a comment of mine on the issue, or by the issue being completed or
-   canceled.
+   canceled after it.
 3. **Pings older than 30 days are dropped**, always, not only on first run. Long enough that nothing waiting on
    me is lost over a PTO, short enough that stale pings don't pile up. On first run, pings within the 30 days
    show in the list without banners.
