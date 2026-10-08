@@ -42,8 +42,6 @@ public struct AnthropicClient: Sendable {
             withJSONObject: [
                 "model": model,
                 "max_tokens": 16000,
-                // Opus 5.5 defaults to "medium" (Opus 5 defaulted to "high"); pinned so a default change can't move it.
-                "output_config": ["effort": "medium"],
                 "fallbacks": "default",
                 "system": system,
                 "messages": [["role": "user", "content": prompt]],
