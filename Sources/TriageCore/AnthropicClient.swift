@@ -19,7 +19,7 @@ public enum AnthropicError: LocalizedError {
 
 /// Raw HTTP client for the Messages API (there's no official Swift SDK).
 public struct AnthropicClient: Sendable {
-    public static let defaultModel = "claude-opus-5"
+    public static let defaultModel = "claude-opus-5-5"
 
     let apiKey: String
     let model: String
