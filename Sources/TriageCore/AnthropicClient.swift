@@ -19,7 +19,7 @@ public enum AnthropicError: LocalizedError {
 
 /// Raw HTTP client for the Messages API (there's no official Swift SDK).
 public struct AnthropicClient: Sendable {
-    public static let defaultModel = "claude-opus-5"
+    public static let defaultModel = "claude-opus-5-5"
 
     let apiKey: String
     let model: String
@@ -42,6 +42,8 @@ public struct AnthropicClient: Sendable {
             withJSONObject: [
                 "model": model,
                 "max_tokens": 16000,
+                // Opus 5.5 defaults to "medium" (Opus 5 defaulted to "high"); pinned so a default change can't move it.
+                "output_config": ["effort": "medium"],
                 "fallbacks": "default",
                 "system": system,
                 "messages": [["role": "user", "content": prompt]],
