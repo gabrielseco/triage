@@ -2,6 +2,8 @@ import Foundation
 import Observation
 import TriageCore
 
+enum RuleScope { case thread, project, repository }
+
 @MainActor @Observable
 final class ThreadStore {
     var projects: [WorkbenchProject] = []
@@ -12,6 +14,8 @@ final class ThreadStore {
     var isCreating = false
     var isLoading = true
     var model = ""
+    /// Preset chosen in the creation sheet; nil follows the project.
+    var threadPreset: PermissionPreset?
     var permissions: [UUID: [WorkbenchPermission]] = [:]
     var streamingText: [UUID: String] = [:]
     var rawOutput: [UUID: String] = [:]
@@ -79,7 +83,7 @@ final class ThreadStore {
         do {
             let title = String((prompt.split(separator: "\n").first.map(String.init) ?? prompt).prefix(100))
             let thread = try await WorkbenchWorktree.create(
-                project: project, title: title, model: model.isEmpty ? nil : model)
+                project: project, title: title, model: model.isEmpty ? nil : model, preset: threadPreset)
             threads.insert(thread, at: 0)
             selection = thread.id
             await send(prompt, to: thread.id)
@@ -95,7 +99,8 @@ final class ThreadStore {
         threads[index].state = .queued
         streamingText[id] = ""
         persist()
-        do { try await supervisor.submit(threads[index], prompt: prompt) } catch {
+        let policy = policy(for: threads[index])
+        do { try await supervisor.submit(threads[index], prompt: prompt, policy: policy) } catch {
             if let current = threads.firstIndex(where: { $0.id == id }) {
                 threads[current].state = .failed
                 threads[current].messages.append(.init(kind: .error, text: error.localizedDescription))
@@ -106,9 +111,72 @@ final class ThreadStore {
 
     func stop(_ id: UUID) async { await supervisor.stop(id) }
 
-    func answer(_ permission: WorkbenchPermission, in id: UUID, allow: Bool) async {
+    func answer(_ permission: WorkbenchPermission, in id: UUID, allow: Bool, remember: RuleScope? = nil) async {
+        if allow, let remember { await rememberRules(for: permission, in: id, scope: remember) }
         do { try await supervisor.answer(permission, threadID: id, allow: allow) } catch {
             self.error = error.localizedDescription
+        }
+    }
+
+    /// The rules "Always allow" would add for this request, nil when it has to keep asking.
+    func rulesToRemember(for permission: WorkbenchPermission, in id: UUID) -> [String]? {
+        guard let thread = threads.first(where: { $0.id == id }) else { return nil }
+        return policy(for: thread).rulesToRemember(tool: permission.tool, input: permission.input)
+    }
+
+    func setPreset(_ preset: PermissionPreset, for projectID: UUID) {
+        guard let index = projects.firstIndex(where: { $0.id == projectID }) else { return }
+        projects[index].preset = preset
+        persist()
+        Task { await refreshPolicies(projectID: projectID) }
+    }
+
+    func removeRule(_ rule: String, from projectID: UUID) {
+        guard let index = projects.firstIndex(where: { $0.id == projectID }) else { return }
+        projects[index].rules.removeAll { $0 == rule }
+        persist()
+        Task { await refreshPolicies(projectID: projectID) }
+    }
+
+    func removeRule(_ rule: String, fromThread id: UUID) {
+        guard let index = threads.firstIndex(where: { $0.id == id }) else { return }
+        threads[index].rules.removeAll { $0 == rule }
+        persist()
+        Task { await supervisor.setPolicy(policy(for: threads[index]), for: id) }
+    }
+
+    private func policy(for thread: WorkbenchThread) -> PermissionPolicy {
+        thread.policy(in: projects.first { $0.id == thread.projectID })
+    }
+
+    private func refreshPolicies(projectID: UUID) async {
+        for thread in threads where thread.projectID == projectID {
+            await supervisor.setPolicy(policy(for: thread), for: thread.id)
+        }
+    }
+
+    private func rememberRules(for permission: WorkbenchPermission, in id: UUID, scope: RuleScope) async {
+        guard let rules = rulesToRemember(for: permission, in: id),
+            let thread = threads.first(where: { $0.id == id })
+        else { return }
+        switch scope {
+        case .thread:
+            if let index = threads.firstIndex(where: { $0.id == id }) {
+                threads[index].rules += rules.filter { !threads[index].rules.contains($0) }
+            }
+        case .project, .repository:
+            guard let index = projects.firstIndex(where: { $0.id == thread.projectID }) else { return }
+            projects[index].rules += rules.filter { !projects[index].rules.contains($0) }
+        }
+        persist()
+        await refreshPolicies(projectID: thread.projectID)
+        if scope == .repository, let project = projects.first(where: { $0.id == thread.projectID }) {
+            let path = project.path
+            do {
+                try await Task.detached { try RepoPermissionSettings.add(rules: rules, toProjectAt: path) }.value
+            } catch {
+                self.error = "Saved in Triage, but not in the repository settings: \(error.localizedDescription)"
+            }
         }
     }
 

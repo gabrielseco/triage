@@ -20,6 +20,58 @@ permissions. **Allow once** replies with the original tool input; **Deny** rejec
 Project permission rules remain effective. Unsupported host control requests receive an error response.
 The host never enables permission bypass. **Raw output** shows a bounded tail for diagnostics.
 
+## Permission policy
+
+Before a request becomes a prompt, `PermissionPolicy` (`TriageCore`) decides whether it can run without
+asking. The CLI has already applied the repository's own `.claude/settings*.json` rules, so only requests
+those rules leave open reach the policy.
+
+**Presets** are set per project (the shield button in the sidebar or thread header) and can be overridden
+when a thread is created. New projects start on **Read-only auto**.
+
+| Preset | Runs without asking |
+| --- | --- |
+| Ask | Nothing, apart from stored rules |
+| Read-only auto | `Read`, `Grep`, `Glob`; `ls`, `cat`, `rg`, `find` (without `-exec`/`-delete`), `git status/diff/log/show…`, `gh pr/issue/run view/list…` |
+| Workflow auto | The above, the commands in the shell code blocks of the worktree's `AGENTS.md`, `swift build/test`, and local `git add/commit/fetch/switch/merge/rebase` |
+
+**Rules** are what **Always allow** stores: `Bash(swift test:*)` for a command prefix, or the tool name
+(`Edit`). A Bash rule is never a bare `Bash`; an interpreter needs its script (`python3 scripts/x.py`), and
+`git -c …` or `python3 -c …` can't be remembered. Rules apply under every preset, scoped to the thread or the
+project. **In this project and its repository settings** also adds the rule to the project checkout's
+`.claude/settings.local.json` (`permissions.allow`), keeping existing content and key order. A file that isn't
+the expected JSON is left unchanged and the error is shown; the rule still applies in Triage. With CLI
+2.1.296 the rule also took effect in a thread's linked worktree: the CLI did not ask for a command that rule
+covers. Rules can be removed from the same sheet; that doesn't edit `settings.local.json`, which the CLI
+also reads, so remove the entry there as well to revoke it completely.
+
+**Guardrails** always ask, whatever the preset or a stored rule. They are written from what a program can
+do rather than from a list of bad spellings:
+
+- Programs that run other programs or can't be reasoned about never run unattended: shells and shell
+  keywords, wrappers (`env`, `xargs`, `time`, `timeout`, `nice`, `command`), `sudo`, `curl`, `ssh`, `rm`,
+  `sed`, `awk`, `cd`, `tee`, `open`, `npx`, and the run/exec subcommands of `uv`, `npm`, `pnpm`, `yarn`.
+- Options are matched together with their unique abbreviations and clusters (`--har` is `--hard`, `-fu`
+  is `-f -u`). `git` asks for force and delete variants, `reset --hard`, `clean`, `rm`, `config` writes,
+  `submodule`, `bisect`, `rebase -i`, and anything that runs a program (`--exec`, `--upload-pack`, `-c`);
+  `gh` asks for `api`, `alias`, `extension`, merges, deletions and `auth` other than `status`. Force
+  refspecs and `--force` on `fetch`/`pull`, and `git checkout <path>`, ask. Options that follow symlinks
+  (`find -L`, `grep -R`, `rg --follow`, `ls -L`) or write (`sort -o`, `tree -o`) ask.
+- A path outside the thread's worktree prompts, including `..`, `~user`, a symlink pointing out, and a
+  `Glob`/`glob` pattern that names files outside it. An unquoted shell glob (`cat *`) prompts, since it
+  expands to entries the policy can't see; a quoted pattern (`find -name '*.swift'`) is fine.
+- Commands are split on `&&`, `||`, `;`, `|` and newlines and every part must be allowed. Substitution
+  (`$()`, backticks, `$VAR`), brace expansion, subshells, background jobs, here-documents, redirects other
+  than `2>&1`/`/dev/null`, comments and assignment prefixes are not interpreted: the command prompts.
+- **Always allow** only stores a rule for a vetted program (a subcommand tool such as `git` or `swift`, an
+  interpreter with its script, a script path in the worktree, or a plain inspection tool such as `ls`
+  or `rg`). Anything else can be allowed once. A stored rule covers the verb shown (`gh pr comment`, not
+  `gh pr`) and is checked against the same guardrails when it matches.
+- Commands that publish or act on GitHub (`git push`, `gh pr create`, `gh pr comment`) are never taken
+  from `AGENTS.md` for Workflow auto; allow them once or with Always allow.
+
+Auto-approved calls appear in the thread as `Auto-allowed: Bash \`git status\` (Read-only auto)`.
+
 **Stop** cancels queued work or interrupts a live turn and closes its process, with a bounded termination
 fallback. Closing a window keeps runs alive. Quitting stops processes and saves metadata. After restart,
 unfinished threads appear interrupted; send a message with **Resume** to continue. Work is not

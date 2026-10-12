@@ -20,6 +20,7 @@ public actor ThreadSupervisor {
     private let logDirectory: URL
     private var queue: [(WorkbenchThread, String)] = []
     private var live: [UUID: Run] = [:]
+    private var policies: [UUID: PermissionPolicy] = [:]
     private var shuttingDown = false
     private var shutdownWaiters: [CheckedContinuation<Void, Never>] = []
 
@@ -50,10 +51,19 @@ public actor ThreadSupervisor {
         self.logDirectory = logDirectory
     }
 
-    public func submit(_ thread: WorkbenchThread, prompt: String) async throws {
+    /// Replaces what runs without asking for a thread, effective for the next tool request.
+    public func setPolicy(_ policy: PermissionPolicy, for id: UUID) {
+        guard live[id] != nil || queue.contains(where: { $0.0.id == id }) else { return }
+        policies[id] = policy
+    }
+
+    public func submit(
+        _ thread: WorkbenchThread, prompt: String, policy: PermissionPolicy = PermissionPolicy()
+    ) async throws {
         guard !shuttingDown else { throw WorkbenchError("The thread engine is shutting down.") }
         guard !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         guard !queue.contains(where: { $0.0.id == thread.id }) else { throw WorkbenchError("This thread is queued.") }
+        policies[thread.id] = policy
         if var run = live[thread.id], !run.terminating {
             guard !run.busy, let session = run.session else { throw WorkbenchError("This thread is already running.") }
             run.busy = true
@@ -226,6 +236,7 @@ extension ThreadSupervisor {
 
     private func release(_ id: UUID) {
         live.removeValue(forKey: id)
+        policies.removeValue(forKey: id)
         if live.isEmpty {
             let waiters = shutdownWaiters
             shutdownWaiters.removeAll()
@@ -308,6 +319,12 @@ extension ThreadSupervisor {
         let permission = WorkbenchPermission(
             id: request, tool: tool, input: frame["request"]["input"],
             description: frame["request"]["description"].text ?? "Allow this tool call?")
+        if case .allow(let reason) = (policies[id] ?? PermissionPolicy()).decide(tool: tool, input: permission.input) {
+            try await session.send(ClaudeStream.answer(permission, allow: true))
+            let summary = PermissionPolicy.summary(tool: tool, input: permission.input)
+            output.yield(.message(id, .init(kind: .step, text: "Auto-allowed: \(summary) (\(reason))")))
+            return
+        }
         live[id]?.permissions[request] = permission
         output.yield(.permission(id, permission))
         output.yield(.state(id, .waitingPermission))

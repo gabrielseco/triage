@@ -4,11 +4,28 @@ public struct WorkbenchProject: Codable, Equatable, Identifiable, Sendable {
     public let id: UUID
     public var name: String
     public let path: String
+    /// What runs without asking in this project's threads; a thread can override it.
+    public var preset: PermissionPreset
+    /// "Always allow" rules shared by every thread in the project, in Claude Code's `Tool(pattern)` form.
+    public var rules: [String]
 
-    public init(id: UUID = UUID(), name: String, path: String) {
+    public init(
+        id: UUID = UUID(), name: String, path: String, preset: PermissionPreset = .default, rules: [String] = []
+    ) {
         self.id = id
         self.name = name
         self.path = path
+        self.preset = preset
+        self.rules = rules
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(UUID.self, forKey: .id)
+        name = try values.decode(String.self, forKey: .name)
+        path = try values.decode(String.self, forKey: .path)
+        preset = try values.decodeIfPresent(PermissionPreset.self, forKey: .preset) ?? .default
+        rules = try values.decodeIfPresent([String].self, forKey: .rules) ?? []
     }
 }
 
@@ -53,11 +70,16 @@ public struct WorkbenchThread: Codable, Equatable, Identifiable, Sendable {
     public var hasSession: Bool
     public let model: String?
     public var messages: [WorkbenchMessage]
+    /// Overrides the project's preset for this thread when set.
+    public var preset: PermissionPreset?
+    /// "Always allow" rules that apply to this thread only.
+    public var rules: [String]
 
     public init(
         id: UUID = UUID(), projectID: UUID, sessionID: UUID = UUID(), title: String,
         worktree: String, branch: String, state: WorkbenchState = .idle, hasSession: Bool = false,
-        messages: [WorkbenchMessage] = [], model: String? = nil
+        messages: [WorkbenchMessage] = [], model: String? = nil, preset: PermissionPreset? = nil,
+        rules: [String] = []
     ) {
         self.id = id
         self.projectID = projectID
@@ -69,6 +91,30 @@ public struct WorkbenchThread: Codable, Equatable, Identifiable, Sendable {
         self.hasSession = hasSession
         self.model = model
         self.messages = messages
+        self.preset = preset
+        self.rules = rules
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(UUID.self, forKey: .id)
+        projectID = try values.decode(UUID.self, forKey: .projectID)
+        sessionID = try values.decode(UUID.self, forKey: .sessionID)
+        title = try values.decode(String.self, forKey: .title)
+        worktree = try values.decode(String.self, forKey: .worktree)
+        branch = try values.decode(String.self, forKey: .branch)
+        state = try values.decode(WorkbenchState.self, forKey: .state)
+        hasSession = try values.decode(Bool.self, forKey: .hasSession)
+        model = try values.decodeIfPresent(String.self, forKey: .model)
+        messages = try values.decode([WorkbenchMessage].self, forKey: .messages)
+        preset = try values.decodeIfPresent(PermissionPreset.self, forKey: .preset)
+        rules = try values.decodeIfPresent([String].self, forKey: .rules) ?? []
+    }
+
+    /// The policy this thread runs under: its own preset if set, else the project's, plus both rule sets.
+    public func policy(in project: WorkbenchProject?) -> PermissionPolicy {
+        .make(
+            preset: preset ?? project?.preset ?? .default, rules: (project?.rules ?? []) + rules, worktree: worktree)
     }
 }
 
@@ -103,7 +149,8 @@ public enum WorkbenchWorktree {
     }
 
     public static func create(
-        project: WorkbenchProject, id: UUID = UUID(), title: String = "New thread", model: String? = nil
+        project: WorkbenchProject, id: UUID = UUID(), title: String = "New thread", model: String? = nil,
+        preset: PermissionPreset? = nil
     ) async throws -> WorkbenchThread {
         let root = URL(fileURLWithPath: project.path)
         let slug = "workbench-" + id.uuidString.lowercased()
@@ -122,7 +169,8 @@ public enum WorkbenchWorktree {
         }
         _ = try await git(root.path, ["worktree", "add", "-b", slug, worktree.path, base])
         return WorkbenchThread(
-            id: id, projectID: project.id, title: title, worktree: worktree.path, branch: slug, model: model)
+            id: id, projectID: project.id, title: title, worktree: worktree.path, branch: slug, model: model,
+            preset: preset)
     }
 
     private static func git(_ path: String, _ arguments: [String]) async throws -> String {

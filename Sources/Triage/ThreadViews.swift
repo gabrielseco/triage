@@ -5,18 +5,32 @@ import TriageCore
 struct ThreadsView: View {
     @Environment(ThreadStore.self) private var store
     @State private var showingNewThread = false
+    @State private var permissionsProjectID: UUID?
 
     var body: some View {
         @Bindable var store = store
         NavigationSplitView {
             List(selection: $store.selection) {
                 ForEach(store.projects) { project in
-                    Section(project.name) {
+                    Section {
                         ForEach(store.threads.filter { $0.projectID == project.id }) { thread in
                             ThreadRow(thread: thread, project: project).tag(thread.id)
                         }
                         if !store.threads.contains(where: { $0.projectID == project.id }) {
                             Text("No threads yet").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                    } header: {
+                        HStack {
+                            Text(project.name)
+                            Spacer()
+                            Button {
+                                permissionsProjectID = project.id
+                            } label: {
+                                Image(systemName: "checkmark.shield")
+                            }
+                            .buttonStyle(.plain)
+                            .help("\(project.preset.title): choose what runs without asking")
+                            .accessibilityLabel("Permissions for \(project.name)")
                         }
                     }
                 }
@@ -68,6 +82,12 @@ struct ThreadsView: View {
         }
         .sheet(isPresented: $showingNewThread) {
             NewThreadSheet().environment(store)
+        }
+        .sheet(
+            isPresented: Binding(
+                get: { permissionsProjectID != nil }, set: { if !$0 { permissionsProjectID = nil } })
+        ) {
+            if let id = permissionsProjectID { ProjectPermissionsSheet(projectID: id).environment(store) }
         }
     }
 }
@@ -124,6 +144,11 @@ struct NewThreadSheet: View {
                 Text("Sonnet").tag("sonnet")
                 Text("Opus").tag("opus")
             }
+            Picker("Permissions", selection: $store.threadPreset) {
+                Text("Project default").tag(nil as PermissionPreset?)
+                ForEach(PermissionPreset.allCases) { Text($0.title).tag(Optional($0)) }
+            }
+            .help("What runs without asking in this thread")
             if let error = store.error { Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled) }
             HStack {
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction).disabled(store.isCreating)
@@ -155,6 +180,7 @@ struct ThreadDetailView: View {
     let thread: WorkbenchThread
     @State private var prompt = ""
     @State private var showingRaw = false
+    @State private var showingPermissions = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -196,6 +222,9 @@ struct ThreadDetailView: View {
             composer
         }
         .padding(20)
+        .sheet(isPresented: $showingPermissions) {
+            ProjectPermissionsSheet(projectID: thread.projectID, threadID: thread.id).environment(store)
+        }
     }
 
     private var header: some View {
@@ -205,6 +234,12 @@ struct ThreadDetailView: View {
                 Label(thread.state.title, systemImage: thread.state.symbol).font(.callout).foregroundStyle(
                     thread.state.color)
                 Spacer()
+                Button {
+                    showingPermissions = true
+                } label: {
+                    Label("Permissions", systemImage: "checkmark.shield")
+                }
+                .help("Choose what runs without asking, and review saved rules")
                 Toggle("Raw output", isOn: $showingRaw).toggleStyle(.button).help("Show the thread's diagnostic output")
                     .onChange(of: showingRaw) { _, shown in if shown { Task { await store.loadRaw(thread.id) } } }
                 if thread.state.isBusy {
@@ -265,34 +300,6 @@ struct ThreadMessageView: View {
         case .assistant: "Claude"
         case .step: "Activity"
         case .error: "Error"
-        }
-    }
-}
-
-struct ThreadPermissionView: View {
-    @Environment(ThreadStore.self) private var store
-    let permission: WorkbenchPermission
-    let threadID: UUID
-
-    var body: some View {
-        GroupBox {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(
-                    permission.description.isEmpty ? "Claude wants to use \(permission.tool)." : permission.description
-                ).font(.callout)
-                Text(permission.tool).font(.caption.monospaced()).foregroundStyle(.secondary)
-                ScrollView([.horizontal, .vertical]) {
-                    Text(permission.input.formatted).font(.caption.monospaced()).textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }.frame(maxHeight: 140)
-                HStack {
-                    Button("Deny") { Task { await store.answer(permission, in: threadID, allow: false) } }
-                    Spacer()
-                    Button("Allow once") { Task { await store.answer(permission, in: threadID, allow: true) } }
-                }
-            }.frame(maxWidth: .infinity, alignment: .leading)
-        } label: {
-            Label("Permission needed", systemImage: "hand.raised")
         }
     }
 }
