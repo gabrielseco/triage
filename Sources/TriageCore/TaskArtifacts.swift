@@ -61,18 +61,50 @@ public struct TaskScreenshotManifest: Codable, Equatable, Sendable {
 /// Version 1 review findings, stored as reviews/<source>.json.
 public struct TaskReview: Codable, Equatable, Sendable {
     public enum Severity: String, Codable, Sendable { case blocking, warning, suggestion }
+    public enum Status: String, Codable, Sendable { case complete }
+
+    public struct Provenance: Codable, Equatable, Sendable {
+        public let schemaVersion: Int
+        public let taskID: String
+        public let source: String
+        public let branch: String
+        public let baseCommit: String
+        public let tree: String
+        public let goalSHA256: String
+        public let goalManifestSHA256: String
+        public let headCommit: String?
+
+        public init(
+            taskID: String, source: String, branch: String, baseCommit: String, tree: String,
+            goalSHA256: String, goalManifestSHA256: String, headCommit: String? = nil
+        ) {
+            schemaVersion = 1
+            self.taskID = taskID
+            self.source = source
+            self.branch = branch
+            self.baseCommit = baseCommit
+            self.tree = tree
+            self.goalSHA256 = goalSHA256
+            self.goalManifestSHA256 = goalManifestSHA256
+            self.headCommit = headCommit
+        }
+    }
 
     public struct Finding: Codable, Equatable, Sendable {
         public let severity: Severity
         public let message: String
         public let file: String?
         public let line: Int?
+        public let evidence: [String]?
 
-        public init(severity: Severity, message: String, file: String? = nil, line: Int? = nil) {
+        public init(
+            severity: Severity, message: String, file: String? = nil, line: Int? = nil, evidence: [String]? = nil
+        ) {
             self.severity = severity
             self.message = message
             self.file = file
             self.line = line
+            self.evidence = evidence
         }
     }
 
@@ -80,12 +112,18 @@ public struct TaskReview: Codable, Equatable, Sendable {
     public let taskID: String
     public let source: String
     public let findings: [Finding]
+    public let status: Status?
+    public let provenance: Provenance?
 
-    public init(taskID: String, source: String, findings: [Finding]) {
+    public init(
+        taskID: String, source: String, findings: [Finding], status: Status? = nil, provenance: Provenance? = nil
+    ) {
         schemaVersion = 1
         self.taskID = taskID
         self.source = source
         self.findings = findings
+        self.status = status
+        self.provenance = provenance
     }
 }
 
@@ -113,6 +151,7 @@ public enum TaskArtifactError: Error, Equatable, Sendable {
     case unsupportedVersion(Int)
     case invalidTaskID(String)
     case taskMismatch(expected: String, actual: String)
+    case reviewSourceMismatch(expected: String, actual: String)
     case unsafeScreenshotPath(String)
     case invalidTimestamp(String)
     case invalidUTF8
@@ -143,7 +182,19 @@ public enum TaskArtifactReader {
     }
 
     public static func decodeReview(_ data: Data, expectedTaskID: String) throws -> TaskReview {
-        try decode(TaskReview.self, data: data, expectedTaskID: expectedTaskID)
+        let review = try decode(TaskReview.self, data: data, expectedTaskID: expectedTaskID)
+        if let provenance = review.provenance {
+            guard provenance.schemaVersion == 1 else {
+                throw TaskArtifactError.unsupportedVersion(provenance.schemaVersion)
+            }
+            guard provenance.taskID == review.taskID else {
+                throw TaskArtifactError.taskMismatch(expected: review.taskID, actual: provenance.taskID)
+            }
+            guard provenance.source == review.source else {
+                throw TaskArtifactError.reviewSourceMismatch(expected: review.source, actual: provenance.source)
+            }
+        }
+        return review
     }
 
     public static func decodeEvents(_ data: Data, expectedTaskID: String) throws -> [TaskEvent] {

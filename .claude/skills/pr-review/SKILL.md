@@ -1,7 +1,7 @@
 ---
 name: pr-review
 description: Thoroughly review a GitHub pull request on this repo as a senior macOS/Swift engineer — Swift 6 strict concurrency and actor isolation, TriageCore/app layering, blocking Process calls off the main actor, secret handling (Keychain, 1Password, key helpers), shell/AppleScript injection in the handoff path, sticky item-id semantics in the Classifier, UserDefaults persistence, and bundle-only APIs (notifications, SMAppService) — not just generic Swift best practices. Use when the user asks to "review this PR", "review PR #N", pastes a GitHub PR URL and asks for feedback, or asks "what do you think of this PR". For reviewing local staged/uncommitted changes before a commit, defer to the general /code-review skill instead.
-allowed-tools: Bash(git:*), Bash(gh:*), Bash(scripts/check.sh:*), Bash(swift:*), Bash(swiftlint:*), Read, Grep, Glob
+allowed-tools: Bash(git:*), Bash(gh:*), Bash(scripts/check.sh:*), Bash(swift:*), Bash(swiftlint:*), Bash(python3 scripts/task-review.py:*), Read, Grep, Glob
 ---
 
 # PR Review
@@ -15,7 +15,7 @@ checklist.
 ## Step 1 — Load context
 
 - Resolve the PR number from the user's message, or from the current branch if unspecified:
-  `gh pr view --json number,title,body,headRefName,baseRefName,statusCheckRollup`
+  `gh pr view --json number,title,body,headRefName,baseRefName,headRefOid,baseRefOid,statusCheckRollup`
 - `gh pr diff <number>` for the diff.
 - For each changed file, read it in full (`git show origin/<branch>:<path>` or `Read` on a checkout of
   the branch) — hunks alone hide the isolation context (is the enclosing type `@MainActor`? is this
@@ -25,6 +25,22 @@ checklist.
   failed, report why first. If CI hasn't run and the
   branch is checked out locally, run `scripts/check.sh` yourself — don't review what the compiler
   would already reject.
+
+### Capture task review context
+
+When reviewing a task, read [Review producer](../../../docs/artifacts/README.md#review-producer).
+Use the supplied task slug, or the single `goal.json` matching the reviewed branch in its implementation
+worktree. Do not invent a task for a standalone review; without one, retain the GitHub-only workflow.
+Stage the implementation before requesting review; the reviewer must not stage unrelated user changes.
+Before inspecting the diff, capture source `pr-review` with the PR's exact base and head commit IDs:
+
+```bash
+python3 scripts/task-review.py snapshot <slug> pr-review --base <baseRefOid> --head <headRefOid>
+```
+
+Read the generated `review-inputs/pr-review.json` and keep that provenance for this pass. If the local
+staged tree differs from the PR head, review the correct worktree before publishing an artifact. Never
+capture new provenance at the end to make an old review look current.
 
 ## Step 2 — Read the rules
 
@@ -189,9 +205,26 @@ For a large diff, run these as parallel `fork` subagents:
 
 ## Step 5 — Report findings
 
-Use the `ReportFindings` tool with verified findings ranked most-severe first (empty array if the diff
-is clean; don't manufacture issues). Each finding needs a concrete failure scenario (inputs/state →
+Use the `ReportFindings` tool when available; otherwise report findings in the chat. Rank verified
+findings most-severe first (empty array if the diff is clean; don't manufacture issues). Each finding needs a concrete failure scenario (inputs/state →
 wrong output, hang, crash, or leaked secret), not just a description of the deviation.
+
+### Publish the completed review
+
+For a task review, write `.claude/tasks/<slug>/review-results/pr-review.json` with the same findings,
+`status: "complete"`, and the original snapshot as `provenance`, then publish it:
+
+```bash
+python3 scripts/task-review.py record <slug> pr-review \
+  --input .claude/tasks/<slug>/review-results/pr-review.json
+```
+
+Use `blocking` for correctness, concurrency, security or data-loss issues; `warning` for actionable
+nonblocking findings; `suggestion` for optional improvements and nits. Keep the concrete failure scenario,
+repo-relative file/line and observed evidence. A clean completed review writes `findings: []`.
+If the review is incomplete or publication fails, report the gap and fix it before calling the review
+complete. Do not publish an empty artifact to stand in for a skipped or failed review. Local publication
+and GitHub posting are separate results: report a posting failure and retry without claiming it posted.
 
 ## Step 6 — Post the review on the PR
 
@@ -205,4 +238,4 @@ Always post; don't ask first. The review belongs on the PR, where the author and
 - Format with [conventional comments](https://conventionalcomments.org/): `issue (blocking):` for
   correctness, concurrency, security or data-loss risks, `suggestion:` otherwise, `nitpick:` for
   style, `praise:` when something is done well.
-- Suffix every comment with `[by Claude]`.
+- Suffix every comment with `[by Claude]` or `[by Codex]`, matching the agent that performed the review.

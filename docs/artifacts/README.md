@@ -23,7 +23,8 @@ session UUID. Multi-repo work stores artifacts in the primary repo's worktree.
 
 Task outputs are gitignored. `goal.md` remains human-readable Markdown and is not parsed in v1.
 `goal.json` supplies the machine-readable goal; the helper renders both and rejects mismatches.
-Independent goal verification now produces verdicts; review and event producers are subsequent work.
+Independent goal verification produces verdicts, and completed PR/design reviews produce review files.
+Event producers are subsequent work.
 The [examples](examples) are illustrative documents, not claims that verification has run.
 The example screenshot manifest references an image a producer would create; images are not fixtures.
 
@@ -42,7 +43,7 @@ Readers run away from the main actor; their file reads are synchronous.
 | `goal.json` | `branch`, `baseCommit`, `request`, `criteria`: array of `{text, proof}`, `outOfScope`: string array, `status` | `approvedGoalSHA256`, `changesAfterApproval`: string array |
 | `verdict.json` | `verdict` (`pass` or `fail`), `criteria`: array of `{text, pass, evidence: [String]}` | None |
 | `shots.json` | `screenshots`: array of `{path, caption}` | Each screenshot: `appearance` (`light` or `dark`), `criterion` |
-| `reviews/<source>.json` | `source`, `findings`: array of `{severity, message}` | Each finding: `file`, `line` |
+| `reviews/<source>.json` | `source`, `findings`: array of `{severity, message}` | `status`, `provenance`; each finding: `file`, `line`, `evidence` |
 | `events.jsonl` | Per line: `id` (UUID), `timestamp` (ISO 8601), `kind`, `payload` (string-to-string object) | None |
 
 ## Goal verification and delivery
@@ -83,6 +84,75 @@ Review severity is `blocking`, `warning`, or `suggestion`. An empty findings arr
 ran and found nothing; an absent review file means it has not run. Review file/line fields are evidence
 labels, not instructions to open arbitrary paths.
 
+## Review producer
+
+The shared PR and design review skills publish `.claude/tasks/<taskID>/reviews/<source>.json`
+when a task is present. Standalone reviews without a task retain their existing GitHub workflow.
+Both skills continue to post findings or a no-findings comment on the PR. Local artifact publication
+does not establish that posting succeeded; report any posting error separately.
+
+Before reviewing, stage the implementation and capture the review's code and goal context:
+
+```bash
+python3 scripts/task-review.py snapshot <taskID> pr-review --base <baseRefOid> --head <headRefOid>
+```
+
+Use source `design-review` for design checks. Load the PR's exact commit IDs with
+`gh pr view <n> --json baseRefOid,headRefOid`; before a PR exists, use its intended base and omit `--head`.
+Run in the task's implementation worktree. Snapshot requires an approved goal, no unstaged edits or
+nonignored untracked files, and a staged tree matching `--head` when supplied. A reviewer must not
+stage unrelated user edits to satisfy this requirement.
+
+The snapshot is written to `review-inputs/<source>.json`, outside the completed-review directory.
+It contains the v1 envelope, `source`, `branch`, `baseCommit`, `tree`, both goal hashes and optional
+`headCommit`. Copy that entire object as `provenance` into the review result before inspecting the code.
+Do not resnapshot at the end to hide intervening changes.
+
+Write the reviewer's result in the ignored task directory, for example `review-results/pr-review.json`:
+
+```json
+{
+  "schemaVersion": 1,
+  "taskID": "task-slug",
+  "source": "pr-review",
+  "status": "complete",
+  "provenance": {},
+  "findings": [
+    {
+      "severity": "blocking",
+      "message": "Concrete input and failure observed by the reviewer",
+      "file": "Sources/TriageCore/Example.swift",
+      "line": 12,
+      "evidence": ["Observed command result, screenshot path or design rule"]
+    }
+  ]
+}
+```
+
+Replace `provenance` with the complete captured object. `file`, `line` and `evidence` are optional;
+file paths must be repo-relative without traversal, and a positive integer line requires a file.
+Evidence is an array of nonempty strings. Design grades map Blocking → `blocking`, Polish → `warning`,
+Nit → `suggestion`. Retain the visual problem, cited rule and inspected screenshot in the evidence.
+Register inspected design PNGs with `task-shot.py` before cleanup and use their task-relative paths.
+
+A completed clean review writes `findings: []`. A skipped design review or an inspection lacking required
+evidence does not publish a completed artifact. The helper does not perform the review or infer findings.
+
+```bash
+python3 scripts/task-review.py record <taskID> pr-review \
+  --input .claude/tasks/<taskID>/review-results/pr-review.json
+```
+
+Publication validates the v1 findings, completion status and captured provenance against the current
+tree, goal and branch. Invalid, incomplete or stale input leaves any previous completed file intact.
+Valid input atomically replaces the latest result for that source and preserves additional JSON metadata.
+Review the same task/source sequentially. Older results can remain after code changes, so consumers
+must compare provenance to the current goal/tree before presenting them as current.
+
+TriageCore reads optional completion/provenance and finding evidence, while accepting earlier v1 fixtures
+without those additions. Producers require them. Consumers must not infer a current clean review from
+a file's existence alone or treat a missing artifact as a review that passed.
+
 Screenshot paths are task-relative, beneath `shots/`; absolute paths, traversal, backslashes and
 percent-encoded paths are rejected. Consumers must also resolve symlinks and check containment before
 opening images; the decoder validates the path text, not the filesystem. Captions describe what was
@@ -119,5 +189,5 @@ that image bytes can be decoded before publishing them, and preserves the origin
 - The screenshot producer publishes a manifest accepted by TriageCore and preserves prior entries.
 - `/verify` instructions publish inspected task screenshots without depending on the Workbench UI.
 
-Next: adopt verdict/review/event producers, then validate the installed CLI control protocol before
+Next: adopt event producers, then validate the installed CLI control protocol before
 building the streaming engine.
