@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# All clients share the same goal-verification gate for branch delivery.
+set -euo pipefail
+repo="$(git rev-parse --show-toplevel)"
+branch=""
+needs_check=false
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [[ "$local_sha" =~ ^0+$ ]] && continue  # branch deletion has no code to verify
+  [[ "$remote_ref" == refs/heads/* ]] || continue
+  if [[ -z "$branch" ]]; then
+    branch="$(git symbolic-ref --quiet --short HEAD)" || {
+      echo "Blocked: branch delivery requires a named branch and verified goal." >&2
+      exit 1
+    }
+  fi
+  if [[ "$local_ref" != "refs/heads/$branch" && "$local_ref" != HEAD ]]; then
+    echo "Blocked: push each branch from its own worktree after goal verification." >&2
+    exit 1
+  fi
+  if [[ "$(git rev-parse "$local_sha^{tree}")" != "$(git write-tree)" ]]; then
+    echo "Blocked: the pushed commit differs from the staged tree being verified." >&2
+    exit 1
+  fi
+  needs_check=true
+done
+if $needs_check; then
+  python3 "$repo/scripts/task-goal.py" check
+fi
