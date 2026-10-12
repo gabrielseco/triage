@@ -7,18 +7,6 @@ import UserNotifications
 final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     /// Owned here rather than by a view so refresh + digests keep running with the window closed.
     let store = AppStore()
-    let threads = ThreadStore()
-    private var isTerminating = false
-
-    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard !isTerminating else { return .terminateLater }
-        isTerminating = true
-        Task {
-            await threads.shutdown()
-            sender.reply(toApplicationShouldTerminate: true)
-        }
-        return .terminateLater
-    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if Notifier.isAvailable {

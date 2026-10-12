@@ -1,7 +1,7 @@
 ---
 name: verify
 description: Run a PR's build of Triage.app and check on screen that the change does what the PR says — build the worktree into a throwaway bundle, swap it in for the installed app, drive it, screenshot the Triage window, compare against the PR's claims, then restore the installed app. Use for any PR that touches the app target (Sources/Triage, Resources) before opening or merging it, or when the user asks to "verify", "try it in the app", "check it works" or "get screenshots". Pure TriageCore changes are verified by their tests instead.
-allowed-tools: Bash(scripts/bundle.sh:*), Bash(scripts/snap.sh:*), Bash(python3 scripts/task-shot.py:*), Bash(TRIAGE_APP=*), Bash(open:*), Bash(pkill:*), Bash(pgrep:*), Bash(swift scripts/ax.swift:*), Bash(sips:*), Bash(gh:*), Bash(git:*), Bash(rm:*), Read
+allowed-tools: Bash(scripts/bundle.sh:*), Bash(scripts/snap.sh:*), Bash(TRIAGE_APP=*), Bash(open:*), Bash(pkill:*), Bash(pgrep:*), Bash(swift scripts/ax.swift:*), Bash(sips:*), Bash(gh:*), Bash(git:*), Bash(rm:*), Read
 ---
 
 # Verify
@@ -73,24 +73,6 @@ Accessibility without moving the mouse.
 **Side effects: this is the user's real account.** Never click Close PR, anything that posts to GitHub, or
 Explain (costs API credits) unless the PR is about that button and the user says OK. Dismiss and Snooze
 only change local state. If you use them, undo them before finishing.
-
-### Publish task screenshots
-
-When this work has a task ID (the slug in `.claude/tasks/<slug>/goal.md`), register every inspected PNG
-before removing the scratch build. Run from the primary repo's worktree, or pass `--task-root` pointing
-at its `.claude/tasks` directory. Use the existing task ID; do not invent another ID just for verification.
-
-```bash
-python3 scripts/task-shot.py <slug> <scratchpad>/verify/inbox-light.png \
-  "Inbox after refresh" --appearance light --criterion "Inbox remains usable"
-```
-
-Repeat for each screenshot, including before/after and dark-mode captures, using distinct filenames.
-The helper copies PNGs into `.claude/tasks/<slug>/shots/` and atomically updates `shots.json` with relative
-paths and captions. Re-registering a filename replaces its image and metadata. Run captures for the same
-task sequentially. An error is a verification output failure: report it and fix it before declaring the task
-done. Tasks without a goal retain the existing scratchpad-only workflow. Movies stay in the scratchpad.
-See [the v1 artifact contract](../../../docs/artifacts/README.md) for the manifest format.
 
 ## Step 5: Restore, always, even if a step failed
 

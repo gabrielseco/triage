@@ -5,7 +5,6 @@ import TriageCore
 @main
 struct TriageApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
-    @Environment(\.openWindow) private var openWindow
 
     init() {
         // Running from `swift run` there's no bundle; make it a normal foreground app with a Dock icon.
@@ -27,15 +26,8 @@ struct TriageApp: App {
             CommandGroup(after: .toolbar) {
                 Button("Refresh") { Task { await delegate.store.refresh() } }
                     .keyboardShortcut("r")
-                Button("Threads") { openWindow(id: "threads") }
             }
             CommandMenu("Pull Request") { PullRequestMenu().environment(delegate.store) }
-        }
-
-        Window("Threads", id: "threads") {
-            ThreadsView()
-                .environment(delegate.threads)
-                .frame(minWidth: 1000, minHeight: 600)
         }
 
         MenuBarExtra {
