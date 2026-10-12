@@ -4,7 +4,7 @@ import Testing
 
 @testable import TriageCore
 
-@Suite(.timeLimit(.minutes(1)))
+@Suite(.serialized, .timeLimit(.minutes(1)))
 struct ThreadSupervisorTests {
     @Test func streamsRepeatedTurnsInOneProcessAndWritesRawLog() async throws {
         let fixture = try SupervisorFixture()

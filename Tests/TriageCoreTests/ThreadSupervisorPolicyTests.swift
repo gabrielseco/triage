@@ -3,8 +3,9 @@ import Testing
 
 @testable import TriageCore
 
-@Suite(.timeLimit(.minutes(1)))
-struct ThreadSupervisorPolicyTests {
+// Same suite as the engine tests so every scripted-CLI session runs serialized: on a small CI runner
+// concurrent sessions starve each other of threads and the waits time out.
+extension ThreadSupervisorTests {
     @Test func policyAnswersAllowedCallsWithoutPrompting() async throws {
         let fixture = try SupervisorFixture()
         let thread = fixture.thread()
