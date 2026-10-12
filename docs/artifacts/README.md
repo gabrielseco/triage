@@ -1,7 +1,8 @@
 # Task artifacts, version 1
 
 Workbench phase 0 gives CLI work a machine-readable output without parsing agent prose.
-This PR defines readers and a screenshot producer; thread execution and UI come later.
+Readers and goal, screenshot, review and lifecycle producers support CLI workflows; thread execution
+and UI come later.
 
 ## Identity and layout
 
@@ -24,7 +25,7 @@ session UUID. Multi-repo work stores artifacts in the primary repo's worktree.
 Task outputs are gitignored. `goal.md` remains human-readable Markdown and is not parsed in v1.
 `goal.json` supplies the machine-readable goal; the helper renders both and rejects mismatches.
 Independent goal verification produces verdicts, and completed PR/design reviews produce review files.
-Event producers are subsequent work.
+The lifecycle observer records observed GitHub PR and Actions events.
 The [examples](examples) are illustrative documents, not claims that verification has run.
 The example screenshot manifest references an image a producer would create; images are not fixtures.
 
@@ -165,6 +166,50 @@ an incomplete or malformed record fails the read and can be retried after the wr
 Their payloads carry `repo` and `url`; `ci.completed` also carries `status`. Producers should not
 put tokens, credentials, or raw environment dumps in artifacts.
 
+## Event producer
+
+Both clients follow the shared `AGENTS.md` workflow and run `scripts/task-event.py` from the task's
+implementation worktree after successful remote actions. This is an explicit observer, rather than a
+parser of shell commands or agent prose. The Git and Claude delivery gates remain unchanged.
+
+```bash
+python3 scripts/task-event.py pr-created <taskID> --pr <number> --head <fullCommitID>
+python3 scripts/task-event.py ci-completed <taskID> --pr <number> --head <fullCommitID> --run <runID>
+python3 scripts/task-event.py pr-merged <taskID> --pr <number> --head <fullCommitID>
+```
+
+The observer uses authenticated, read-only `gh` queries. It checks the approved goal, task branch,
+origin repository, PR and requested revision. Register creation after pushing and opening the PR;
+CI and merge observations use that task's existing PR identity. Retain the task worktree after merge
+until its event has been recorded. Running from the main checkout would target a different local task.
+External merges can be observed later from the retained worktree without merging again.
+
+Each event carries string values in its payload:
+
+| Kind | Remote evidence |
+| --- | --- |
+| `pr.created` | Repository, PR URL and number, head revision and branch |
+| `ci.completed` | Repository, run URL, PR number, head revision, run ID and attempt, actual conclusion |
+| `pr.merged` | Repository, PR URL and number, head revision and merge commit |
+
+CI events describe individual completed GitHub Actions runs. Pending runs produce no event. Unknown
+conclusions or mismatched identities are errors. When GitHub omits a PR-association list, a push or PR
+run must still match the repository, task branch and exact current PR revision. Failures and cancellations retain their
+actual conclusion. A successful run is not proof that all required CI passed; the existing merge
+workflow still checks CI and review findings. External status checks and continuous background polling
+are outside this producer's scope.
+
+Retries use stable UUIDs based on remote lifecycle identity. The creation event retains the revision
+observed on first attachment; it does not reconstruct earlier PR revisions. Later pushes do not rewrite
+it. New run attempts and revisions remain distinguishable.
+Concurrent writers share a task-local lock and append complete newline-terminated records. Existing
+records are validated before appending; malformed or incomplete history must be investigated rather
+than silently repaired. Symlinked task, log and lock paths are rejected.
+
+If the remote action succeeded but publication failed, report both outcomes separately and rerun the
+observer. Authentication, missing evidence or corrupt-history errors leave existing history intact.
+Missing event files mean no lifecycle evidence has been recorded, not that a remote action failed.
+
 ## Screenshot producer
 
 After capturing and inspecting a PNG with `/verify`:
@@ -189,5 +234,5 @@ that image bytes can be decoded before publishing them, and preserves the origin
 - The screenshot producer publishes a manifest accepted by TriageCore and preserves prior entries.
 - `/verify` instructions publish inspected task screenshots without depending on the Workbench UI.
 
-Next: adopt event producers, then validate the installed CLI control protocol before
-building the streaming engine.
+Next: check artifact compatibility in other projects and validate the installed CLI control protocol
+before building the streaming engine.
