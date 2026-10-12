@@ -5,3 +5,7 @@ xcuserdata/
 .DS_Store
 # Claude Code worktrees (CLAUDE.md: every change happens in one)
 .claude/worktrees/
+
+# Local agent task outputs (goals, screenshots, reviews and event logs)
+.claude/tasks/
+__pycache__/
