@@ -21,7 +21,8 @@ python3 scripts/task-goal.py snapshot <slug>
 
 This records `verification-input.json` with the approved goal hashes, branch, comparison base and staged
 Git tree. Pass its absolute path, the goal directory, this skill's absolute path and the worktree to an
-independent agent. The author must not supply the verdict or conclusions. Use the model/delegation rules
+independent agent. Also pass the green CI run ID for this commit if there is one, and the tree of the
+previous verdict if this is a re-verification. The author must not supply the verdict or conclusions. Use the model/delegation rules
 from `AGENTS.md`; do not inherit implementation claims as evidence.
 
 If an independent agent is unavailable, report verification as unavailable. Do not self-certify PASS.
@@ -45,6 +46,38 @@ For each criterion, cite observed proof: test result, command result, file and l
 Do not trust ticked checkboxes or the author's summary. An unmet or unverified criterion has `pass: false`.
 Also check unmet parts of the request, unexpected changes, scope exclusions, and weakened criteria.
 Missing evidence or unresolved concerns require an overall `fail`.
+
+### Stopping rule
+
+Verification answers "is each approved criterion met?", not "is this code flawless?". It is bounded:
+
+- **Fail only on a reproduced violation of a criterion's literal text**, or on missing, unexpected or weakened
+  work. Show the input and the observed result. A hunch, a theoretical bypass you could not reproduce, or an
+  edge case the criterion does not name is not a failure.
+- **`concerns` holds only unresolved violations.** Everything else (accepted risks, hardening ideas,
+  polish) goes in your chat report to the caller, who puts it in the PR description or a follow-up. If the
+  same observation was already reported and accepted in an earlier round, do not re-raise it.
+- **Probe each criterion once, proportionally.** For an adversarial criterion (for example "guardrails
+  always prompt"), try the named patterns and a short list of the obvious variants, then stop. Do not search
+  open-endedly for new bypass classes.
+- **On a re-verification, start from the delta.** Read what changed since the last PASS or FAIL
+  (`git diff <previous tree> <staged tree>`). Re-check the criteria that delta can affect, and confirm
+  the others by spot check. A delta that touches only tests or docs cannot break a production criterion
+  unless a test was removed or weakened, so check exactly that.
+
+### Test evidence
+
+Do not rebuild and re-run the whole suite by default. Prefer, in order:
+
+1. **A green CI run for this exact commit.** The caller may pass an Actions run ID. Confirm with
+   `gh run view <id> --json conclusion,headSha` that it succeeded and that `headSha` is the staged commit
+   (or that the tree is identical), then cite the run as the proof for "checks pass" criteria.
+2. **The author's recorded `scripts/check.sh` result** for the staged tree, when no PR or run exists yet.
+3. **A targeted local run** (`swift test --filter <suite>`) only for a criterion whose proof names a test
+   you need to see fail or pass, or when neither of the above is available.
+
+Run the full `scripts/check.sh` yourself only when the criterion is "check.sh passes" and no green run or
+recorded result covers the staged tree.
 
 Write a result in the v1 verdict format, with every criterion in the goal's order and exact text:
 
