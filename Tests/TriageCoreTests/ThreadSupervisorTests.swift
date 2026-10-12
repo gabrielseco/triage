@@ -15,7 +15,11 @@ private actor ThreadUpdates {
             if predicate(values) { return values }
             try await Task.sleep(for: .milliseconds(10))
         }
-        throw WorkbenchError("Timed out waiting for scripted thread updates")
+        let diagnostics = values.compactMap { update -> String? in
+            if case .message(_, let message) = update, message.kind == .error { return message.text }
+            return nil
+        }.joined(separator: "\n")
+        throw WorkbenchError("Timed out waiting for scripted thread updates: \(diagnostics)")
     }
 }
 
@@ -44,9 +48,12 @@ private struct SupervisorFixture {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let script = directory.appendingPathComponent("scripted backend.py")
         try Data(Self.script.utf8).write(to: script)
+        var environment = ProcessInfo.processInfo.environment
+        environment["FIXTURE_VALUE"] = "forwarded"
+        environment["PYTHONUTF8"] = "1"
         supervisor = ThreadSupervisor(
             limit: limit, executable: "/usr/bin/python3", prefix: [script.path],
-            environment: ["FIXTURE_VALUE": "forwarded"], logDirectory: directory.appendingPathComponent("logs"))
+            environment: environment, logDirectory: directory.appendingPathComponent("logs"))
         let updates = ThreadUpdates()
         self.updates = updates
         let stream = supervisor.events
