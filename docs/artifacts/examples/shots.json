@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "taskID": "workbench-artifacts",
+  "screenshots": [
+    {
+      "path": "shots/inbox-light.png",
+      "caption": "Inbox after refresh",
+      "appearance": "light",
+      "criterion": "Inbox remains usable"
+    }
+  ]
+}
