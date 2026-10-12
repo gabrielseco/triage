@@ -3,7 +3,6 @@ import TriageCore
 
 struct ContentView: View {
     @Environment(AppStore.self) private var store
-    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         @Bindable var store = store
@@ -33,12 +32,6 @@ struct ContentView: View {
         .navigationSubtitle(store.summaryLine)
         .toolbar {
             ToolbarItemGroup {
-                Button {
-                    openWindow(id: "threads")
-                } label: {
-                    Label("Threads", systemImage: "text.bubble")
-                }
-                .help("Open coding threads")
                 Toggle(isOn: $store.onlyMine) {
                     Label(
                         store.onlyMine ? "Mine" : "Everyone's", systemImage: store.onlyMine ? "person.fill" : "person.2"

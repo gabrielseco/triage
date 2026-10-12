@@ -1,7 +1,7 @@
 ---
 name: design-review
 description: Review how a PR's UI looks from a product designer's point of view — hierarchy, alignment and spacing, typography, color and contrast in light and dark mode, truncation at the minimum window size, empty/loading/error states, and fit with native macOS conventions — checked against docs/DESIGN.md and Apple's HIG. Builds the PR into a throwaway bundle (the /verify mechanics), captures a matrix of states, pairs the screenshots with a static pass over the SwiftUI diff, and posts graded findings on the PR. Use after /verify for any PR that changes something visible in the app, or when the user asks for a "design review", "does this look good", "check the design" or "polish pass".
-allowed-tools: Bash(scripts/bundle.sh:*), Bash(scripts/snap.sh:*), Bash(TRIAGE_APP=*), Bash(open:*), Bash(pkill:*), Bash(pgrep:*), Bash(swift scripts/ax.swift:*), Bash(osascript:*), Bash(sips:*), Bash(gh:*), Bash(git:*), Bash(grep:*), Bash(rm:*), Bash(python3 scripts/task-review.py:*), Bash(python3 scripts/task-shot.py:*), Read, Grep
+allowed-tools: Bash(scripts/bundle.sh:*), Bash(scripts/snap.sh:*), Bash(TRIAGE_APP=*), Bash(open:*), Bash(pkill:*), Bash(pgrep:*), Bash(swift scripts/ax.swift:*), Bash(osascript:*), Bash(sips:*), Bash(gh:*), Bash(git:*), Bash(grep:*), Bash(rm:*), Read, Grep
 ---
 
 # Design review
@@ -16,27 +16,13 @@ full matrix.
 ## Step 1: Scope
 
 Read `docs/DESIGN.md`, then the PR (`gh pr view <n> --json title,body,files`, `gh pr diff <n>`). Before the
-PR exists (right after `/verify` while building), use `git diff origin/main --cached` after staging the implementation. List:
+PR exists (right after `/verify` while building), use the worktree's `git diff origin/main...` instead. List:
 
 - **Surfaces touched:** sidebar, inbox rows / PR header, item detail, toolbar, Settings, menu bar, notifications.
 - **States each one can be in:** the normal case plus whichever of these the diff can affect: empty, loading,
   error, long text (long PR title, long repo name, long author), many items, selected, hover, disabled.
 
-If the diff has nothing visible, say so and stop; do not publish an empty design artifact for a skipped review.
-
-For a task review, read [Review producer](../../../docs/artifacts/README.md#review-producer) and use the
-supplied slug or the single branch-matching `goal.json` in the implementation worktree. Without a task,
-retain the existing report/post workflow. Before inspecting or capturing the implementation, capture
-source `design-review` against the PR's exact base/head IDs (load them with `gh pr view --json
-baseRefOid,headRefOid`); before the PR exists, omit `--head` and use its intended base:
-
-```bash
-python3 scripts/task-review.py snapshot <slug> design-review --base <baseRefOid> --head <headRefOid>
-```
-
-Keep the original `review-inputs/design-review.json` as this pass's provenance. The author stages the
-implementation first; the reviewer does not stage unrelated user edits. Snapshot errors must be resolved
-before publishing a completed artifact.
+If the diff has nothing visible, say so and stop.
 
 ## Step 2: Static pass over the diff
 
@@ -86,10 +72,6 @@ For each surface and state from Step 1:
   steps) so the report can put them side by side.
 
 Read every capture (use `sips -Z 1600` on a copy first). Look at it. Don't assume it rendered.
-For task reviews, register inspected PNGs before cleanup using `python3 scripts/task-shot.py <slug>
-<capture.png> "<caption>" --appearance <light|dark>`. Keep distinct filenames for states, sizes and before/after.
-Reference their task-relative `shots/...` paths in finding evidence. Screenshot publication failures are
-review output failures to resolve, not proof that the UI passed.
 
 ## Step 4: Review like a designer
 
@@ -121,24 +103,6 @@ Grade each finding:
 Each finding: what's wrong, the screenshot, the rule it breaks (DESIGN.md section or HIG), and the SwiftUI fix at
 `file:line`. Say what works well too, in a line: it tells the author what to keep.
 
-### Publish the completed review
-
-For a task review, write `.claude/tasks/<slug>/review-results/design-review.json` with `status: "complete"`,
-the original snapshot as `provenance`, and the same findings and evidence that you report below.
-Map Blocking → `blocking`, Polish → `warning`, Nit → `suggestion`; keep screenshot paths, the cited design
-rule and the concrete visual problem in `evidence` and `message`. Include repo-relative `file` and `line`
-when a finding points to code. Use `findings: []` only after the required review has actually completed.
-
-```bash
-python3 scripts/task-review.py record <slug> design-review \
-  --input .claude/tasks/<slug>/review-results/design-review.json
-```
-
-If required evidence cannot be inspected, report the review as incomplete and leave the completed
-artifact unpublished. Static findings can still be reported with the inspection gaps. If publication
-fails, resolve it before claiming completion. GitHub posting remains required once the PR exists;
-report and retry a posting failure separately rather than claiming that local publication posted it.
-
 ## Step 5: Report and post
 
 - In the chat: verdict (**looks good** / **polish needed** / **blocking issues**), findings by grade, and the list
@@ -146,9 +110,9 @@ report and retry a posting failure separately rather than claiming that local pu
 - On the PR, once it exists (before that, the chat report is enough): one review, posted the way `/pr-review`
   does (`gh api repos/<owner>/<repo>/pulls/<n>/reviews --input <json>`, `"event": "COMMENT"`, head `commit_id`,
   `comments[]` of `{path, line, side: "RIGHT", body}`). The body carries the verdict. Label each comment
-  `issue (blocking, design):`, `suggestion (design):` or `nitpick (design):` and end it with `[by Claude]` or `[by Codex]`, matching the reviewer.
+  `issue (blocking, design):`, `suggestion (design):` or `nitpick (design):` and end it with `[by Claude]`.
   Findings that don't point at a line go in the body. With nothing to report, post a short
-  `gh pr review <n> --comment --body "Design review: no findings [by <agent>]"` (replace `<agent>` with `Claude` or `Codex`).
+  `gh pr review <n> --comment --body "Design review: no findings [by Claude]"`.
 - Blocking findings get fixed on the branch before the PR is marked ready, then run this again. Polish is fixed
   unless the user says otherwise.
 - If a finding shows DESIGN.md is wrong or silent (a new pattern the PR introduces on purpose), propose the
