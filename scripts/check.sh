@@ -22,7 +22,7 @@ swift build -Xswiftc -warnings-as-errors
 echo "→ test + coverage (TriageCore, minimum in scripts/coverage.sh)"
 scripts/coverage.sh
 
-echo "→ task screenshot producer tests"
+echo "→ task artifact tooling tests"
 python3 -B -m unittest discover -s scripts/tests -p 'test_*.py'
 
 echo "✓ all checks passed"

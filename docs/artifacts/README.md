@@ -12,6 +12,8 @@ session UUID. Multi-repo work stores artifacts in the primary repo's worktree.
 ```text
 .claude/tasks/<taskID>/
   goal.md
+  goal.json
+  verification-input.json
   verdict.json
   shots.json
   shots/*.png
@@ -20,7 +22,8 @@ session UUID. Multi-repo work stores artifacts in the primary repo's worktree.
 ```
 
 Task outputs are gitignored. `goal.md` remains human-readable Markdown and is not parsed in v1.
-The verifier, review skills and hooks will adopt their respective JSON outputs in subsequent PRs.
+`goal.json` supplies the machine-readable goal; the helper renders both and rejects mismatches.
+Independent goal verification now produces verdicts; review and event producers are subsequent work.
 The [examples](examples) are illustrative documents, not claims that verification has run.
 The example screenshot manifest references an image a producer would create; images are not fixtures.
 
@@ -36,10 +39,45 @@ Readers run away from the main actor; their file reads are synchronous.
 
 | File | Required fields after the envelope | Optional fields |
 | --- | --- | --- |
+| `goal.json` | `branch`, `baseCommit`, `request`, `criteria`: array of `{text, proof}`, `outOfScope`: string array, `status` | `approvedGoalSHA256`, `changesAfterApproval`: string array |
 | `verdict.json` | `verdict` (`pass` or `fail`), `criteria`: array of `{text, pass, evidence: [String]}` | None |
 | `shots.json` | `screenshots`: array of `{path, caption}` | Each screenshot: `appearance` (`light` or `dark`), `criterion` |
 | `reviews/<source>.json` | `source`, `findings`: array of `{severity, message}` | Each finding: `file`, `line` |
 | `events.jsonl` | Per line: `id` (UUID), `timestamp` (ISO 8601), `kind`, `payload` (string-to-string object) | None |
+
+## Goal verification and delivery
+
+Use the shared [goal skill](../../.claude/skills/goal/SKILL.md) before substantive work and
+[verify-goal skill](../../.claude/skills/verify-goal/SKILL.md) before committing. Codex discovers the same
+files through relative `.agents/skills` symlinks. Approval already given for the task remains valid;
+record it explicitly rather than asking again. A helper cannot decide whether approval was given.
+
+`scripts/task-goal.py` creates and approves goals, snapshots staged changes, and records independently
+produced verdicts. `revise` archives prior goal/verification files under `history/<UUID>`, logs the reason,
+and revokes approval; revised criteria require authorized approval and a new independent review.
+
+`verification-input.json` contains `schemaVersion`, `taskID`, `branch`, `baseCommit`, `tree`,
+`goalSHA256`, and `goalManifestSHA256`. The independent verifier copies it into the verdict's
+`provenance` field. Additional verdict fields `missing`, `unexpected`, and `concerns` are string arrays.
+These are optional to generic v1 artifact readers, which still read core verdict fields. Delivery checks
+require matching provenance, exact criterion coverage, nonempty evidence for every passing criterion,
+all criteria passed, and no unresolved issues. The verifier evaluates evidence; the helper validates its
+shape and freshness, not the truth of arbitrary text or the identity of its author.
+
+The gate checks the staged Git tree and both goal hashes, so committing the verified tree remains valid.
+Unstaged edits, nonignored untracked files, changed staged code, goal changes, or a branch change block
+delivery. Stage all delivery files after checks and before taking the snapshot. Without an explicit slug,
+`check` requires exactly one local task matching the current branch; ambiguity fails closed.
+Task outputs belong to the implementation worktree, not a sibling checkout.
+
+Enable Git hooks with `git config core.hooksPath .githooks` (the repo already uses this for post-merge).
+The pre-push hook checks branch deliveries from their own worktrees and refuses a pushed tree that
+differs from the staged tree. Tag pushes and branch deletions are outside this code-delivery gate.
+Claude's Bash hook checks ordinary `gh pr create` commands, including literal `cd` paths and environment
+prefixes. It is a workflow guardrail, not a shell interpreter or security boundary: aliases, scripts and
+dynamically constructed commands must explicitly run `python3 scripts/task-goal.py check` too.
+Codex and other clients share the Git hook and instruction file and must run the same check before
+PR creation. Neither hook grants approval, runs an agent or manufactures a verdict.
 
 Review severity is `blocking`, `warning`, or `suggestion`. An empty findings array means the review
 ran and found nothing; an absent review file means it has not run. Review file/line fields are evidence
