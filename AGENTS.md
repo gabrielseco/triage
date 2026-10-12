@@ -33,11 +33,13 @@ Do this without being asked:
    Git's pre-push hook enforces this when `.githooks` is enabled; Claude's PR-creation hook checks it too.
    Other clients must run the same check explicitly before PR creation. Write the PR with `.github/pull_request_template.md` (Summary, Why, collapsed What changed, Screenshots,
    Related Resources, Testing). Tick only the Testing boxes you actually ran.
+   After creation succeeds, record `pr.created` with the lifecycle observer below.
 6. **Run `/pr-review` on the PR** (and `/design-review` if the change is visible) and post the result on the PR
    itself: inline comments per finding, or a short "no findings" comment. Fix the findings on the branch, push,
    and run `/pr-review` again.
 7. **Merge only when the user asks**, and then only with CI green and no blocking findings, using a merge commit
    (`gh pr merge --merge`). After merging, say what other open PRs now need a rebase.
+   Record observed CI completions and the confirmed merge from the task worktree before cleanup.
 8. **After merging, update the main checkout.** Run `git pull` on `main` in the main checkout (not a worktree). The
    `post-merge` hook (`.githooks/`, enabled with `git config core.hooksPath .githooks`) rebuilds and restarts
    `~/Applications/Triage.app` when the app changed. Report the notification or `~/Library/Logs/Triage/rebuild.log`.
@@ -47,6 +49,25 @@ Do this without being asked:
 - Logic goes in `TriageCore` (pure, tested). The `Triage` app target is SwiftUI, persistence and OS integration, and has no tests.
 - Blocking work (processes, AppleScript) goes through `TriageCore/Subprocess`, never on the main actor.
 - The user never works with fork PRs, so skip fork-only edge cases.
+
+## Task lifecycle events
+
+Claude and Codex use the same observer after successful GitHub actions, from the task's implementation
+worktree. Keep the task worktree until its merge has been recorded, including when the user merges on
+GitHub. Use the full PR head commit and the actual Actions run ID:
+
+```bash
+python3 scripts/task-event.py pr-created <slug> --pr <number> --head <headCommit>
+python3 scripts/task-event.py ci-completed <slug> --pr <number> --head <headCommit> --run <runID>
+python3 scripts/task-event.py pr-merged <slug> --pr <number> --head <headCommit>
+```
+
+Record each completed Actions run observed while checking CI, including failures and cancellations.
+The observer reads GitHub state; it does not create a PR, run CI, merge, or authorize those actions.
+Pending runs produce no completed event. A recorded successful run does not replace checking all
+required CI and review findings before merging. If GitHub succeeded but local recording failed, report
+that separately and retry the observer; retries preserve history without duplicate events. See
+[the event producer contract](docs/artifacts/README.md#event-producer) for identity and recovery rules.
 
 ## Shared skills
 
