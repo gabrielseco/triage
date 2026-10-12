@@ -10,7 +10,7 @@ private actor ThreadUpdates {
     func snapshot() -> [WorkbenchUpdate] { values }
 
     func wait(_ predicate: @Sendable ([WorkbenchUpdate]) -> Bool) async throws -> [WorkbenchUpdate] {
-        let deadline = Date().addingTimeInterval(5)
+        let deadline = Date().addingTimeInterval(30)  // cold python3 start on CI
         while Date() < deadline {
             if predicate(values) { return values }
             try await Task.sleep(for: .milliseconds(10))
@@ -19,7 +19,7 @@ private actor ThreadUpdates {
             if case .message(_, let message) = update, message.kind == .error { return message.text }
             return nil
         }.joined(separator: "\n")
-        throw WorkbenchError("Timed out waiting for scripted thread updates: \(diagnostics)")
+        throw WorkbenchError("Timed out (\(values.count) updates received) waiting for thread updates: \(diagnostics)")
     }
 }
 
