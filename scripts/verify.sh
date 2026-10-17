@@ -22,6 +22,12 @@ while IFS= read -r name; do
   [[ -n "$name" ]] && names+=("$name")
 done < <(sed -nE 's/^[[:space:]-]*proof:[[:space:]]*screenshot:[[:space:]]*([^[:space:]]+)[[:space:]]*$/\1/p' "$WORKBENCH_GOAL")
 
+# `workbench doctor` runs this with a stub goal that names nothing; exiting 0 there proves nothing, so it gets one capture
+# and exercises the build, the launch and the permissions.
+if [[ ${#names[@]} -eq 0 && "${WORKBENCH_THREAD:-}" == "doctor" ]]; then
+  names=(doctor)
+fi
+
 if [[ ${#names[@]} -eq 0 ]]; then
   echo "No 'proof: screenshot:' lines in $WORKBENCH_GOAL, nothing to capture."
   exit 0
