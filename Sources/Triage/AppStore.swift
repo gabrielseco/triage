@@ -191,6 +191,8 @@ final class AppStore {
         switch filter {
         case .all: inboxItems
         case .kind(.awaitingReview): activeItems.filter { $0.kind == .awaitingReview }.sortedByCreation()
+        case .kind(.botFinding):
+            activeItems.filter { $0.kind == .botFinding }.sortedAsBotFindings(viewer: viewer(for:))
         case .kind(let k): activeItems.filter { $0.kind == k }
         case .repo(let r): activeItems.filter { $0.pr.repo.id == r }
         case .lastDigest: activeItems.filter { lastDigestItemIDs.contains($0.id) }
