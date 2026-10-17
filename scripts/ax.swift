@@ -1,6 +1,7 @@
 // Drive Triage's main window through the Accessibility API. The terminal needs Accessibility permission. Used by /verify.
 //   swift scripts/ax.swift                  list what's on screen: role <tab> label
 //   swift scripts/ax.swift press "Dismiss"  press the first button, or select the first row, whose label starts with that
+//   swift scripts/ax.swift resize 1440 900  set the main window's size in points (scripts/verify.sh)
 //   TRIAGE_PID=<pid> swift scripts/ax.swift ...  drive that process, not the installed app (scripts/verify.sh)
 import AppKit
 import ApplicationServices
@@ -46,6 +47,11 @@ func walk(_ element: AXUIElement, into found: inout [Found]) {
 
 // TRIAGE_PID drives that one process, whatever its bundle id: scripts/verify.sh's throwaway build has its own id and
 // runs next to the installed app, which this must never press buttons in. Without it, the installed app, as before.
+// resize is for the verify build only, so it has no installed-app fallback.
+if CommandLine.arguments.dropFirst().first == "resize", ProcessInfo.processInfo.environment["TRIAGE_PID"] == nil {
+    FileHandle.standardError.write(Data("resize needs TRIAGE_PID: it never resizes the installed app\n".utf8))
+    exit(1)
+}
 let app: NSRunningApplication
 if let raw = ProcessInfo.processInfo.environment["TRIAGE_PID"] {
     guard let pid = Int32(raw), let byPID = NSRunningApplication(processIdentifier: pid) else {
@@ -95,6 +101,20 @@ if args.first == "press", let target = args.dropFirst().first {
         exit(1)
     }
     print("pressed \(hit.role) \(hit.label)")
+} else if args.first == "resize" {
+    let sizes = args.dropFirst().compactMap { Int($0) }.filter { $0 > 0 }
+    guard args.count == 3, sizes.count == 2 else {
+        FileHandle.standardError.write(Data("resize needs two positive integers: <width> <height>\n".utf8))
+        exit(1)
+    }
+    var size = CGSize(width: sizes[0], height: sizes[1])
+    guard let value = AXValueCreate(.cgSize, &size) else { exit(1) }
+    let result = AXUIElementSetAttributeValue(window, kAXSizeAttribute as CFString, value)
+    guard result == .success else {
+        FileHandle.standardError.write(Data("resize failed (\(result.rawValue))\n".utf8))
+        exit(1)
+    }
+    print("resized to \(sizes[0])x\(sizes[1])")
 } else {
     for item in found {
         print("\(item.role)\t\(item.label.replacingOccurrences(of: "\n", with: " ").prefix(100))")

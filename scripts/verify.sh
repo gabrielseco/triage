@@ -6,6 +6,10 @@
 #   WORKBENCH_PROOF_DIR  absolute, empty directory for the PNGs (required)
 #   WORKBENCH_GOAL       path of the goal file (required)
 #   VERIFY_SETTLE_SECONDS  wait after the window appears, for the first refresh (default 15)
+#   VERIFY_GITLAB=1     also copy gitlabHost, so GitLab shows; the build then asks for the GitLab token in the Keychain
+#   VERIFY_WINDOW_SIZE  <width>x<height> in points the window is set to before any capture (default 1440x900). The
+#                       window opens near the app's minimum, which cuts the sidebar. Needs Accessibility; without it
+#                       the capture is at the launch size, with a note.
 # A screenshot named <name> is taken after the steps in scripts/verify-steps/<name>.steps, if that file exists: one
 # step per line, `press <label>` (scripts/ax.swift, on this build only) or `wait <seconds>`. A name with no steps file
 # captures the window as it is. Steps run in the order the goal names the screenshots, each from the state the last left.
@@ -16,6 +20,9 @@ set -euo pipefail
 : "${WORKBENCH_GOAL:?WORKBENCH_GOAL is not set}"
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+WINDOW_SIZE="${VERIFY_WINDOW_SIZE:-1440x900}"
+[[ "$WINDOW_SIZE" =~ ^[1-9][0-9]*x[1-9][0-9]*$ ]] || { echo "Bad VERIFY_WINDOW_SIZE: $WINDOW_SIZE (want <width>x<height>)" >&2; exit 1; }
 
 names=()
 while IFS= read -r name; do
@@ -88,12 +95,16 @@ security find-identity -p codesigning | grep -qF "\"$SIGN_ID\"" || SIGN_ID="-"
 codesign --force --sign "$SIGN_ID" "$APP" >/dev/null 2>&1
 
 # Read-only copy of the installed app's repo list and filters, so the screenshot has something to show. Only
-# these keys: the alert state and the secret references stay out, so the pilot cannot notify or ask 1Password.
+# these keys: the alert state and the secret references stay out, so the pilot cannot notify or ask 1Password. Not
+# gitlabHost either: with a host set the app fetches GitLab and reads its token from the Keychain, which asks
+# "Triage wants to access key dev.rogal.triage.gitlab" for a bundle id it has never seen. VERIFY_GITLAB=1 keeps it, for
+# a goal about GitLab, and the person running it answers that prompt.
 defaults delete "$VERIFY_ID" 2>/dev/null || true
 swift - "$VERIFY_ID" <<'SWIFT' >&2
 import Foundation
 let target = CommandLine.arguments[1]
-let keep = ["repos", "onlyMine", "gitlabHost"]
+var keep = ["repos", "onlyMine"]
+if ProcessInfo.processInfo.environment["VERIFY_GITLAB"] == "1" { keep.append("gitlabHost") }
 let source = UserDefaults.standard.persistentDomain(forName: "dev.rogal.triage") ?? [:]
 UserDefaults.standard.setPersistentDomain(source.filter { keep.contains($0.key) }, forName: target)
 SWIFT
@@ -118,6 +129,16 @@ if [[ -z "$id" ]]; then
   echo "Triage (pid $PID) showed no window within 60 s. End of its output:" >&2
   tail -n 40 "$LOG" >&2
   exit 1
+fi
+
+# Before the settle wait, so the first refresh lays out at the final size. A failure (no Accessibility) is a note: the
+# capture is then at the launch size, as before.
+if ! TRIAGE_PID="$PID" swift "$ROOT/scripts/ax.swift" resize "${WINDOW_SIZE%x*}" "${WINDOW_SIZE#*x}" >&2; then
+  echo "Could not resize the window (is Accessibility granted to this terminal?); capturing at the launch size." >&2
+fi
+if info="$(swift "$ROOT/scripts/window-info.swift" "$PID" 2>/dev/null)"; then
+  read -r _ _ _ width height <<<"$info"
+  echo "window: ${width}x${height}"
 fi
 
 sleep "${VERIFY_SETTLE_SECONDS:-15}"  # the first refresh is a network fetch: the list is empty until it ends
