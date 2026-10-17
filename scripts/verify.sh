@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # The verify_command Workbench runs in a thread's worktree: build this worktree's Triage into a throwaway bundle,
 # launch it, and screenshot its window into $WORKBENCH_PROOF_DIR once per `proof: screenshot: <name>` line in the goal.
-# The installed ~/Applications/Triage.app (same bundle id, same window name) is never touched: the window is found by
-# the PID of the process started here, and only that PID is killed.
+# The installed ~/Applications/Triage.app is never touched: the build has its own bundle id (below), the window is found
+# by the PID of the process started here, and only that PID is killed.
 #   WORKBENCH_PROOF_DIR  absolute, empty directory for the PNGs (required)
 #   WORKBENCH_GOAL       path of the goal file (required)
 #   VERIFY_SETTLE_SECONDS  wait after the window appears, for the first refresh (default 15)
@@ -49,6 +49,7 @@ cleanup() {
     wait "$PID" 2>/dev/null || true
   fi
   defaults delete "$VERIFY_ID" 2>/dev/null || true
+  rm -f "$HOME/Library/Preferences/$VERIFY_ID.plist"  # `defaults delete` leaves an empty file
   rm -rf "$TMP"
 }
 trap cleanup EXIT
