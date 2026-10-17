@@ -1,6 +1,7 @@
 // Drive Triage's main window through the Accessibility API. The terminal needs Accessibility permission. Used by /verify.
 //   swift scripts/ax.swift                  list what's on screen: role <tab> label
 //   swift scripts/ax.swift press "Dismiss"  press the first button, or select the first row, whose label starts with that
+//   TRIAGE_PID=<pid> swift scripts/ax.swift ...  drive that process, not the installed app (scripts/verify.sh)
 import AppKit
 import ApplicationServices
 
@@ -43,7 +44,18 @@ func walk(_ element: AXUIElement, into found: inout [Found]) {
     }
 }
 
-guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: "dev.rogal.triage").first else {
+// TRIAGE_PID drives that one process, whatever its bundle id: scripts/verify.sh's throwaway build has its own id and
+// runs next to the installed app, which this must never press buttons in. Without it, the installed app, as before.
+let app: NSRunningApplication
+if let raw = ProcessInfo.processInfo.environment["TRIAGE_PID"] {
+    guard let pid = Int32(raw), let byPID = NSRunningApplication(processIdentifier: pid) else {
+        FileHandle.standardError.write(Data("No process \"\(raw)\" (TRIAGE_PID)\n".utf8))
+        exit(1)
+    }
+    app = byPID
+} else if let installed = NSRunningApplication.runningApplications(withBundleIdentifier: "dev.rogal.triage").first {
+    app = installed
+} else {
     FileHandle.standardError.write(Data("Triage isn't running\n".utf8))
     exit(1)
 }

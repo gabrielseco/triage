@@ -10,7 +10,7 @@ scripts/check.sh         # what CI runs: swift-format, SwiftLint, Swift 6 build,
 scripts/check.sh --fix   # auto-format first
 scripts/bundle.sh        # build ~/Applications/Triage.app (needed for notifications, login item, Fix in iTerm)
 scripts/snap.sh out.png  # screenshot the Triage window (out.mov 10 records 10s), used by /verify
-scripts/verify.sh        # Workbench verify_command: build a throwaway bundle, launch it, screenshot its window per goal `proof: screenshot:`
+scripts/verify.sh        # Workbench verify_command: build a throwaway bundle, launch it, screenshot its window per goal `proof: screenshot:`; scripts/verify-steps/<name>.steps (press/wait) puts the app in a state first
 ```
 
 ## Workflow for every change
