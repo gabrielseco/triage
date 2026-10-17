@@ -28,12 +28,15 @@ extension AppStore {
     var selectedMention: GitLabMention? { visibleMentions.first { $0.id == selection } }
 
     /// Every 30 s, starting 30 s in, so the first PR refresh reads the GitLab token (and asks for Touch ID) alone.
+    /// Mock mode has no token to read, so it starts after 1 s: a screenshot taken seconds in shows the mentions.
     func startGitLabMentions() {
         guard !gitlabMentions.loopStarted else { return }
         gitlabMentions.loopStarted = true
         Task {
+            var delay = MockMode.isActive ? 1.0 : 30.0
             while true {
-                try? await Task.sleep(for: .seconds(30))
+                try? await Task.sleep(for: .seconds(delay))
+                delay = 30
                 await pollGitLabMentions()
             }
         }
@@ -44,8 +47,8 @@ extension AppStore {
         let host = gitlabHost
         // Without my username a reply from me couldn't be recognized, nor a mention of myself.
         guard !host.isEmpty, let me = gitlabViewer,
-            let forge = try? await forgeClient(.gitlab(host: host)) as? GitLabForge,
-            let mentions = try? await forge.mentions(),
+            let source = try? await forgeClient(.gitlab(host: host)) as? MentionsSource,
+            let mentions = try? await source.mentions(),
             host == gitlabHost
         else { return }
         let now = Date()

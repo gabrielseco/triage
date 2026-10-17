@@ -1,0 +1,113 @@
+{
+  "name": "default",
+  "github": { "viewer": "gabi", "repos": ["acme/web", "acme/api"] },
+  "gitlab": { "host": "gitlab.acme.test", "viewer": "gabi.g" },
+  "pullRequests": [
+    {
+      "repo": "acme/web", "number": 412, "title": "Add keyboard shortcuts to the command palette", "author": "gabi",
+      "createdHoursAgo": 70, "updatedHoursAgo": 2, "headRef": "gabi/palette-shortcuts",
+      "reviewDecision": "REVIEW_REQUIRED",
+      "checks": [
+        { "name": "build", "state": "failure", "summary": "Build failed: 2 errors in CommandPalette.tsx", "checkRunID": 9001 },
+        { "name": "lint", "state": "success" }
+      ],
+      "summary": "Adds ⌘K and ⌘P to the palette and lists them in the help dialog."
+    },
+    {
+      "repo": "acme/web", "number": 398, "title": "Fix the flaky checkout test", "author": "gabi",
+      "createdHoursAgo": 20, "updatedHoursAgo": 4, "headRef": "gabi/flaky-checkout", "mergeable": "CONFLICTING",
+      "reviewDecision": "REVIEW_REQUIRED",
+      "checks": [{ "name": "build", "state": "success" }, { "name": "e2e", "state": "success" }]
+    },
+    {
+      "repo": "acme/api", "number": 77, "title": "Paginate the audit log endpoint", "author": "gabi",
+      "createdHoursAgo": 6, "updatedHoursAgo": 1, "headRef": "gabi/audit-pagination",
+      "reviewDecision": "CHANGES_REQUESTED", "approvedBy": [],
+      "checks": [{ "name": "test", "state": "success" }]
+    },
+    {
+      "repo": "acme/web", "number": 405, "title": "Move session handling into a hook", "author": "gabi",
+      "createdHoursAgo": 45, "updatedHoursAgo": 8, "headRef": "gabi/session-hook",
+      "reviewDecision": "REVIEW_REQUIRED",
+      "checks": [{ "name": "build", "state": "success" }],
+      "threads": [
+        {
+          "author": "maria", "path": "src/session.ts", "line": 42, "hoursAgo": 9,
+          "body": "Should this clear the cache on sign-out too?"
+        }
+      ]
+    },
+    {
+      "repo": "acme/api", "number": 81, "title": "Raise the retry budget for the billing client", "author": "gabi",
+      "createdHoursAgo": 10, "updatedHoursAgo": 3, "headRef": "gabi/retry-budget",
+      "reviewDecision": "REVIEW_REQUIRED",
+      "checks": [{ "name": "test", "state": "success" }],
+      "threads": [
+        {
+          "author": "cursor[bot]", "isBot": true, "path": "billing/client.go", "line": 118, "hoursAgo": 3,
+          "body": "Possible nil dereference when the response body is empty. The error path returns before the retry count is read."
+        }
+      ]
+    },
+    {
+      "repo": "acme/web", "number": 420, "title": "Docs: how the cache invalidates", "author": "gabi",
+      "createdHoursAgo": 3, "updatedHoursAgo": 1, "headRef": "gabi/cache-docs",
+      "reviewDecision": "APPROVED", "approvedBy": ["maria"],
+      "checks": [{ "name": "build", "state": "success" }, { "name": "docs", "state": "success" }]
+    },
+    {
+      "repo": "acme/web", "number": 409, "title": "Refactor the billing form", "author": "maria",
+      "createdHoursAgo": 5, "updatedHoursAgo": 1, "headRef": "maria/billing-form", "requestedReviewers": ["gabi"],
+      "reviewDecision": "REVIEW_REQUIRED",
+      "checks": [{ "name": "build", "state": "success" }],
+      "summary": "Splits the billing form into three steps and moves validation into one place."
+    },
+    {
+      "repo": "acme/api", "number": 79, "title": "Add a health endpoint", "author": "dev-chen",
+      "createdHoursAgo": 55, "updatedHoursAgo": 12, "headRef": "dev-chen/health", "requestedReviewers": ["gabi"],
+      "reviewDecision": "REVIEW_REQUIRED",
+      "checks": [{ "name": "test", "state": "success" }]
+    },
+    {
+      "repo": "acme/web", "number": 415, "title": "Upgrade to Node 22", "author": "priya",
+      "createdHoursAgo": 26, "updatedHoursAgo": 20, "headRef": "priya/node-22",
+      "reviewDecision": "REVIEW_REQUIRED",
+      "checks": [{ "name": "build", "state": "success" }]
+    },
+    {
+      "repo": "acme/api", "number": 83, "title": "Index the events table", "author": "sam",
+      "createdHoursAgo": 2, "updatedHoursAgo": 1, "headRef": "sam/events-index",
+      "reviewDecision": "APPROVED", "approvedBy": ["maria"],
+      "checks": [{ "name": "test", "state": "pending" }]
+    },
+    {
+      "repo": "platform/deploy", "forge": "gitlab", "number": 58, "title": "Pin the base image", "author": "gabi.g",
+      "createdHoursAgo": 30, "updatedHoursAgo": 5, "headRef": "pin-base-image",
+      "checks": [{ "name": "pipeline", "state": "failure", "summary": "deploy-staging failed" }]
+    },
+    {
+      "repo": "platform/deploy", "forge": "gitlab", "number": 61, "title": "Rotate the staging credentials",
+      "author": "li.wei", "createdHoursAgo": 8, "updatedHoursAgo": 2, "headRef": "rotate-staging",
+      "requestedReviewers": ["gabi.g"], "checks": [{ "name": "pipeline", "state": "success" }]
+    }
+  ],
+  "linear": [
+    {
+      "kind": "mention", "issue": "ENG-142", "issueTitle": "Roll out the palette flag", "actor": "Maria Lopez",
+      "hoursAgo": 3, "body": "@gabi can you check the rollout flag before Friday?\nIt is still off for the EU workspace."
+    },
+    {
+      "kind": "reply", "issue": "ENG-131", "issueTitle": "Billing form validation", "actor": "Priya Nair",
+      "hoursAgo": 7, "body": "Good point, I will move the check into the shared validator."
+    }
+  ],
+  "mentions": [
+    {
+      "id": "58-1", "author": "li.wei", "target": "deploy !58", "targetTitle": "Pin the base image", "hoursAgo": 4,
+      "body": "@gabi.g does this need the staging approval too?"
+    }
+  ],
+  "explanation": "The build fails because `CommandPalette.tsx` imports `useShortcut` from a file that moved in #398. Update the import path and the two call sites; the rest of the diff is unaffected.",
+  "diff": "diff --git a/src/palette.ts b/src/palette.ts\n--- a/src/palette.ts\n+++ b/src/palette.ts\n@@ -10,3 +10,5 @@ export function open() {\n   show()\n+  bind('mod+k', open)\n+  bind('mod+p', openFiles)\n }\n",
+  "ciLog": "build\n> tsc --noEmit\nsrc/CommandPalette.tsx(4,10): error TS2305: Module './hooks' has no exported member 'useShortcut'.\nsrc/CommandPalette.tsx(31,5): error TS2304: Cannot find name 'bind'.\n"
+}

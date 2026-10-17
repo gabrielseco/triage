@@ -9,10 +9,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     let store = AppStore()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        if Notifier.isAvailable {
+        if Notifier.canSend {
             UNUserNotificationCenter.current().delegate = self
             Task { await Notifier.requestAuthorization() }
         }
+        store.applyMockScenario()
         store.startAutoRefresh()
     }
 
@@ -62,12 +63,15 @@ enum Notifier {
     /// UNUserNotificationCenter crashes without a bundle id, i.e. when run as a bare `swift run` binary.
     static var isAvailable: Bool { Bundle.main.bundleIdentifier != nil }
 
+    /// Mock mode sends nothing, and never asks macOS for permission to.
+    static var canSend: Bool { isAvailable && !MockMode.isActive }
+
     static func requestAuthorization() async {
         _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
     }
 
     static func send(title: String, body: String) async -> Bool {
-        guard isAvailable else { return false }
+        guard canSend else { return false }
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
@@ -86,7 +90,7 @@ enum Notifier {
     static let reviewRequestKey = "reviewRequest"
 
     static func send(_ alert: ReviewRequestAlert) async -> Bool {
-        guard isAvailable else { return false }
+        guard canSend else { return false }
         let content = UNMutableNotificationContent()
         content.title = alert.title
         content.subtitle = alert.subtitle
@@ -102,7 +106,7 @@ enum Notifier {
     static let mentionURLKey = "mentionURL"
 
     static func send(_ alert: MentionAlert) async -> Bool {
-        guard isAvailable else { return false }
+        guard canSend else { return false }
         let content = UNMutableNotificationContent()
         content.title = alert.title
         content.subtitle = alert.subtitle
@@ -115,7 +119,7 @@ enum Notifier {
     }
 
     static func send(_ alert: PingAlert) async -> Bool {
-        guard isAvailable else { return false }
+        guard canSend else { return false }
         let content = UNMutableNotificationContent()
         content.title = alert.title
         content.subtitle = alert.subtitle
@@ -136,6 +140,7 @@ enum LoginItem {
     static var isEnabled: Bool { SMAppService.mainApp.status == .enabled }
 
     static func set(_ enabled: Bool) throws {
+        try MockMode.refuse("the login item")
         if enabled { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
     }
 }

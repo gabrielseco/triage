@@ -81,7 +81,7 @@ extension RepoRef: Codable {
     }
 }
 
-public enum CheckState: String, Sendable {
+public enum CheckState: String, Sendable, CaseIterable {
     case success, failure, pending, neutral
 }
 
@@ -142,11 +142,11 @@ public struct ReviewThreadInfo: Hashable, Sendable {
     }
 }
 
-public enum Mergeable: String, Sendable {
+public enum Mergeable: String, Sendable, CaseIterable {
     case mergeable = "MERGEABLE", conflicting = "CONFLICTING", unknown = "UNKNOWN"
 }
 
-public enum ReviewDecision: String, Sendable {
+public enum ReviewDecision: String, Sendable, CaseIterable {
     case approved = "APPROVED", changesRequested = "CHANGES_REQUESTED", reviewRequired = "REVIEW_REQUIRED", none
 }
 

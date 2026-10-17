@@ -20,6 +20,7 @@ extension AppStore {
     /// Asks for the local clone with a folder picker; returns nil if cancelled or not a clone of `repo`.
     @discardableResult
     func chooseCheckout(for repo: RepoRef) -> String? {
+        guard !MockMode.isActive else { return nil }
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
@@ -43,6 +44,10 @@ extension AppStore {
     /// `name` keeps each action's files apart (one per PR and action).
     private func handOff(_ item: AttentionItem, name: String, prompt: () async -> String) async {
         let repo = item.pr.repo
+        if MockMode.isActive {
+            actionStatus[item.id] = "Mock mode: this would open iTerm in a worktree of \(repo.fullName)."
+            return
+        }
         guard let checkout = await checkoutPath(for: repo) ?? chooseCheckout(for: repo) else {
             actionStatus[item.id] =
                 "No local checkout of \(repo.fullName) — right-click the repo in the sidebar to set one."

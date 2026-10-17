@@ -24,6 +24,14 @@ things you can see on screen: which view, which state, what should now look diff
 unchanged neighbouring view as a regression check. If nothing in the diff is visible (e.g. TriageCore only),
 say so and stop.
 
+## Mock data first
+
+Unless the PR is about what real GitHub, GitLab or Linear data looks like, check it on mock data: the app reaches
+nothing real, shows the same state on every run and has no private titles to leak into a screenshot. `scripts/mock.sh`
+opens a throwaway build on `Mocks/default.json` beside the installed app (its own bundle id, settings and no
+Keychain), and `scripts/verify.sh` is the same build driven by Workbench. A state the default scenario lacks is a new
+file under `Mocks/` (docs/plans/MOCK.md). Steps 2 to 5 below are for changes that need the user's real accounts.
+
 ## Step 2: Build the PR into a throwaway bundle
 
 From the PR's worktree (never the main checkout). Shell variables don't survive between Bash calls, so every

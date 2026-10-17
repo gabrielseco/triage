@@ -48,8 +48,9 @@ if ! security find-identity -p codesigning | grep -qF "\"$SIGN_ID\""; then
 fi
 codesign --force --sign "$SIGN_ID" "$APP" >/dev/null
 
-# One-time: carry over settings saved by the unbundled binary (domain "Triage").
-if ! defaults read "$BUNDLE_ID" repos >/dev/null 2>&1 && defaults read Triage repos >/dev/null 2>&1; then
+# One-time: carry over settings saved by the unbundled binary (domain "Triage"). Not for a throwaway build
+# (TRIAGE_APP set: /verify, verify.sh, mock.sh), which must never write the installed app's settings.
+if [[ -z "${TRIAGE_APP:-}" ]] && ! defaults read "$BUNDLE_ID" repos >/dev/null 2>&1 && defaults read Triage repos >/dev/null 2>&1; then
   defaults export Triage - | defaults import "$BUNDLE_ID" -
 fi
 

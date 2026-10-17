@@ -49,12 +49,13 @@ extension AppStore {
 
     enum KeySource: String {
         case onePassword = "1Password / key helper", environment = "ANTHROPIC_API_KEY", keychain = "Keychain", none =
-            "not set"
+            "not set", mock = "mock data (no key needed)"
     }
 
     /// Which key Explain will use. A configured 1Password reference wins: it's the explicit choice made in
     /// this app (e.g. the work key), whereas the environment may hold an unrelated personal key.
     var keySource: KeySource {
+        if MockMode.isActive { return .mock }
         if !onePasswordRef.isEmpty { return .onePassword }
         if let k = ProcessInfo.processInfo.environment["ANTHROPIC_API_KEY"], !k.isEmpty { return .environment }
         if Keychain.get("anthropic") != nil { return .keychain }
@@ -77,6 +78,8 @@ extension AppStore {
             // Read from the source keySource picked: an empty ANTHROPIC_API_KEY must not shadow the Keychain.
             guard let k = Keychain.get("anthropic"), !k.isEmpty else { throw AnthropicError.noKey }
             return k
+        case .mock:
+            return "mock"
         case .none:
             throw AnthropicError.noKey
         }
@@ -87,8 +90,8 @@ extension AppStore {
         do {
             let key = try await resolveAPIKey()
             let prompt = await buildPrompt(for: item, mode: .explain)
-            let text = try await AnthropicClient(apiKey: key, model: model)
-                .complete(system: PromptBuilder.systemPrompt, prompt: prompt)
+            let explainer = MockMode.world?.explainer() ?? AnthropicClient(apiKey: key, model: model)
+            let text = try await explainer.complete(system: PromptBuilder.systemPrompt, prompt: prompt)
             explanations[item.id] = .done(text)
         } catch {
             // A rotated key in 1Password: forget the cached one so the next try re-reads it.
