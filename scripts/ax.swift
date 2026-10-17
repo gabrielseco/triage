@@ -47,6 +47,11 @@ func walk(_ element: AXUIElement, into found: inout [Found]) {
 
 // TRIAGE_PID drives that one process, whatever its bundle id: scripts/verify.sh's throwaway build has its own id and
 // runs next to the installed app, which this must never press buttons in. Without it, the installed app, as before.
+// resize is for the verify build only, so it has no installed-app fallback.
+if CommandLine.arguments.dropFirst().first == "resize", ProcessInfo.processInfo.environment["TRIAGE_PID"] == nil {
+    FileHandle.standardError.write(Data("resize needs TRIAGE_PID: it never resizes the installed app\n".utf8))
+    exit(1)
+}
 let app: NSRunningApplication
 if let raw = ProcessInfo.processInfo.environment["TRIAGE_PID"] {
     guard let pid = Int32(raw), let byPID = NSRunningApplication(processIdentifier: pid) else {
