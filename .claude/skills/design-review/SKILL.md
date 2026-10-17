@@ -1,6 +1,6 @@
 ---
 name: design-review
-description: Review how a PR's UI looks from a product designer's point of view — hierarchy, alignment and spacing, typography, color and contrast in light and dark mode, truncation at the minimum window size, empty/loading/error states, and fit with native macOS conventions — checked against docs/DESIGN.md and Apple's HIG. Builds the PR into a throwaway bundle (the /verify mechanics), captures a matrix of states, pairs the screenshots with a static pass over the SwiftUI diff, and posts graded findings on the PR. Use after /verify for any PR that changes something visible in the app, or when the user asks for a "design review", "does this look good", "check the design" or "polish pass".
+description: Review how a PR's UI looks from a product designer's point of view — hierarchy, alignment and spacing, typography, color and contrast in dark mode (light too when the PR changes color), truncation at the minimum window size, empty/loading/error states, and fit with native macOS conventions — checked against docs/DESIGN.md and Apple's HIG. Builds the PR into a throwaway bundle (the /verify mechanics), captures a matrix of states, pairs the screenshots with a static pass over the SwiftUI diff, and posts graded findings on the PR. Use after /verify for any PR that changes something visible in the app, or when the user asks for a "design review", "does this look good", "check the design" or "polish pass".
 allowed-tools: Bash(scripts/bundle.sh:*), Bash(scripts/snap.sh:*), Bash(TRIAGE_APP=*), Bash(open:*), Bash(pkill:*), Bash(pgrep:*), Bash(swift scripts/ax.swift:*), Bash(osascript:*), Bash(sips:*), Bash(gh:*), Bash(git:*), Bash(grep:*), Bash(rm:*), Read, Grep
 ---
 
@@ -44,19 +44,23 @@ Note each hit with `file:line`. It's a finding only if the screenshot or the con
 Use `/verify`'s Steps 2, 3 and 5 exactly (throwaway bundle at `<scratchpad>/verify/Triage.app`, swap it in,
 **always restore**, even on failure). Its rules on side effects apply: this is the user's real account,
 so never press Close, Merge, Explain or anything that posts. Save captures under `<scratchpad>/design/`, named
-`<surface>-<state>-<light|dark>-<size>.png`.
+`<surface>-<state>-<dark|light>-<size>.png`.
 
 For each surface and state from Step 1:
 
-- **Light and dark.** Relaunch the PR build with the appearance forced for that app only:
+- **Dark first.** The owner uses dark mode, so capture dark by default. Relaunch the PR build with the appearance
+  forced for that app only:
   ```bash
   V=<scratchpad>/verify/Triage.app
   [[ "$V" == */verify/Triage.app ]] || exit 1    # never let the pattern match the installed app
   pkill -f "$V/Contents/MacOS/Triage"; sleep 1
-  open -g "$V" --args -AppleInterfaceStyle Dark  # plain `open -g "$V"` for light (if the system is light)
+  open -g "$V" --args -AppleInterfaceStyle Dark
   ```
-  Check the first dark capture really is dark. If the system itself is in dark mode, the light pass needs the user
-  to switch System Settings › Appearance, so ask for that. Don't change it yourself.
+  Check the first capture really is dark. Also capture light, with plain `open -g "$V"` when the system is light,
+  only if the diff changes color, a material or a tinted style (Step 2's hits) or the user asks. If the system
+  itself is in dark mode, the light pass needs the user to switch System Settings › Appearance, so ask for that.
+  Don't change it yourself. `docs/DESIGN.md` still says everything must read in both: a PR that touches color is
+  where that gets checked.
 - **Two sizes.** Minimum (1000×600) and roomy (1600×1000):
   ```bash
   V=<scratchpad>/verify/Triage.app
@@ -83,7 +87,7 @@ Go through each capture with these questions, in this order, most important firs
    siblings, and larger between groups than within them? Anything off by a few points?
 3. **Typography.** Styles per the DESIGN.md table, no more than three sizes in a component, weight and
    `.secondary` doing the hierarchy work.
-4. **Color and contrast.** Meaning-only color, same meaning → same color, readable in both appearances
+4. **Color and contrast.** Meaning-only color, same meaning → same color, readable in dark, and in light when the PR touches color
    (watch tinted pills and `.secondary` on `.quaternary`), never color alone.
 5. **Fit at the minimum size.** Truncates with an ellipsis rather than clipping or overlapping; toolbar and
    button rows don't collapse into a mess; nothing important is pushed off screen.
@@ -95,7 +99,7 @@ Go through each capture with these questions, in this order, most important firs
 
 Grade each finding:
 
-- **Blocking:** broken or clipped layout, unreadable text (either appearance), wrong meaning of a color, a
+- **Blocking:** broken or clipped layout, unreadable text (in a captured appearance), wrong meaning of a color, a
   primary action that's hard to find, something that doesn't fit at 1000×600.
 - **Polish:** misalignment, inconsistent spacing or style, weak hierarchy, a missing tooltip or empty state.
 - **Nit:** subjective. Say it's subjective, at most three.
@@ -106,7 +110,7 @@ Each finding: what's wrong, the screenshot, the rule it breaks (DESIGN.md sectio
 ## Step 5: Report and post
 
 - In the chat: verdict (**looks good** / **polish needed** / **blocking issues**), findings by grade, and the list
-  of screenshot paths (light/dark, before/after) for the user to drag into the PR's Screenshots table.
+  of screenshot paths (dark, and light if captured; before/after) for the user to drag into the PR's Screenshots table.
 - On the PR, once it exists (before that, the chat report is enough): one review, posted the way `/pr-review`
   does (`gh api repos/<owner>/<repo>/pulls/<n>/reviews --input <json>`, `"event": "COMMENT"`, head `commit_id`,
   `comments[]` of `{path, line, side: "RIGHT", body}`). The body carries the verdict. Label each comment
