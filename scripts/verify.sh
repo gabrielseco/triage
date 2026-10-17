@@ -83,13 +83,42 @@ codesign --force --sign "$SIGN_ID" "$APP" >/dev/null 2>&1
 
 # Read-only copy of the installed app's repo list and filters, so the screenshot has something to show. Only
 # these keys: the alert state and the secret references stay out, so the pilot cannot notify or ask 1Password.
+# The repos are the public GitHub ones (VERIFY_REPOS=all keeps every repo): a screenshot ends up in a pull request,
+# and a repo `gh` cannot vouch for as public is left out.
 defaults delete "$VERIFY_ID" 2>/dev/null || true
-swift - "$VERIFY_ID" <<'SWIFT' >&2
+VERIFY_REPOS="${VERIFY_REPOS:-public}" swift - "$VERIFY_ID" <<'SWIFT' >&2
 import Foundation
 let target = CommandLine.arguments[1]
-let keep = ["repos", "onlyMine", "gitlabHost"]
+let keep = ["onlyMine", "gitlabHost"]
 let source = UserDefaults.standard.persistentDomain(forName: "dev.rogal.triage") ?? [:]
-UserDefaults.standard.setPersistentDomain(source.filter { keep.contains($0.key) }, forName: target)
+var copied = source.filter { keep.contains($0.key) }
+
+func isPublic(_ repo: [String: Any]) -> Bool {
+    guard (repo["forge"] as? String ?? "github") == "github",
+        let owner = repo["owner"] as? String, let name = repo["name"] as? String
+    else { return false }
+    let gh = Process()
+    gh.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+    gh.arguments = ["gh", "repo", "view", "\(owner)/\(name)", "--json", "visibility", "--jq", ".visibility"]
+    let out = Pipe()
+    gh.standardOutput = out
+    gh.standardError = FileHandle.nullDevice
+    guard (try? gh.run()) != nil else { return false }
+    gh.waitUntilExit()
+    let answer = String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+    return gh.terminationStatus == 0 && answer.trimmingCharacters(in: .whitespacesAndNewlines) == "PUBLIC"
+}
+
+if let data = source["repos"] as? Data,
+    let repos = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]]
+{
+    let all = ProcessInfo.processInfo.environment["VERIFY_REPOS"] == "all"
+    let kept = all ? repos : repos.filter(isPublic)
+    copied["repos"] = try JSONSerialization.data(withJSONObject: kept)
+    let names = kept.map { "\($0["owner"] as? String ?? "?")/\($0["name"] as? String ?? "?")" }
+    print("verify: \(kept.count) of \(repos.count) repos copied (\(all ? "all" : "public only")): \(names.joined(separator: ", "))")
+}
+UserDefaults.standard.setPersistentDomain(copied, forName: target)
 SWIFT
 
 "$APP/Contents/MacOS/Triage" >"$LOG" 2>&1 &
