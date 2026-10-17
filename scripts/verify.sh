@@ -57,7 +57,8 @@ TRIAGE_APP="$APP" "$ROOT/scripts/bundle.sh" >&2
 PID=$!
 
 id=""
-for _ in $(seq 1 120); do  # 60 s
+SECONDS=0  # wall clock: each lookup starts the Swift interpreter, so counting iterations would overrun 60 s
+while ((SECONDS < 60)); do
   if ! kill -0 "$PID" 2>/dev/null; then
     break
   fi
