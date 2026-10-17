@@ -1,9 +1,15 @@
 import Foundation
 
 extension [AttentionItem] {
-    /// Bot findings on your own PRs first, then the others', each newest opened first. `viewer` says who you
-    /// are on a forge; while it's unknown nothing counts as yours. Items of one PR keep their order.
+    /// Bot findings in `sortedMineFirst` order.
     public func sortedAsBotFindings(viewer: (Forge) -> String?) -> [AttentionItem] {
+        sortedMineFirst(viewer: viewer)
+    }
+
+    /// Items on your own PRs first, then the others', each newest opened first, ties by number highest first.
+    /// `viewer` says who you are on a forge; while it's unknown nothing counts as yours. Items of one PR keep
+    /// their order. Everything and the Bot finding filter both list in this order.
+    public func sortedMineFirst(viewer: (Forge) -> String?) -> [AttentionItem] {
         let keyed = enumerated().map { offset, item in
             (item: item, mine: item.pr.author == viewer(item.pr.repo.forge), offset: offset)
         }
