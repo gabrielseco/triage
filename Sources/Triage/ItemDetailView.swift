@@ -67,7 +67,7 @@ struct ItemDetailView: View {
                 }
                 .help("Approve \(item.pr.author)'s PR on \(forgeName) (⇧⌘A)")
             }
-            if item.kind.isFixable {
+            if item.kind.isFixable, item.showsFixActions(viewer: viewer) {
                 Button {
                     Task { await store.explain(item) }
                 } label: {

@@ -355,6 +355,11 @@ error/fail/vulnerability/critical/security/breaking/bug, else *low*. The headlin
 first line with a letter or digit in it, from the readable text (below) and without Markdown's backticks,
 bold or link syntax, e.g. `cursor: GBR schema pin exceeds latest version`.
 
+**Bot finding list:** the Bot finding filter lists findings on your own PRs first, then other people's, each
+newest opened first (`sortedAsBotFindings`). On someone else's PR a bot finding has no Explain & propose fix,
+Fix in iTerm or Copy prompt, since you can't push to their branch (`showsFixActions`). Until Triage knows who
+you are on that forge, nothing counts as yours and the fix actions stay.
+
 **Readable comments (`CommentText.readable`).** Danger, Sonar and coverage bots write HTML inside their
 Markdown, and SwiftUI's Markdown renderer shows those tags as text. `readable` turns the HTML into the Markdown
 it means: `<a>` → a link, `<code>` → backticks, `<b>` → bold, one line per table row or paragraph. It drops
