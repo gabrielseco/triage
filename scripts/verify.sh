@@ -129,7 +129,8 @@ run_steps() {
         ;;
       press)
         if [[ -z "$arg" || "$arg" =~ $refused ]]; then echo "$file: refused step: press $arg" >&2; return 1; fi
-        TRIAGE_PID="$PID" swift "$ROOT/scripts/ax.swift" press "$arg" >&2 || return 1
+        # The early check above is for a clear message; ax.swift checks the label the prefix resolves to.
+        TRIAGE_PID="$PID" TRIAGE_REFUSE="$refused" swift "$ROOT/scripts/ax.swift" press "$arg" >&2 || return 1
         ;;
       *) echo "$file: unknown step: $verb" >&2; return 1 ;;
     esac

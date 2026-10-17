@@ -79,11 +79,22 @@ if args.first == "press", let target = args.dropFirst().first {
         FileHandle.standardError.write(Data("Nothing labelled \"\(target)\"\n".utf8))
         exit(1)
     }
+    // TRIAGE_REFUSE: a regex the resolved label must not match. Checked here, not on `target`, because the match
+    // above is by prefix: "Expl" resolves to "Explain & propose fix". Set by scripts/verify.sh.
+    let refuse = ProcessInfo.processInfo.environment["TRIAGE_REFUSE"]
+    if let refuse, hit.label.range(of: refuse, options: .regularExpression) != nil {
+        FileHandle.standardError.write(Data("Refused: \"\(target)\" is \"\(hit.label)\"\n".utf8))
+        exit(1)
+    }
     let result =
         hit.role == "AXRow"
         ? AXUIElementSetAttributeValue(hit.element, kAXSelectedAttribute as CFString, kCFBooleanTrue)
         : AXUIElementPerformAction(hit.element, kAXPressAction as CFString)
-    print(result == .success ? "pressed \(hit.role) \(hit.label)" : "failed (\(result.rawValue)) on \(hit.label)")
+    guard result == .success else {
+        FileHandle.standardError.write(Data("failed (\(result.rawValue)) on \(hit.label)\n".utf8))
+        exit(1)
+    }
+    print("pressed \(hit.role) \(hit.label)")
 } else {
     for item in found {
         print("\(item.role)\t\(item.label.replacingOccurrences(of: "\n", with: " ").prefix(100))")
