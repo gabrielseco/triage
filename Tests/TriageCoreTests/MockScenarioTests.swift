@@ -34,9 +34,12 @@ private let pr = """
     #expect(scenario.pullRequests.count >= 10)
 }
 
-@Test func mockScenarioIsOffWithoutTheVariable() throws {
+@Test func mockScenarioIsOffOnlyWhenTheVariableIsAbsent() throws {
     #expect(try MockScenario.fromEnvironment([:]) == nil)
-    #expect(try MockScenario.fromEnvironment([MockScenario.environmentKey: ""]) == nil)
+}
+
+@Test func mockScenarioWithAnEmptyVariableThrowsInsteadOfLaunchingTheRealApp() {
+    #expect(throws: MockError.self) { try MockScenario.fromEnvironment([MockScenario.environmentKey: ""]) }
 }
 
 @Test func mockScenarioNamedByTheVariableLoads() throws {

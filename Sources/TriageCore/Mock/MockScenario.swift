@@ -132,14 +132,15 @@ extension MockScenario {
         }
     }
 
-    /// The scenario named by `TRIAGE_FIXTURE`, or nil when mock mode is off. A set but unusable value throws, so a
-    /// typo never silently falls back to the real app.
+    /// The scenario named by `TRIAGE_FIXTURE`, or nil when mock mode is off. A set but unusable value, an empty one
+    /// included, throws, so a typo or an empty script variable never silently falls back to the real app.
     public static func fromEnvironment() throws -> MockScenario? {
         try fromEnvironment(ProcessInfo.processInfo.environment)
     }
 
     public static func fromEnvironment(_ env: Environment) throws -> MockScenario? {
-        guard let path = env[environmentKey], !path.isEmpty else { return nil }
+        guard let path = env[environmentKey] else { return nil }
+        guard !path.isEmpty else { throw MockError.invalid("\(environmentKey) is set but empty") }
         return try load(from: URL(fileURLWithPath: (path as NSString).expandingTildeInPath))
     }
 
