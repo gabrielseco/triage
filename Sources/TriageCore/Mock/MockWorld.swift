@@ -10,6 +10,10 @@ public final class MockWorld: Sendable {
     public let gitlabViewer: String?
     /// Linear is on for a scenario that has pings.
     public let hasLinear: Bool
+    /// Every repo the scenario has pull requests in, and when the app is taken to have started watching them: the
+    /// ones opened since then are new (`SeenPRs`). Without it a first fetch would start the clock after them all.
+    public let allRepos: [RepoRef]
+    public let watchingSince: Date
 
     private let store: MockStore
     private let linearSource: MockLinear
@@ -32,6 +36,8 @@ public final class MockWorld: Sendable {
             throw MockError.invalid("pull request \(dup) is listed twice")
         }
         store = MockStore(pullRequests)
+        allRepos = Array(Set(repos + pullRequests.map(\.repo))).sorted { $0.id < $1.id }
+        watchingSince = now.addingTimeInterval(-(scenario.watchingHoursAgo ?? 24) * 3600)
         let pings = scenario.linear ?? []
         hasLinear = !pings.isEmpty
         linearSource = MockLinear(
@@ -62,7 +68,7 @@ public final class MockWorld: Sendable {
 // MARK: - The fake forge
 
 /// Pull requests held in memory, shared by every client the world hands out, so an approve or a merge in the app
-/// is still there at the next refresh.
+/// is still there at the next refresh. `@unchecked Sendable`: every access to `pullRequests` is under `lock`.
 final class MockStore: @unchecked Sendable {
     private let lock = NSLock()
     private var pullRequests: [PullRequest]

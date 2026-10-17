@@ -19,6 +19,18 @@ enum MockMode {
 
     static var isActive: Bool { world != nil }
 
+    /// `Triage --check-fixture`: says whether `TRIAGE_FIXTURE` loads, then exits, so a script can show a bad
+    /// scenario's error before opening a window (`open` would drop it: the app ends with the message on stderr).
+    static func checkIfAsked() {
+        guard CommandLine.arguments.contains("--check-fixture") else { return }
+        guard let world else {
+            FileHandle.standardError.write(Data("Triage: \(MockScenario.environmentKey) is not set\n".utf8))
+            exit(2)
+        }
+        FileHandle.standardOutput.write(Data("ok: \(world.scenario.pullRequests.count) pull requests\n".utf8))
+        exit(0)
+    }
+
     static let title = "Triage — mock data"
 
     /// Where mock mode keeps settings and state, emptied at every start, so nothing carries over and the installed

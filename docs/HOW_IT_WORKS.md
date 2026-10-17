@@ -648,8 +648,10 @@ The scenario holds the viewer on each forge, the watched repos, pull requests (t
 yesterday" stays true), Linear pings, GitLab mentions and the canned answers for Explain, the diff and a CI log.
 `Mocks/default.json` has one of every item kind, the viewer's PRs and others' created in a different order than
 their numbers, and a GitLab project. A test decodes it with the real models and classifies it, so it cannot drift.
-Approve, merge and close act on the mock's own copy, so a demo shows the flow. A set but unusable `TRIAGE_FIXTURE`
-ends the app: a typo never falls back to the real one. The window is titled "Triage — mock data". The plan:
+`watchingHoursAgo` (default 24) says when the app started watching, so recent PRs of others show as new. Approve, merge
+and close act on the mock's own copy, so a demo shows the flow. A set but unusable `TRIAGE_FIXTURE`
+ends the app: a typo never falls back to the real one (`Triage --check-fixture` says whether a scenario loads, and the
+scripts run it first). The window is titled "Triage — mock data". The plan:
 `docs/plans/MOCK.md`.
 
 An `.app` is only a folder with a known layout. `Info.plist` gives it an identity (`dev.rogal.triage`),

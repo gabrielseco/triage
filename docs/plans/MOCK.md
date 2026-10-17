@@ -53,6 +53,14 @@ requests that cannot show a boundary between "mine" and "others'"), private titl
 - `scripts/verify.sh` always runs on a scenario (`VERIFY_FIXTURE`, default `Mocks/default.json`). It no longer copies
   settings, needs no GitLab handling and waits 3 s, not 15.
 
+## The scenario's clock
+
+"New PR" means opened after the app started watching the repo, and a first fetch starts that clock at "now", after
+every PR in a scenario. So the scenario says when watching began (`watchingHoursAgo`, default 24) and the app starts
+the clock there. GitLab mentions are polled 1 s in, not 30 s, because there is no token to read first. A scenario that
+does not load makes the app end with the reason on stderr, which `open` would hide, so `mock.sh` and `verify.sh` run
+`Triage --check-fixture` first and stop with the message.
+
 ## The default scenario
 
 Ten pull requests across two GitHub repos and one GitLab project, written so the order shows: the viewer's own and

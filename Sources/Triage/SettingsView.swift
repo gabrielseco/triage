@@ -119,9 +119,11 @@ struct SettingsView: View {
             LinearSettings()
             Section("GitHub") {
                 Text(
-                    ProcessInfo.processInfo.environment["GITHUB_TOKEN"] != nil
-                        ? "Using GITHUB_TOKEN from the environment."
-                        : "Using the `gh` CLI token\(store.viewer.map { " (signed in as \($0))" } ?? "")."
+                    MockMode.isActive
+                        ? "Mock data: no GitHub token is read."
+                        : ProcessInfo.processInfo.environment["GITHUB_TOKEN"] != nil
+                            ? "Using GITHUB_TOKEN from the environment."
+                            : "Using the `gh` CLI token\(store.viewer.map { " (signed in as \($0))" } ?? "")."
                 )
                 .foregroundStyle(.secondary)
             }

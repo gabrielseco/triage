@@ -90,6 +90,9 @@ public struct MockScenario: Decodable, Sendable {
     }
 
     public var name: String?
+    /// How long ago the app is taken to have started watching: pull requests opened since then show as new.
+    /// Default 24.
+    public var watchingHoursAgo: Double?
     public var github: GitHub
     public var gitlab: GitLab?
     public var pullRequests: [PRSpec]

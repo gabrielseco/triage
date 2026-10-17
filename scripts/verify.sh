@@ -103,6 +103,9 @@ SIGN_ID="Triage Local Signing"
 security find-identity -p codesigning | grep -qF "\"$SIGN_ID\"" || SIGN_ID="-"
 codesign --force --sign "$SIGN_ID" "$APP" >/dev/null 2>&1
 
+# A scenario that does not load ends the app at once; say why now rather than after 60 s without a window.
+TRIAGE_FIXTURE="$FIXTURE" "$APP/Contents/MacOS/Triage" --check-fixture >/dev/null || { echo "Bad mock scenario: $FIXTURE" >&2; exit 1; }
+
 TRIAGE_FIXTURE="$FIXTURE" "$APP/Contents/MacOS/Triage" >"$LOG" 2>&1 &
 PID=$!
 

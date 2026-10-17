@@ -20,6 +20,9 @@ extension AppStore {
         repos = mock.repos
         gitlabHost = mock.gitlabHost ?? ""
         linearEnabled = mock.hasLinear
+        var seen = seenPRs
+        seen.startWatching(mock.allRepos, now: mock.watchingSince)
+        seenPRs = seen
     }
 
     func save<T: Encodable>(_ value: T, _ key: String) {

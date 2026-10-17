@@ -20,6 +20,7 @@ extension AppStore {
     /// Asks for the local clone with a folder picker; returns nil if cancelled or not a clone of `repo`.
     @discardableResult
     func chooseCheckout(for repo: RepoRef) -> String? {
+        guard !MockMode.isActive else { return nil }
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false

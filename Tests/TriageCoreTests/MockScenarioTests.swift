@@ -258,3 +258,25 @@ private let pr = """
     #expect(byNumber != byCreation)
     #expect(prs.contains { $0.author == w.githubViewer } && prs.contains { $0.author != w.githubViewer })
 }
+
+@Test func theDefaultScenarioStartsTheNewPRClockSoOthersRecentPRsAreNew() async throws {
+    let w = try MockWorld(MockScenario.load(from: defaultScenarioURL), now: now)
+    var seen = SeenPRs()
+    seen.startWatching(w.allRepos, now: w.watchingSince)
+    let github = try w.forgeClient(.github, repos: w.repos)
+    let prs = try await github.fetch().flatMap { try $0.result.get().pullRequests }
+    let new = prs.filter { seen.isNew($0) }
+    #expect(!new.isEmpty)
+    #expect(new.allSatisfy { $0.createdAt > w.watchingSince })
+    #expect(prs.contains { !seen.isNew($0) })
+    let kinds = new.flatMap { Classifier.classify($0, viewer: w.githubViewer, isNew: true).items.map(\.kind) }
+    #expect(kinds.contains(.newPR))
+}
+
+@Test func mockWatchingDefaultsToADayAndFollowsTheScenario() throws {
+    let w = try world(prs: pr)
+    #expect(w.watchingSince == now.addingTimeInterval(-24 * 3600))
+    let custom = try MockWorld(
+        scenario(#"{"watchingHoursAgo":2,"github":{"viewer":"me","repos":[]},"pullRequests":[]}"#), now: now)
+    #expect(custom.watchingSince == now.addingTimeInterval(-2 * 3600))
+}
