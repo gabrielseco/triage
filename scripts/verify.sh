@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # The verify_command Workbench runs in a thread's worktree: build this worktree's Triage into a throwaway bundle,
 # launch it, and screenshot its window into $WORKBENCH_PROOF_DIR once per `proof: screenshot: <name>` line in the goal.
-# The installed ~/Applications/Triage.app (same bundle id, same window name) is never touched: the window is found by
-# the PID of the process started here, and only that PID is killed.
+# The installed ~/Applications/Triage.app is never touched: the build has its own bundle id (below), the window is found
+# by the PID of the process started here, and only that PID is killed.
 #   WORKBENCH_PROOF_DIR  absolute, empty directory for the PNGs (required)
 #   WORKBENCH_GOAL       path of the goal file (required)
+#   VERIFY_SETTLE_SECONDS  wait after the window appears, for the first refresh (default 15)
 # The terminal running this needs Screen Recording permission.
 set -euo pipefail
 
@@ -36,6 +37,9 @@ then
   exit 1
 fi
 
+# A second process with the installed app's bundle id (dev.rogal.triage) starts but opens no window, so the
+# throwaway build gets its own id, and with it its own settings domain, deleted again on exit.
+VERIFY_ID="dev.rogal.triage.verify"
 TMP="$(mktemp -d)"
 LOG="$TMP/triage.log"
 PID=""
@@ -44,6 +48,8 @@ cleanup() {
     kill "$PID" 2>/dev/null || true
     wait "$PID" 2>/dev/null || true
   fi
+  defaults delete "$VERIFY_ID" 2>/dev/null || true
+  rm -f "$HOME/Library/Preferences/$VERIFY_ID.plist"  # `defaults delete` leaves an empty file
   rm -rf "$TMP"
 }
 trap cleanup EXIT
@@ -52,6 +58,23 @@ trap 'exit 143' TERM
 
 APP="$TMP/Triage.app"
 TRIAGE_APP="$APP" "$ROOT/scripts/bundle.sh" >&2
+/usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $VERIFY_ID" "$APP/Contents/Info.plist"
+# Changing the plist breaks the signature bundle.sh made. Sign with the same stable identity, as bundle.sh does: an ad hoc
+# signature differs on every run, so macOS asks again for each Keychain item the app reads (GitLab, Linear, Anthropic).
+SIGN_ID="Triage Local Signing"
+security find-identity -p codesigning | grep -qF "\"$SIGN_ID\"" || SIGN_ID="-"
+codesign --force --sign "$SIGN_ID" "$APP" >/dev/null 2>&1
+
+# Read-only copy of the installed app's repo list and filters, so the screenshot has something to show. Only
+# these keys: the alert state and the secret references stay out, so the pilot cannot notify or ask 1Password.
+defaults delete "$VERIFY_ID" 2>/dev/null || true
+swift - "$VERIFY_ID" <<'SWIFT' >&2
+import Foundation
+let target = CommandLine.arguments[1]
+let keep = ["repos", "onlyMine", "gitlabHost"]
+let source = UserDefaults.standard.persistentDomain(forName: "dev.rogal.triage") ?? [:]
+UserDefaults.standard.setPersistentDomain(source.filter { keep.contains($0.key) }, forName: target)
+SWIFT
 
 "$APP/Contents/MacOS/Triage" >"$LOG" 2>&1 &
 PID=$!
@@ -75,7 +98,7 @@ if [[ -z "$id" ]]; then
   exit 1
 fi
 
-sleep 2  # let the first render settle
+sleep "${VERIFY_SETTLE_SECONDS:-15}"  # the first refresh is a network fetch: the list is empty until it ends
 for name in "${names[@]}"; do
   screencapture -x -o -l "$id" "$WORKBENCH_PROOF_DIR/$name.png"
   echo "$WORKBENCH_PROOF_DIR/$name.png"
