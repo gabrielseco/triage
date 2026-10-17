@@ -6,7 +6,10 @@
 #   WORKBENCH_PROOF_DIR  absolute, empty directory for the PNGs (required)
 #   WORKBENCH_GOAL       path of the goal file (required)
 #   VERIFY_SETTLE_SECONDS  wait after the window appears, for the first refresh (default 15)
-# The terminal running this needs Screen Recording permission.
+# A screenshot named <name> is taken after the steps in scripts/verify-steps/<name>.steps, if that file exists: one
+# step per line, `press <label>` (scripts/ax.swift, on this build only) or `wait <seconds>`. A name with no steps file
+# captures the window as it is. Steps run in the order the goal names the screenshots, each from the state the last left.
+# The terminal running this needs Screen Recording permission, and Accessibility when a steps file is used.
 set -euo pipefail
 
 : "${WORKBENCH_PROOF_DIR:?WORKBENCH_PROOF_DIR is not set}"
@@ -36,6 +39,19 @@ then
   echo "Screen Recording permission is missing: grant it to this terminal/app in System Settings > Privacy & Security." >&2
   exit 1
 fi
+
+for name in "${names[@]}"; do
+  [[ -f "$ROOT/scripts/verify-steps/$name.steps" ]] || continue
+  if ! swift - <<'SWIFT'
+import ApplicationServices
+exit(AXIsProcessTrusted() ? 0 : 1)
+SWIFT
+  then
+    echo "Accessibility permission is missing (needed to press buttons for $name): grant it in System Settings > Privacy & Security." >&2
+    exit 1
+  fi
+  break
+done
 
 # A second process with the installed app's bundle id (dev.rogal.triage) starts but opens no window, so the
 # throwaway build gets its own id, and with it its own settings domain, deleted again on exit.
@@ -99,7 +115,34 @@ if [[ -z "$id" ]]; then
 fi
 
 sleep "${VERIFY_SETTLE_SECONDS:-15}"  # the first refresh is a network fetch: the list is empty until it ends
+# A steps file is reviewed in a PR and only has these two verbs. A button that acts on a forge, opens another app or
+# spends money is refused even if a file names it: this build holds the user's real GitHub login.
+refused='^(Approve|Merge|Squash|Rebase|Close|Open|Fix in iTerm|Explain)'
+run_steps() {
+  local file="$1" verb arg
+  while IFS=' ' read -r verb arg || [[ -n "$verb" ]]; do
+    case "$verb" in
+      '' | '#'*) ;;
+      wait)
+        [[ "$arg" =~ ^[0-9]+(\.[0-9]+)?$ ]] || { echo "$file: bad wait: $arg" >&2; return 1; }
+        sleep "$arg"
+        ;;
+      press)
+        if [[ -z "$arg" || "$arg" =~ $refused ]]; then echo "$file: refused step: press $arg" >&2; return 1; fi
+        # The early check above is for a clear message; ax.swift checks the label the prefix resolves to.
+        TRIAGE_PID="$PID" TRIAGE_REFUSE="$refused" swift "$ROOT/scripts/ax.swift" press "$arg" >&2 || return 1
+        ;;
+      *) echo "$file: unknown step: $verb" >&2; return 1 ;;
+    esac
+  done <"$file"
+}
+
 for name in "${names[@]}"; do
+  steps="$ROOT/scripts/verify-steps/$name.steps"
+  if [[ -f "$steps" ]]; then
+    run_steps "$steps" || { echo "The steps for $name failed" >&2; exit 1; }
+    sleep 1.5  # SwiftUI animates the change
+  fi
   screencapture -x -o -l "$id" "$WORKBENCH_PROOF_DIR/$name.png"
   echo "$WORKBENCH_PROOF_DIR/$name.png"
 done
