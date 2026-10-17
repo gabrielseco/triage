@@ -23,7 +23,7 @@ Do this without being asked:
    For changes to the app target (`Sources/Triage`, `Resources`), run `/verify` too. It runs the PR build and
    screenshots it, and those screenshots go in the PR. If the change is visible (layout, styling, copy, a new
    view or state), run `/design-review` after `/verify` and fix its blocking findings before pushing. It checks
-   the build against `docs/DESIGN.md` in dark mode (light too when the change touches color) and at the minimum window size.
+   the build against `docs/DESIGN.md` in dark mode and at the minimum window size.
 4. **Open the PR** with `.github/pull_request_template.md` (Summary, Why, collapsed What changed, Screenshots,
    Related Resources, Testing). Tick only the Testing boxes you actually ran.
 5. **Run `/pr-review` on the PR** (and `/design-review` if the change is visible) and post the result on the PR
