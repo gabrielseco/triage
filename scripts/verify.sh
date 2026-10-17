@@ -59,7 +59,11 @@ trap 'exit 143' TERM
 APP="$TMP/Triage.app"
 TRIAGE_APP="$APP" "$ROOT/scripts/bundle.sh" >&2
 /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $VERIFY_ID" "$APP/Contents/Info.plist"
-codesign --force --sign - "$APP" >/dev/null 2>&1  # changing the plist breaks the signature bundle.sh made
+# Changing the plist breaks the signature bundle.sh made. Sign with the same stable identity, as bundle.sh does: an ad hoc
+# signature differs on every run, so macOS asks again for each Keychain item the app reads (GitLab, Linear, Anthropic).
+SIGN_ID="Triage Local Signing"
+security find-identity -p codesigning | grep -qF "\"$SIGN_ID\"" || SIGN_ID="-"
+codesign --force --sign "$SIGN_ID" "$APP" >/dev/null 2>&1
 
 # Read-only copy of the installed app's repo list and filters, so the screenshot has something to show. Only
 # these keys: the alert state and the secret references stay out, so the pilot cannot notify or ask 1Password.
