@@ -43,6 +43,10 @@ extension AppStore {
     /// `name` keeps each action's files apart (one per PR and action).
     private func handOff(_ item: AttentionItem, name: String, prompt: () async -> String) async {
         let repo = item.pr.repo
+        if MockMode.isActive {
+            actionStatus[item.id] = "Mock mode: this would open iTerm in a worktree of \(repo.fullName)."
+            return
+        }
         guard let checkout = await checkoutPath(for: repo) ?? chooseCheckout(for: repo) else {
             actionStatus[item.id] =
                 "No local checkout of \(repo.fullName) — right-click the repo in the sidebar to set one."

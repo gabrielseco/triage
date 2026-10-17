@@ -66,12 +66,14 @@ extension AppStore {
 
     /// Saves a pasted key, or removes it when empty, and fetches with it.
     func saveLinearKey(_ key: String) throws {
+        try MockMode.refuse("saving a key")
         try Keychain.set(key, for: LinearAuth.keychainAccount, service: LinearAuth.keychainService)
         linear.cachedKey = nil
         Task { await refreshLinear() }
     }
 
-    func linearClient() async throws -> LinearClient {
+    func linearClient() async throws -> any LinearSource {
+        if let mock = MockMode.world { return mock.linear() }
         if let key = linear.cachedKey { return LinearClient(key: key) }
         if let failure = linear.keyFailure { throw failure }
         // The read can wait on Touch ID; only keep what it returns if the reference wasn't edited meanwhile.

@@ -7,6 +7,7 @@ struct TriageApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
 
     init() {
+        MockMode.install()
         // Running from `swift run` there's no bundle; make it a normal foreground app with a Dock icon.
         // A bundled app is activated by Launch Services when the user opens it, and stays in the
         // background for `open -g` (/verify), so only force activation without a bundle.
@@ -17,11 +18,14 @@ struct TriageApp: App {
     }
 
     var body: some Scene {
-        Window("Triage", id: "main") {
+        Window(MockMode.isActive ? MockMode.title : "Triage", id: "main") {
             ContentView()
+                .environment(\.openURL, MockMode.openURL)
                 .environment(delegate.store)
                 .frame(minWidth: 1000, minHeight: 600)
         }
+        // The minimum cuts the sidebar and the detail pane; mock mode is for looking, so it opens large (the screen clamps it).
+        .defaultSize(width: MockMode.isActive ? 1440 : 1000, height: MockMode.isActive ? 900 : 600)
         .commands {
             CommandGroup(after: .toolbar) {
                 Button("Refresh") { Task { await delegate.store.refresh() } }
@@ -31,13 +35,13 @@ struct TriageApp: App {
         }
 
         MenuBarExtra {
-            MenuBarContent().environment(delegate.store)
+            MenuBarContent().environment(\.openURL, MockMode.openURL).environment(delegate.store)
         } label: {
             MenuBarLabel(store: delegate.store)
         }
 
         Settings {
-            SettingsView().environment(delegate.store)
+            SettingsView().environment(\.openURL, MockMode.openURL).environment(delegate.store)
         }
     }
 }

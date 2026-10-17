@@ -53,6 +53,7 @@ struct SettingsView: View {
                     HStack {
                         Button(saved ? "Saved to Keychain" : "Save key") {
                             do {
+                                try MockMode.refuse("saving a key")
                                 try Keychain.set(key, for: "anthropic")
                                 saved = true
                                 saveError = nil

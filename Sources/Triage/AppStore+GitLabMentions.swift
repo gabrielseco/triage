@@ -44,8 +44,8 @@ extension AppStore {
         let host = gitlabHost
         // Without my username a reply from me couldn't be recognized, nor a mention of myself.
         guard !host.isEmpty, let me = gitlabViewer,
-            let forge = try? await forgeClient(.gitlab(host: host)) as? GitLabForge,
-            let mentions = try? await forge.mentions(),
+            let source = try? await forgeClient(.gitlab(host: host)) as? MentionsSource,
+            let mentions = try? await source.mentions(),
             host == gitlabHost
         else { return }
         let now = Date()

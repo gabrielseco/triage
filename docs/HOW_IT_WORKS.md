@@ -99,6 +99,7 @@ triage/
 │   │   ├── PromptBuilder.swift    ← evidence + logs + diff → one prompt string
 │   │   ├── AnthropicClient.swift  ← Messages API call + Keychain helper
 │   │   ├── SecretSource.swift     ← keys from 1Password (`op://…`) or a helper script
+│   │   ├── Mock/                  ← mock mode: the scenario file, the fake forge, Linear and Explain (§10)
 │   │   ├── Subprocess.swift       ← runs processes off the main actor
 │   │   ├── Handoff.swift          ← Fix in iTerm: worktree + prompt + script
 │   │   ├── Digest.swift           ← "what's new since last time" + schedule math
@@ -111,12 +112,15 @@ triage/
 │       ├── ContentView.swift      ← sidebar + inbox list
 │       ├── ItemDetailView.swift   ← detail pane + actions
 │       ├── PingViews.swift        ← list, row and detail shared by Linear pings and GitLab mentions
-│       └── SettingsView.swift     ← ⌘, window
+│       ├── SettingsView.swift     ← ⌘, window
+│       └── MockMode.swift         ← `TRIAGE_FIXTURE`: the switch for mock mode and its guards
+├── Mocks/default.json             ← the mock scenario: PRs, Linear pings and GitLab mentions
 ├── Tests/TriageCoreTests/         ← TriageCore tests, one file per module (like ExUnit / Jest)
 ├── Resources/AppIcon.svg|png      ← app icon source + 1024px render
 └── scripts/
     ├── check.sh                   ← what CI runs: format, lint, build, tests, coverage gate
     ├── bundle.sh                  ← builds ~/Applications/Triage.app
+    ├── mock.sh                    ← opens a throwaway build on mock data
     ├── render-docs.py             ← this file → docs/HOW_IT_WORKS.html
     └── render-icon.sh             ← SVG → PNG via headless Chrome
 ```
@@ -616,11 +620,37 @@ every refresh (2 min):
 |---|---|
 | `triage` | `scripts/bundle.sh` + quit the running app + `open ~/Applications/Triage.app` |
 | `scripts/bundle.sh` | `swift build -c release` → creates `Triage.app/Contents/{MacOS,Resources,Info.plist}`, builds `AppIcon.icns` from the PNG with `sips` + `iconutil`, codesigns with the stable `Triage Local Signing` identity from `scripts/setup-signing.sh` (ad-hoc fallback), migrates old settings once |
+| `scripts/mock.sh [scenario]` | Builds a throwaway bundle with its own id and opens it on mock data (default `Mocks/default.json`); the installed app is never touched. See "Mock mode" below |
+| `scripts/verify.sh` | Workbench's `verify_command`: the same throwaway build, on mock data, one screenshot per `proof: screenshot:` line in the goal |
 | `scripts/render-icon.sh` | Renders `Resources/AppIcon.svg` → `AppIcon.png` (1024px, transparent) with headless Chrome |
 | `swift run Triage` | Quick dev run, no bundle (no notifications or login item) |
-| `swift test` | Swift Testing suite: classifier rules, dedup ids, bot severity, prompt assembly, digest diff and schedule, GitHub and GitLab decoding (fixtures, no network), forge ids and wording, readable comments, GitLab approve requests and mentions, Linear pings, alerts, the handoff script |
+| `swift test` | Swift Testing suite: classifier rules, dedup ids, bot severity, prompt assembly, digest diff and schedule, GitHub and GitLab decoding (fixtures, no network), the mock scenario and fake clients, forge ids and wording, readable comments, GitLab approve requests and mentions, Linear pings, alerts, the handoff script |
 | `scripts/check.sh [--fix]` | What CI runs: swift-format, SwiftLint, Swift 6 build, tests, TriageCore coverage gate |
 | `scripts/render-docs.py` | Renders this file into `docs/HOW_IT_WORKS.html` (sidebar table of contents, light and dark) |
+
+### Mock mode
+
+`TRIAGE_FIXTURE=<scenario.json>` runs the real app on data from one file, and nothing real is reached: no
+network, no Keychain, no `gh` or 1Password, no notification, no iTerm, no browser, and not the installed app's
+settings. Views and rules run unchanged; only what the app reads from outside is swapped, in one place per edge:
+
+| Edge | Real | Mock |
+|---|---|---|
+| GitHub, GitLab pull requests | `GitHubForge`, `GitLabForge` (`ForgeClient`) | `MockForge` |
+| GitLab mentions | `GitLabForge` (`MentionsSource`) | `MockForge` |
+| Linear pings | `LinearClient` (`LinearSource`) | `MockLinear` |
+| Explain | `AnthropicClient` (`Explainer`) | `MockExplainer` |
+| Secrets, notifications, iTerm, login item, links | read or sent | refused, or a status line |
+| Settings and state | `UserDefaults.standard` | a throwaway `dev.rogal.triage.mock-state` domain, emptied at start |
+| Network | `URLSession.shared` | a `URLProtocol` that fails every request, so a missed client shows |
+
+The scenario holds the viewer on each forge, the watched repos, pull requests (times as hours ago, so "updated
+yesterday" stays true), Linear pings, GitLab mentions and the canned answers for Explain, the diff and a CI log.
+`Mocks/default.json` has one of every item kind, the viewer's PRs and others' created in a different order than
+their numbers, and a GitLab project. A test decodes it with the real models and classifies it, so it cannot drift.
+Approve, merge and close act on the mock's own copy, so a demo shows the flow. A set but unusable `TRIAGE_FIXTURE`
+ends the app: a typo never falls back to the real one. The window is titled "Triage — mock data". The plan:
+`docs/plans/MOCK.md`.
 
 An `.app` is only a folder with a known layout. `Info.plist` gives it an identity (`dev.rogal.triage`),
 which macOS needs for notifications, Keychain scoping, login items and the icon. There's no Xcode

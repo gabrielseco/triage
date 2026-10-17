@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # The verify_command Workbench runs in a thread's worktree: build this worktree's Triage into a throwaway bundle,
-# launch it, and screenshot its window into $WORKBENCH_PROOF_DIR once per `proof: screenshot: <name>` line in the goal.
-# The installed ~/Applications/Triage.app is never touched: the build has its own bundle id (below), the window is found
-# by the PID of the process started here, and only that PID is killed.
+# launch it on mock data, and screenshot its window into $WORKBENCH_PROOF_DIR once per `proof: screenshot: <name>` line
+# in the goal. The app reaches nothing real (docs/plans/MOCK.md): no GitHub, no GitLab, no Keychain, no settings of the
+# installed app, so there is nothing to wait for and nothing private in the picture. The installed
+# ~/Applications/Triage.app is never touched: the build has its own bundle id (below), the window is found by the PID
+# of the process started here, and only that PID is killed.
 #   WORKBENCH_PROOF_DIR  absolute, empty directory for the PNGs (required)
 #   WORKBENCH_GOAL       path of the goal file (required)
-#   VERIFY_SETTLE_SECONDS  wait after the window appears, for the first refresh (default 15)
-#   VERIFY_GITLAB=1     also copy gitlabHost, so GitLab shows; the build then asks for the GitLab token in the Keychain
+#   VERIFY_FIXTURE      the mock scenario (default Mocks/default.json); a goal that needs another state names its file
+#   VERIFY_SETTLE_SECONDS  wait after the window appears, for the first refresh (default 3)
 #   VERIFY_WINDOW_SIZE  <width>x<height> in points the window is set to before any capture (default 1440x900). The
 #                       window opens near the app's minimum, which cuts the sidebar. Needs Accessibility; without it
 #                       the capture is at the launch size, with a note.
@@ -20,6 +22,10 @@ set -euo pipefail
 : "${WORKBENCH_GOAL:?WORKBENCH_GOAL is not set}"
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+FIXTURE="${VERIFY_FIXTURE:-$ROOT/Mocks/default.json}"
+[[ -f "$FIXTURE" ]] || { echo "No such mock scenario: $FIXTURE" >&2; exit 1; }
+FIXTURE="$(cd "$(dirname "$FIXTURE")" && pwd)/$(basename "$FIXTURE")"
 
 WINDOW_SIZE="${VERIFY_WINDOW_SIZE:-1440x900}"
 [[ "$WINDOW_SIZE" =~ ^[1-9][0-9]*x[1-9][0-9]*$ ]] || { echo "Bad VERIFY_WINDOW_SIZE: $WINDOW_SIZE (want <width>x<height>)" >&2; exit 1; }
@@ -67,8 +73,9 @@ SWIFT
 done
 
 # A second process with the installed app's bundle id (dev.rogal.triage) starts but opens no window, so the
-# throwaway build gets its own id, and with it its own settings domain, deleted again on exit.
+# throwaway build gets its own id. Mock mode keeps its settings in its own domain too (MockMode.defaultsSuite).
 VERIFY_ID="dev.rogal.triage.verify"
+MOCK_DOMAIN="dev.rogal.triage.mock-state"
 TMP="$(mktemp -d)"
 LOG="$TMP/triage.log"
 PID=""
@@ -77,8 +84,10 @@ cleanup() {
     kill "$PID" 2>/dev/null || true
     wait "$PID" 2>/dev/null || true
   fi
-  defaults delete "$VERIFY_ID" 2>/dev/null || true
-  rm -f "$HOME/Library/Preferences/$VERIFY_ID.plist"  # `defaults delete` leaves an empty file
+  for domain in "$VERIFY_ID" "$MOCK_DOMAIN"; do
+    defaults delete "$domain" 2>/dev/null || true
+    rm -f "$HOME/Library/Preferences/$domain.plist"  # `defaults delete` leaves an empty file
+  done
   rm -rf "$TMP"
 }
 trap cleanup EXIT
@@ -94,22 +103,7 @@ SIGN_ID="Triage Local Signing"
 security find-identity -p codesigning | grep -qF "\"$SIGN_ID\"" || SIGN_ID="-"
 codesign --force --sign "$SIGN_ID" "$APP" >/dev/null 2>&1
 
-# Read-only copy of the installed app's repo list and filters, so the screenshot has something to show. Only
-# these keys: the alert state and the secret references stay out, so the pilot cannot notify or ask 1Password. Not
-# gitlabHost either: with a host set the app fetches GitLab and reads its token from the Keychain, which asks
-# "Triage wants to access key dev.rogal.triage.gitlab" for a bundle id it has never seen. VERIFY_GITLAB=1 keeps it, for
-# a goal about GitLab, and the person running it answers that prompt.
-defaults delete "$VERIFY_ID" 2>/dev/null || true
-swift - "$VERIFY_ID" <<'SWIFT' >&2
-import Foundation
-let target = CommandLine.arguments[1]
-var keep = ["repos", "onlyMine"]
-if ProcessInfo.processInfo.environment["VERIFY_GITLAB"] == "1" { keep.append("gitlabHost") }
-let source = UserDefaults.standard.persistentDomain(forName: "dev.rogal.triage") ?? [:]
-UserDefaults.standard.setPersistentDomain(source.filter { keep.contains($0.key) }, forName: target)
-SWIFT
-
-"$APP/Contents/MacOS/Triage" >"$LOG" 2>&1 &
+TRIAGE_FIXTURE="$FIXTURE" "$APP/Contents/MacOS/Triage" >"$LOG" 2>&1 &
 PID=$!
 
 id=""
@@ -141,9 +135,10 @@ if info="$(swift "$ROOT/scripts/window-info.swift" "$PID" 2>/dev/null)"; then
   echo "window: ${width}x${height}"
 fi
 
-sleep "${VERIFY_SETTLE_SECONDS:-15}"  # the first refresh is a network fetch: the list is empty until it ends
+sleep "${VERIFY_SETTLE_SECONDS:-3}"  # the first refresh reads the scenario: a moment for the list to lay out
 # A steps file is reviewed in a PR and only has these two verbs. A button that acts on a forge, opens another app or
-# spends money is refused even if a file names it: this build holds the user's real GitHub login.
+# spends money is refused even if a file names it: the mock has nothing to lose, but a steps file is also read against the
+# real app.
 refused='^(Approve|Merge|Squash|Rebase|Close|Open|Fix in iTerm|Explain)'
 run_steps() {
   local file="$1" verb arg

@@ -24,6 +24,7 @@ extension AppStore {
 
     /// The client for `forge`, fetching `repos` on refresh. Throws when there's no token.
     func forgeClient(_ forge: Forge, repos: [RepoRef] = []) async throws -> any ForgeClient {
+        if let mock = MockMode.world { return try mock.forgeClient(forge, repos: repos) }
         switch forge {
         case .github:
             guard let token = await GitHubAuth.resolveToken() else { throw GitHubError.noToken }
@@ -48,6 +49,7 @@ extension AppStore {
 
     /// Saves a pasted token for the current host, or removes it when empty, and shows its merge requests.
     func saveGitLabToken(_ token: String) throws {
+        try MockMode.refuse("saving a token")
         try Keychain.set(token, for: gitlabHost, service: GitLabAuth.keychainService)
         cachedGitLabToken = nil
         gitlabViewer = nil

@@ -20,7 +20,7 @@ enum SidebarFilter: Hashable {
 
 @MainActor @Observable
 final class AppStore {
-    private let defaults = UserDefaults.standard
+    private let defaults = AppStore.defaults
 
     var repos: [RepoRef] { didSet { save(repos, "repos") } }
     var dismissed: Set<String> { didSet { save(dismissed, "dismissed") } }
@@ -143,25 +143,25 @@ final class AppStore {
         dismissed = Self.load("dismissed") ?? []
         snoozed = Self.load("snoozed") ?? [:]
         seenPRs = Self.load("seenPRs") ?? SeenPRs()
-        onlyMine = UserDefaults.standard.bool(forKey: "onlyMine")
-        model = UserDefaults.standard.string(forKey: "model") ?? AnthropicClient.defaultModel
-        onePasswordRef = UserDefaults.standard.string(forKey: "onePasswordRef") ?? ""
+        onlyMine = Self.defaults.bool(forKey: "onlyMine")
+        model = Self.defaults.string(forKey: "model") ?? AnthropicClient.defaultModel
+        onePasswordRef = Self.defaults.string(forKey: "onePasswordRef") ?? ""
         checkoutPaths = Self.load("checkoutPaths") ?? [:]
-        harnessCommand = UserDefaults.standard.string(forKey: "harnessCommand") ?? Handoff.defaultHarnessCommand
-        gitlabHost = UserDefaults.standard.string(forKey: "gitlabHost") ?? ""
-        gitlabTokenRef = UserDefaults.standard.string(forKey: "gitlabTokenRef") ?? ""
-        linearKeyRef = UserDefaults.standard.string(forKey: "linearKeyRef") ?? ""
-        linearEnabled = UserDefaults.standard.bool(forKey: "linearEnabled")
-        notifyPings = UserDefaults.standard.object(forKey: "notifyPings") as? Bool ?? true
+        harnessCommand = Self.defaults.string(forKey: "harnessCommand") ?? Handoff.defaultHarnessCommand
+        gitlabHost = Self.defaults.string(forKey: "gitlabHost") ?? ""
+        gitlabTokenRef = Self.defaults.string(forKey: "gitlabTokenRef") ?? ""
+        linearKeyRef = Self.defaults.string(forKey: "linearKeyRef") ?? ""
+        linearEnabled = Self.defaults.bool(forKey: "linearEnabled")
+        notifyPings = Self.defaults.object(forKey: "notifyPings") as? Bool ?? true
         pingAlerts = Self.load("pingAlerts") ?? PingAlertState()
-        notifyGitLabMentions = UserDefaults.standard.object(forKey: "notifyGitLabMentions") as? Bool ?? true
+        notifyGitLabMentions = Self.defaults.object(forKey: "notifyGitLabMentions") as? Bool ?? true
         mentionAlerts = Self.load("gitlabMentionAlerts") ?? MentionAlertState()
         digestHours = Self.load("digestHours") ?? [12, 18]
-        digestWeekdaysOnly = UserDefaults.standard.object(forKey: "digestWeekdaysOnly") as? Bool ?? true
+        digestWeekdaysOnly = Self.defaults.object(forKey: "digestWeekdaysOnly") as? Bool ?? true
         digestBaseline = Self.load("digestBaseline")
         lastDigestItemIDs = Self.load("lastDigestItemIDs") ?? []
         lastDigestAt = Self.load("lastDigestAt")
-        notifyReviewRequests = UserDefaults.standard.object(forKey: "notifyReviewRequests") as? Bool ?? true
+        notifyReviewRequests = Self.defaults.object(forKey: "notifyReviewRequests") as? Bool ?? true
         reviewRequestAlerts = Self.load("reviewRequestAlerts") ?? ReviewRequestAlertState()
     }
 
