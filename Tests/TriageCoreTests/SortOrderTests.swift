@@ -26,3 +26,37 @@ private func item(_ number: Int, createdAt: Date, updatedAt: Date = start) -> At
     let b = item(4, createdAt: start)
     #expect([a, b].sortedByCreation().map(\.pr.number) == [4, 3])
 }
+
+private func extra(_ base: AttentionItem, _ name: String, _ severity: Severity) -> AttentionItem {
+    var copy = base
+    copy.id = "\(base.pr.id)|\(name)"
+    copy.severity = severity
+    return copy
+}
+
+@Test func everythingOrderNewestCreatedFirst() {
+    let items = [1, 2, 3].map { item($0, createdAt: start.addingTimeInterval(Double($0 == 2 ? 30 : $0))) }
+    #expect(items.sortedByCreation().map(\.pr.number) == [2, 3, 1])
+}
+
+@Test func everythingOrderTiesByHigherNumber() {
+    let items = [5, 9, 7].map { item($0, createdAt: start) }
+    #expect(items.sortedByCreation().map(\.pr.number) == [9, 7, 5])
+}
+
+@Test func everythingOrderKeepsAPullRequestsItemsTogetherAndInOrder() {
+    let a = item(1, createdAt: start)
+    let b = item(2, createdAt: start.addingTimeInterval(100))
+    let a1 = extra(a, "x", .high)
+    let a2 = extra(a, "y", .low)
+    let b1 = extra(b, "x", .medium)
+    let b2 = extra(b, "y", .low)
+    let sorted = [a1, b1, a2, b2].sortedByCreation()
+    #expect(sorted.map(\.id) == [b1.id, b2.id, a1.id, a2.id])
+}
+
+@Test func everythingOrderIgnoresRecentActivityOnAnOldPullRequest() {
+    let old = item(1, createdAt: start, updatedAt: start.addingTimeInterval(99_999))
+    let new = item(2, createdAt: start.addingTimeInterval(10), updatedAt: start.addingTimeInterval(10))
+    #expect([old, new].sortedByCreation().map(\.pr.number) == [2, 1])
+}

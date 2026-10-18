@@ -359,6 +359,10 @@ error/fail/vulnerability/critical/security/breaking/bug, else *low*. The headlin
 first line with a letter or digit in it, from the readable text (below) and without Markdown's backticks,
 bold or link syntax, e.g. `cursor: GBR schema pin exceeds latest version`.
 
+**Everything list:** Everything orders the pull requests by when they were opened, newest first, whoever opened
+them (`sortedByCreation`, the order Waiting for review uses). Ties go to the higher PR number, and a PR's own items
+keep their order (worst severity first, then most recently updated), so a push to an old PR doesn't move it up.
+
 **Bot finding list:** the Bot finding filter lists findings on your own PRs first, then other people's, each
 newest opened first (`sortedAsBotFindings`). On someone else's PR a bot finding has no Explain & propose fix,
 Fix in iTerm or Copy prompt, since you can't push to their branch (`showsFixActions`). Until Triage knows who

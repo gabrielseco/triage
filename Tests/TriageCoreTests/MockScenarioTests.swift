@@ -262,6 +262,20 @@ private let pr = """
     #expect(prs.contains { $0.author == w.githubViewer } && prs.contains { $0.author != w.githubViewer })
 }
 
+@Test func everythingOrderMockListsPullRequestsNewestCreatedFirst() async throws {
+    let w = try MockWorld(MockScenario.load(from: defaultScenarioURL), now: now)
+    let github = try w.forgeClient(.github, repos: w.repos)
+    let prs = try await github.fetch().flatMap { try $0.result.get().pullRequests }
+    let items = prs.flatMap { Classifier.classify($0, viewer: w.githubViewer, isNew: true).items }
+        .filter { !$0.kind.isPassive }
+        .sorted { ($0.severity, $0.pr.updatedAt) > ($1.severity, $1.pr.updatedAt) }
+    var seen: Set<String> = []
+    let numbers = items.sortedByCreation().map(\.pr).filter { seen.insert($0.id).inserted }.map(\.number)
+    let expected = prs.sorted { $0.createdAt > $1.createdAt }.map(\.number).filter(numbers.contains)
+    #expect(numbers.count > 2)
+    #expect(numbers == expected)
+}
+
 @Test func theDefaultScenarioStartsTheNewPRClockSoOthersRecentPRsAreNew() async throws {
     let w = try MockWorld(MockScenario.load(from: defaultScenarioURL), now: now)
     var seen = SeenPRs()
