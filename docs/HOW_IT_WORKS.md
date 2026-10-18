@@ -364,6 +364,9 @@ newest opened first (`sortedAsBotFindings`). On someone else's PR a bot finding 
 Fix in iTerm or Copy prompt, since you can't push to their branch (`showsFixActions`). Until Triage knows who
 you are on that forge, nothing counts as yours and the fix actions stay.
 
+**Everything list:** Everything lists pull requests newest opened first, whoever opened them
+(`sortedByCreation`), ties by highest number. The items of one pull request stay together, worst first.
+
 **Readable comments (`CommentText.readable`).** Danger, Sonar and coverage bots write HTML inside their
 Markdown, and SwiftUI's Markdown renderer shows those tags as text. `readable` turns the HTML into the Markdown
 it means: `<a>` → a link, `<code>` → backticks, `<b>` → bold, one line per table row or paragraph. It drops

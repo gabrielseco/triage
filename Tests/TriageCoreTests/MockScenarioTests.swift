@@ -262,6 +262,30 @@ private let pr = """
     #expect(prs.contains { $0.author == w.githubViewer } && prs.contains { $0.author != w.githubViewer })
 }
 
+@Test func everythingOrderMockFollowsCreation() async throws {
+    let scenario = try MockScenario.load(from: defaultScenarioURL)
+    let w = try MockWorld(scenario, now: now)
+    let github = try w.forgeClient(.github, repos: w.repos)
+    let gitlab = try w.forgeClient(.gitlab(host: #require(w.gitlabHost)))
+    var items: [AttentionItem] = []
+    for (client, viewer) in [(github, w.githubViewer), (gitlab, try #require(w.gitlabViewer))] {
+        for result in try await client.fetch() {
+            for pr in try result.result.get().pullRequests {
+                items += Classifier.classify(pr, viewer: viewer, isNew: true).items.filter { !$0.kind.isPassive }
+            }
+        }
+    }
+    items.sort { ($0.severity, $0.pr.updatedAt) > ($1.severity, $1.pr.updatedAt) }
+    var seen: Set<String> = []
+    let order = items.sortedByCreation().map(\.pr).filter { seen.insert($0.id).inserted }
+    #expect(order.count >= 5)
+
+    // createdAt is `now - createdHoursAgo`, so newest first is smallest createdHoursAgo first.
+    let hours = order.map { now.timeIntervalSince($0.createdAt) / 3600 }
+    #expect(hours == hours.sorted())
+    #expect(Set(hours).count == hours.count)
+}
+
 @Test func theDefaultScenarioStartsTheNewPRClockSoOthersRecentPRsAreNew() async throws {
     let w = try MockWorld(MockScenario.load(from: defaultScenarioURL), now: now)
     var seen = SeenPRs()
