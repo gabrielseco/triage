@@ -276,6 +276,43 @@ private let pr = """
     #expect(kinds.contains(.newPR))
 }
 
+@Test func everythingOrderMockMatchesCreationHours() async throws {
+    let w = try MockWorld(MockScenario.load(from: defaultScenarioURL), now: now)
+    var seen = SeenPRs()
+    seen.startWatching(w.allRepos, now: w.watchingSince)
+    var items: [AttentionItem] = []
+    for (client, viewer) in [
+        (try w.forgeClient(.github, repos: w.repos), w.githubViewer),
+        (try w.forgeClient(.gitlab(host: #require(w.gitlabHost))), try #require(w.gitlabViewer)),
+    ] {
+        for result in try await client.fetch() {
+            for pr in try result.result.get().pullRequests {
+                items += Classifier.classify(pr, viewer: viewer, isNew: seen.isNew(pr)).items
+            }
+        }
+    }
+    let inbox =
+        items
+        .sorted { ($0.severity, $0.pr.updatedAt) > ($1.severity, $1.pr.updatedAt) }
+        .filter { !$0.kind.isPassive }
+        .sortedByCreation()
+    var shown: [(repo: String, number: Int)] = []
+    for item in inbox {
+        let key = (repo: item.pr.repo.fullName, number: item.pr.number)
+        if let last = shown.last, last == key { continue }
+        shown.append(key)
+    }
+    #expect(
+        Set(shown.map { "\($0.repo)#\($0.number)" }).count == shown.count, "a pull request's items are not together")
+
+    let expected = w.scenario.pullRequests
+        .sorted { ($0.createdHoursAgo, -$0.number) < ($1.createdHoursAgo, -$1.number) }
+        .map { "\($0.repo)#\($0.number)" }
+        .filter { key in shown.contains { "\($0.repo)#\($0.number)" == key } }
+    #expect(shown.map { "\($0.repo)#\($0.number)" } == expected)
+    #expect(shown.count > 3)
+}
+
 @Test func mockWatchingDefaultsToADayAndFollowsTheScenario() throws {
     let w = try world(prs: pr)
     #expect(w.watchingSince == now.addingTimeInterval(-24 * 3600))
