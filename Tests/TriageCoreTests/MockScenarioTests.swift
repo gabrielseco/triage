@@ -246,6 +246,37 @@ private let pr = """
     #expect(kinds == Set(AttentionKind.allCases))
 }
 
+@Test func everythingOrderMockListsThePullRequestsNewestCreatedFirst() async throws {
+    let w = try MockWorld(MockScenario.load(from: defaultScenarioURL), now: now)
+    let github = try w.forgeClient(.github, repos: w.repos)
+    let gitlab = try w.forgeClient(.gitlab(host: #require(w.gitlabHost)))
+    var items: [AttentionItem] = []
+    for (client, viewer) in [(github, w.githubViewer), (gitlab, try #require(w.gitlabViewer))] {
+        for result in try await client.fetch() {
+            for pr in try result.result.get().pullRequests {
+                items += Classifier.classify(pr, viewer: viewer, isNew: true).items
+            }
+        }
+    }
+    // As `AppStore.inboxItems` has them, then as Everything shows them.
+    let everything =
+        items
+        .filter { !$0.kind.isPassive }
+        .sorted { ($0.severity, $0.pr.updatedAt) > ($1.severity, $1.pr.updatedAt) }
+        .sortedByCreation()
+    var groups: [PullRequest] = []
+    for item in everything where groups.last?.id != item.pr.id { groups.append(item.pr) }
+    #expect(Set(groups.map(\.id)).count == groups.count, "a pull request's items are not together")
+
+    let listed = Set(groups.map { "\($0.repo.fullName)#\($0.number)" })
+    let expected = w.scenario.pullRequests
+        .filter { listed.contains("\($0.repo)#\($0.number)") }
+        .sorted { $0.createdHoursAgo < $1.createdHoursAgo }
+        .map(\.number)
+    #expect(groups.count > 5)
+    #expect(groups.map(\.number) == expected)
+}
+
 @Test func theDefaultScenarioHasPingsAndAMentionAndCreationOrderThatDiffersFromNumbers() async throws {
     let w = try MockWorld(MockScenario.load(from: defaultScenarioURL), now: now)
     let pings = LinearPings.classify(try await w.linear().notifications().notifications, now: now)

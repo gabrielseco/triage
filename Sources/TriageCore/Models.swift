@@ -319,10 +319,18 @@ public struct AttentionItem: Identifiable, Hashable, Sendable {
 }
 
 extension [AttentionItem] {
-    /// Waiting for review reads as a queue: the most recently opened PR first, so the order doesn't reshuffle
-    /// every time someone pushes to or comments on a PR in it.
+    /// Everything and Waiting for review read as a queue: the most recently opened PR first, so the order doesn't
+    /// reshuffle every time someone pushes to or comments on a PR in it. Items of one PR keep their order.
     public func sortedByCreation() -> [AttentionItem] {
-        sorted { ($0.pr.createdAt, $0.pr.number) > ($1.pr.createdAt, $1.pr.number) }
+        enumerated()
+            .sorted { a, b in
+                let (x, y) = (a.element.pr, b.element.pr)
+                if (x.createdAt, x.number) != (y.createdAt, y.number) {
+                    return (x.createdAt, x.number) > (y.createdAt, y.number)
+                }
+                return a.offset < b.offset
+            }
+            .map(\.element)
     }
 }
 
