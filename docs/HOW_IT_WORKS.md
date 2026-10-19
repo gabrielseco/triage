@@ -625,7 +625,7 @@ every refresh (2 min):
 | `triage` | `scripts/bundle.sh` + quit the running app + `open ~/Applications/Triage.app` |
 | `scripts/bundle.sh` | `swift build -c release` → creates `Triage.app/Contents/{MacOS,Resources,Info.plist}`, builds `AppIcon.icns` from the PNG with `sips` + `iconutil`, codesigns with the stable `Triage Local Signing` identity from `scripts/setup-signing.sh` (ad-hoc fallback), migrates old settings once |
 | `scripts/mock.sh [scenario]` | Builds a throwaway bundle with its own id and opens it on mock data (default `Mocks/default.json`); the installed app is never touched. See "Mock mode" below |
-| `scripts/verify.sh` | Workbench's `verify_command`: the same throwaway build, on mock data, one screenshot per `proof: screenshot:` line in the goal |
+| `scripts/verify-app.sh` | The throwaway build on mock data that `/verify` drives under Workbench: `start` prints a pid, `list`, `press`, `shot` and `stop` take it; never the installed app |
 | `scripts/render-icon.sh` | Renders `Resources/AppIcon.svg` → `AppIcon.png` (1024px, transparent) with headless Chrome |
 | `swift run Triage` | Quick dev run, no bundle (no notifications or login item) |
 | `swift test` | Swift Testing suite: classifier rules, dedup ids, bot severity, prompt assembly, digest diff and schedule, GitHub and GitLab decoding (fixtures, no network), the mock scenario and fake clients, forge ids and wording, readable comments, GitLab approve requests and mentions, Linear pings, alerts, the handoff script |

@@ -4,7 +4,7 @@ import CoreGraphics
 
 let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
 // Optional argument: a PID. Then only that process's windows count and the owner name is ignored, so another running
-// Triage (the installed app) is never picked. Used by scripts/verify.sh.
+// Triage (the installed app) is never picked. Used by scripts/verify-app.sh.
 let pid = CommandLine.arguments.dropFirst().first.flatMap { Int($0) }
 let info = (windows as? [[String: Any]] ?? []).first { window in
     let owned: Bool

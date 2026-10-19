@@ -7,7 +7,37 @@ allowed-tools: Bash(scripts/bundle.sh:*), Bash(scripts/snap.sh:*), Bash(TRIAGE_A
 # Verify
 
 Tests cover TriageCore; nothing covers the SwiftUI app. This skill is the check for the app: run the PR's
-code as a real bundle, look at it, and say whether it matches what the PR claims.
+code as a real bundle, look at it, and say whether it matches what the PR claims. Workbench runs it too, with
+the tools listed in `[verifier]` of its config: see "Under Workbench".
+
+## Under Workbench
+
+If `WORKBENCH_PROOF_DIR` is set, Workbench started you (`workbench verifier`) on a thread's worktree, and this is the only
+part of the skill that applies: Steps 2 to 5 are for a person's own checkout and real accounts, and you have no tools for
+them. You have `Read` and `scripts/verify-app.sh`, nothing else. Never use `open`, `pkill` or `scripts/bundle.sh`, and never
+touch `~/Applications/Triage.app`.
+
+1. **What to show.** Read `$WORKBENCH_GOAL`: each criterion and its `proof:`. A `proof: screenshot: <name>` line names
+   `<name>.png`, which you leave in `$WORKBENCH_PROOF_DIR`. Read the diff-relevant files named in the criteria with `Read`
+   when you need to know what should be on screen.
+2. **Start the build.** `scripts/verify-app.sh start` builds this worktree into a throwaway bundle with its own bundle id, opens
+   it on mock data (`Mocks/default.json`, or `start Mocks/<file>.json` for a state the goal names) and prints
+   `pid=`, `window=` and `size=`. Keep the pid: every other command needs it, and refuses any other. Read the scenario file
+   first if you need to know which states it has. If the state a criterion needs is in no scenario, say so in your report;
+   do not look for it in the installed app.
+3. **Drive it.** `scripts/verify-app.sh list <pid>` shows what is on screen (role and label). `scripts/verify-app.sh press
+   <pid> "<label>"` presses a button or selects a row (an exact label, else a prefix). Wait about two seconds after a press
+   before you look: SwiftUI animates. It refuses `Approve`, `Merge`, `Squash`, `Rebase`, `Close`, `Open`, `Fix in iTerm` and
+   `Explain`; a criterion about one of those buttons is checked by seeing that it is listed, not by pressing it.
+4. **Capture.** In the state a criterion needs, `scripts/verify-app.sh shot <pid> <name>` writes
+   `$WORKBENCH_PROOF_DIR/<name>.png`. `Read` that file and look at it: if it does not show the state, press again and take it
+   again under the same name. A criterion that names several screenshots (before and after a press, a second window size)
+   gets one `shot` each, in the order the goal names them.
+5. **Stop it, always.** `scripts/verify-app.sh stop <pid>`, also when a step failed. It ends only that build and removes
+   its settings.
+6. **Report.** One line per criterion: its id, `holds` or `does not hold`, and what you saw, naming the file. Say plainly when
+   the goal needed a state you could not reach or a button you may not press. Workbench shows this as a note beside the
+   screenshots; it decides nothing, a person looks at the screenshots.
 
 ## Permissions
 
@@ -29,7 +59,7 @@ say so and stop.
 Unless the PR is about what real GitHub, GitLab or Linear data looks like, check it on mock data: the app reaches
 nothing real, shows the same state on every run and has no private titles to leak into a screenshot. `scripts/mock.sh`
 opens a throwaway build on `Mocks/default.json` beside the installed app (its own bundle id, settings and no
-Keychain), and `scripts/verify.sh` is the same build driven by Workbench. A state the default scenario lacks is a new
+Keychain), and `scripts/verify-app.sh` is the same build driven by Workbench (see "Under Workbench"). A state the default scenario lacks is a new
 file under `Mocks/` (docs/plans/MOCK.md). Steps 2 to 5 below are for changes that need the user's real accounts.
 
 ## Step 2: Build the PR into a throwaway bundle
