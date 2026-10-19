@@ -189,7 +189,7 @@ final class AppStore {
 
     var visibleItems: [AttentionItem] {
         switch filter {
-        case .all: inboxItems
+        case .all: inboxItems.sortedByCreation()
         case .kind(.awaitingReview): activeItems.filter { $0.kind == .awaitingReview }.sortedByCreation()
         case .kind(.botFinding):
             activeItems.filter { $0.kind == .botFinding }.sortedAsBotFindings(viewer: viewer(for:))
