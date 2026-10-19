@@ -49,7 +49,7 @@ fi
 codesign --force --sign "$SIGN_ID" "$APP" >/dev/null
 
 # One-time: carry over settings saved by the unbundled binary (domain "Triage"). Not for a throwaway build
-# (TRIAGE_APP set: /verify, verify.sh, mock.sh), which must never write the installed app's settings.
+# (TRIAGE_APP set: /verify, verify-app.sh, mock.sh), which must never write the installed app's settings.
 if [[ -z "${TRIAGE_APP:-}" ]] && ! defaults read "$BUNDLE_ID" repos >/dev/null 2>&1 && defaults read Triage repos >/dev/null 2>&1; then
   defaults export Triage - | defaults import "$BUNDLE_ID" -
 fi

@@ -3,12 +3,12 @@ import Testing
 
 @testable import TriageCore
 
-/// The scenario `scripts/mock.sh` and `scripts/verify.sh` run on, read from the repo.
+/// The scenario `scripts/mock.sh` and `scripts/verify-app.sh` run on, read from the repo.
 private let defaultScenarioURL = URL(fileURLWithPath: #filePath)
     .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     .appendingPathComponent("Mocks/default.json")
 
-/// The scenario a goal about bot findings names (`VERIFY_FIXTURE`, or `verify-app.sh start Mocks/bot-findings.json`).
+/// The scenario a goal about bot findings names (`scripts/verify-app.sh start Mocks/bot-findings.json`).
 private let botFindingsScenarioURL = defaultScenarioURL.deletingLastPathComponent()
     .appendingPathComponent("bot-findings.json")
 

@@ -6,12 +6,12 @@ Status: built in one PR. Written 2026-10-17.
 
 `TRIAGE_FIXTURE=<scenario.json>` runs the real app on data from one file. Nothing real is reached: no network, no
 Keychain, no `gh`, no 1Password, no notification, no iTerm, no browser, and none of the installed app's settings. The
-screen is the same on every run, so `/verify` and Workbench's `verify.sh` can photograph a state a goal names without
+screen is the same on every run, so `/verify` (and Workbench's verifier, which runs it) can photograph a state a goal names without
 caring about GitHub, GitLab or tokens, and anyone can open the mock app to look at a state or try a change.
 
 ## Why
 
-`scripts/verify.sh` copied the installed app's repo list and then had to work around what that dragged in: the GitLab
+The old `scripts/verify.sh` (removed: the verifier drives `scripts/verify-app.sh` now) copied the installed app's repo list and then had to work around what that dragged in: the GitLab
 host (a Keychain dialog that blocked the first refresh), the live PR list (a screenshot of the owner's own pull
 requests that cannot show a boundary between "mine" and "others'"), private titles in a public screenshot, and a
 15 s wait for a network fetch. Each was patched on its own. A mock at the app's edges removes all of them at once.
@@ -51,19 +51,18 @@ requests that cannot show a boundary between "mine" and "others'"), private titl
   (default `Mocks/default.json`). The installed app is never touched. `swift run Triage` with `TRIAGE_FIXTURE` set also
   works, without notifications.
 - `scripts/verify-app.sh` is that build for something else to drive: `start [scenario]` prints its pid and window id and
-  leaves it running, `list`, `press`, `shot` and `stop` take the pid and refuse any other process. `scripts/verify.sh` and
-  the `/verify` skill under Workbench both use it.
+  leaves it running, `list`, `press`, `shot` and `stop` take the pid and refuse any other process. The `/verify` skill under
+  Workbench drives it, always on a scenario (default `Mocks/default.json`): no settings are copied, no GitLab handling is
+  needed and it waits 3 s, not 15 (`VERIFY_SETTLE_SECONDS`).
 - `Mocks/bot-findings.json` is the default scenario plus a bot finding on someone else's PR (#409, reviewed by the viewer),
   to see that the viewer's own findings come first and only they offer the fix actions.
-- `scripts/verify.sh` always runs on a scenario (`VERIFY_FIXTURE`, default `Mocks/default.json`). It no longer copies
-  settings, needs no GitLab handling and waits 3 s, not 15.
 
 ## The scenario's clock
 
 "New PR" means opened after the app started watching the repo, and a first fetch starts that clock at "now", after
 every PR in a scenario. So the scenario says when watching began (`watchingHoursAgo`, default 24) and the app starts
 the clock there. GitLab mentions are polled 1 s in, not 30 s, because there is no token to read first. A scenario that
-does not load makes the app end with the reason on stderr, which `open` would hide, so `mock.sh` and `verify.sh` run
+does not load makes the app end with the reason on stderr, which `open` would hide, so `mock.sh` and `verify-app.sh` run
 `Triage --check-fixture` first and stop with the message.
 
 ## The default scenario

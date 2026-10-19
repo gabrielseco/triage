@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The throwaway Triage build that /verify and Workbench drive, and nothing else: it never touches the installed
-# ~/Applications/Triage.app. One helper for what both scripts/verify.sh and the /verify skill (under Workbench) need, so the
-# parts that keep a verification safe are written once.
+# ~/Applications/Triage.app. The /verify skill, run by Workbench's verifier, drives it, so the parts that keep a verification safe are
+# written once and the model has nothing else to call.
 #   scripts/verify-app.sh start [scenario.json]   build this checkout, launch it on mock data, print its pid and window
 #                                                 id, and leave it running (default scenario: Mocks/default.json)
 #   scripts/verify-app.sh list <pid>              what is on screen: role <tab> label
