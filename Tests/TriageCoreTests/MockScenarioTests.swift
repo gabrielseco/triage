@@ -3,10 +3,14 @@ import Testing
 
 @testable import TriageCore
 
-/// The scenario `scripts/mock.sh` and `scripts/verify.sh` run on, read from the repo.
+/// The scenario `scripts/mock.sh` and `scripts/verify-app.sh` run on, read from the repo.
 private let defaultScenarioURL = URL(fileURLWithPath: #filePath)
     .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     .appendingPathComponent("Mocks/default.json")
+
+/// The scenario a goal about bot findings names (`scripts/verify-app.sh start Mocks/bot-findings.json`).
+private let botFindingsScenarioURL = defaultScenarioURL.deletingLastPathComponent()
+    .appendingPathComponent("bot-findings.json")
 
 private let now = Date(timeIntervalSince1970: 1_800_000_000)
 
@@ -282,4 +286,23 @@ private let pr = """
     let custom = try MockWorld(
         scenario(#"{"watchingHoursAgo":2,"github":{"viewer":"me","repos":[]},"pullRequests":[]}"#), now: now)
     #expect(custom.watchingSince == now.addingTimeInterval(-2 * 3600))
+}
+
+@Test func theBotFindingsScenarioHasOneFindingOnYourPRAndOneOnSomeoneElses() async throws {
+    let w = try MockWorld(MockScenario.load(from: botFindingsScenarioURL), now: now)
+    let github = try w.forgeClient(.github, repos: w.repos)
+    var findings: [AttentionItem] = []
+    for result in try await github.fetch() {
+        for pr in try result.result.get().pullRequests {
+            findings += Classifier.classify(pr, viewer: w.githubViewer, isNew: true).items.filter {
+                $0.kind == .botFinding
+            }
+        }
+    }
+    #expect(findings.count == 2)
+    // Yours first, though the other PR is newer, and only yours offers the actions that need your own branch.
+    let sorted = findings.sortedAsBotFindings { _ in w.githubViewer }
+    #expect(sorted.map(\.pr.number) == [81, 409])
+    #expect(sorted.map { $0.showsFixActions(viewer: w.githubViewer) } == [true, false])
+    #expect(sorted.map { $0.pr.author == w.githubViewer } == [true, false])
 }

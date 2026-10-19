@@ -1,8 +1,8 @@
 // Drive Triage's main window through the Accessibility API. The terminal needs Accessibility permission. Used by /verify.
 //   swift scripts/ax.swift                  list what's on screen: role <tab> label
 //   swift scripts/ax.swift press "Dismiss"  press the first button, or select the first row, whose label starts with that
-//   swift scripts/ax.swift resize 1440 900  set the main window's size in points (scripts/verify.sh)
-//   TRIAGE_PID=<pid> swift scripts/ax.swift ...  drive that process, not the installed app (scripts/verify.sh)
+//   swift scripts/ax.swift resize 1440 900  set the main window's size in points (scripts/verify-app.sh)
+//   TRIAGE_PID=<pid> swift scripts/ax.swift ...  drive that process, not the installed app (scripts/verify-app.sh)
 import AppKit
 import ApplicationServices
 
@@ -45,7 +45,7 @@ func walk(_ element: AXUIElement, into found: inout [Found]) {
     }
 }
 
-// TRIAGE_PID drives that one process, whatever its bundle id: scripts/verify.sh's throwaway build has its own id and
+// TRIAGE_PID drives that one process, whatever its bundle id: scripts/verify-app.sh's throwaway build has its own id and
 // runs next to the installed app, which this must never press buttons in. Without it, the installed app, as before.
 // resize is for the verify build only, so it has no installed-app fallback.
 if CommandLine.arguments.dropFirst().first == "resize", ProcessInfo.processInfo.environment["TRIAGE_PID"] == nil {
@@ -86,7 +86,7 @@ if args.first == "press", let target = args.dropFirst().first {
         exit(1)
     }
     // TRIAGE_REFUSE: a regex the resolved label must not match. Checked here, not on `target`, because the match
-    // above is by prefix: "Expl" resolves to "Explain & propose fix". Set by scripts/verify.sh.
+    // above is by prefix: "Expl" resolves to "Explain & propose fix". Set by scripts/verify-app.sh.
     let refuse = ProcessInfo.processInfo.environment["TRIAGE_REFUSE"]
     if let refuse, hit.label.range(of: refuse, options: .regularExpression) != nil {
         FileHandle.standardError.write(Data("Refused: \"\(target)\" is \"\(hit.label)\"\n".utf8))
