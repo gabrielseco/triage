@@ -11,7 +11,7 @@
 # Every command after `start` takes the pid `start` printed and refuses any other: a pid it did not start, the installed
 # app, or a process that has since been replaced, so the window, the button and the process are always this build's.
 # Safety, each part written down because a model may be running this:
-#   - the build has its own bundle id (dev.rogal.triage.verify) and the app is in mock mode (docs/plans/MOCK.md): it
+#   - the build has a bundle id of its own, new for each start (dev.rogal.triage.verify-<number>), and the app is in mock mode (docs/plans/MOCK.md): it
 #     reaches no GitHub, GitLab or Keychain, reads none of the installed app's settings, and shows no private titles
 #   - the window is found by pid, never by name, and only that pid is ever killed
 #   - `press` refuses the buttons that act on a forge, open another app or spend money, by label, here and again in
@@ -25,7 +25,9 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-VERIFY_ID="dev.rogal.triage.verify"
+# One id per start: a process that shares a bundle id with an earlier one that was killed can start and open no window, and
+# nothing else says why. The id of a running build is kept in its directory.
+ID_PREFIX="dev.rogal.triage.verify"
 MOCK_DOMAIN="dev.rogal.triage.mock-state"  # MockMode.defaultsSuite
 # The buttons a verification never presses, by the start of their label.
 REFUSED='^(Approve|Merge|Squash|Rebase|Close|Open|Fix in iTerm|Explain)'
@@ -54,18 +56,21 @@ build_dir() {
   printf '%s' "$dir"
 }
 
+# The settings of the build with this bundle id (empty: only the mock domain, which every build shares).
 forget_settings() {
-  for domain in "$VERIFY_ID" "$MOCK_DOMAIN"; do
+  local id="${1:-}" domain
+  for domain in ${id:+"$id"} "$MOCK_DOMAIN"; do
     defaults delete "$domain" 2>/dev/null || true
     rm -f "$HOME/Library/Preferences/$domain.plist"  # `defaults delete` leaves an empty file
   done
-  rm -rf "$HOME/Library/Saved Application State/$VERIFY_ID.savedState"  # the window frame macOS keeps per bundle id
+  [[ -z "$id" ]] || rm -rf "$HOME/Library/Saved Application State/$id.savedState" "$HOME/Library/Caches/$id" "$HOME/Library/HTTPStorages/$id"
 }
 
 # Ends the build with this pid and removes what it left. Quiet when there is nothing to do.
 remove_build() {
-  local pid="$1" dir=""
+  local pid="$1" dir="" id=""
   [[ -f "$PIDS/$pid" ]] && dir="$(<"$PIDS/$pid")"
+  [[ -n "$dir" && -f "$dir/bundle-id" ]] && id="$(<"$dir/bundle-id")"
   if [[ -n "$dir" && "$(ps -o command= -p "$pid" 2>/dev/null)" == "$dir/Triage.app/Contents/MacOS/Triage"* ]]; then
     kill "$pid" 2>/dev/null || true
     for _ in 1 2 3 4 5 6 7 8 9 10; do kill -0 "$pid" 2>/dev/null || break; sleep 0.2; done
@@ -73,6 +78,7 @@ remove_build() {
   fi
   rm -f "$PIDS/$pid"
   [[ -n "$dir" && "$dir" == "$STATE_ROOT"/build.* ]] && rm -rf "$dir"
+  [[ "$id" == "$ID_PREFIX"-* ]] && forget_settings "$id"
   return 0
 }
 
@@ -106,17 +112,18 @@ SWIFT
   remove_stale
   # Global, not local: the EXIT trap runs after this function has returned.
   tmp="$(mktemp -d "$STATE_ROOT/build.XXXXXX")"
-  pid="" ok=0
+  pid="" ok=0 bundle_id="$ID_PREFIX-$RANDOM$RANDOM"
   local id="" sign="Triage Local Signing"
+  printf '%s' "$bundle_id" >"$tmp/bundle-id"
   # Anything short of a printed pid ends the build: a half-started app must not be left running.
-  trap 'if ((ok == 0)); then [[ -n "$pid" ]] && remove_build "$pid"; rm -rf "$tmp"; forget_settings; fi' EXIT
+  trap 'if ((ok == 0)); then [[ -n "$pid" ]] && remove_build "$pid"; rm -rf "$tmp"; forget_settings "${bundle_id:-}"; fi' EXIT
   trap 'exit 130' INT
   trap 'exit 143' TERM
 
   local app="$tmp/Triage.app" log="$tmp/triage.log"
   TRIAGE_APP="$app" "$ROOT/scripts/bundle.sh" >&2
   # A second process with the installed app's bundle id (dev.rogal.triage) starts but opens no window.
-  /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $VERIFY_ID" "$app/Contents/Info.plist"
+  /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $bundle_id" "$app/Contents/Info.plist"
   # Changing the plist breaks the signature bundle.sh made. Sign with the same stable identity, as bundle.sh does: an ad hoc
   # signature differs on every run, so macOS asks again for each Keychain item the app reads (GitLab, Linear, Anthropic).
   security find-identity -p codesigning | grep -qF "\"$sign\"" || sign="-"
