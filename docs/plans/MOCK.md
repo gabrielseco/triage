@@ -50,6 +50,11 @@ requests that cannot show a boundary between "mine" and "others'"), private titl
 - `scripts/mock.sh [scenario]` builds a throwaway bundle with its own bundle id and opens it on a scenario
   (default `Mocks/default.json`). The installed app is never touched. `swift run Triage` with `TRIAGE_FIXTURE` set also
   works, without notifications.
+- `scripts/verify-app.sh` is that build for something else to drive: `start [scenario]` prints its pid and window id and
+  leaves it running, `list`, `press`, `shot` and `stop` take the pid and refuse any other process. `scripts/verify.sh` and
+  the `/verify` skill under Workbench both use it.
+- `Mocks/bot-findings.json` is the default scenario plus a bot finding on someone else's PR (#409, reviewed by the viewer),
+  to see that the viewer's own findings come first and only they offer the fix actions.
 - `scripts/verify.sh` always runs on a scenario (`VERIFY_FIXTURE`, default `Mocks/default.json`). It no longer copies
   settings, needs no GitLab handling and waits 3 s, not 15.
 

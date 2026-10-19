@@ -11,6 +11,7 @@ scripts/check.sh --fix   # auto-format first
 scripts/bundle.sh        # build ~/Applications/Triage.app (needed for notifications, login item, Fix in iTerm)
 scripts/snap.sh out.png  # screenshot the Triage window (out.mov 10 records 10s), used by /verify
 scripts/mock.sh [file]   # open the app on mock data (Mocks/default.json): nothing real is reached, see docs/plans/MOCK.md
+scripts/verify-app.sh    # the throwaway mock-data build /verify drives under Workbench: start (prints pid, window), list, press, shot, stop <pid>; never the installed app
 scripts/verify.sh        # Workbench verify_command: build a throwaway bundle, launch it on mock data, screenshot its window per goal `proof: screenshot:`; scripts/verify-steps/<name>.steps (press/wait) puts the app in a state first
 ```
 
