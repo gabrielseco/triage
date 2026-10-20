@@ -8,7 +8,11 @@
 #   scripts/verify-app.sh press <pid> "<label>"   press that button, or select that row
 #   scripts/verify-app.sh shot <pid> <name>       screenshot the window into $WORKBENCH_PROOF_DIR/<name>.png
 #   scripts/verify-app.sh stop <pid>              end that build, and remove it and its settings
-# Every command after `start` takes the pid `start` printed and refuses any other: a pid it did not start, the installed
+#   scripts/verify-app.sh serve [scenario.json]   `start`, then stay in the foreground until told to end (SIGTERM or Ctrl-C),
+#                                                 and remove the build then. For Workbench's `[run]`, which starts and ends it:
+#                                                 it prints "Triage is up" when the window is on screen. `list`, `press` and
+#                                                 `shot` take `run` in place of the pid, meaning that build; `stop` does not.
+# Every command after `start` takes the pid `start` printed (or `run` under `serve`) and refuses any other: a pid it did not start, the installed
 # app, or a process that has since been replaced, so the window, the button and the process are always this build's.
 # Safety, each part written down because a model may be running this:
 #   - the build has a bundle id of its own, new for each start (dev.rogal.triage.verify-<number>), and the app is in mock mode (docs/plans/MOCK.md): it
@@ -36,13 +40,23 @@ STATE_ROOT="${STATE_ROOT%/}/triage-verify"
 PIDS="$STATE_ROOT/pids"
 
 usage() {
-  sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//' >&2
+  sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//' >&2
   exit 2
 }
 
 fail() {
   echo "verify-app: $*" >&2
   exit 1
+}
+
+# The pid of the build `serve` is holding for Workbench: `run` means that build. Anything else is returned as it came.
+resolve_pid() {
+  local arg="$1" file
+  [[ "$arg" == run ]] || { printf '%s' "$arg"; return; }
+  [[ "${WORKBENCH_RUN_PID:-}" =~ ^[1-9][0-9]*$ ]] || fail "'run' needs WORKBENCH_RUN_PID: there is no build that Workbench started"
+  file="$PIDS/serve-$WORKBENCH_RUN_PID"
+  [[ -f "$file" ]] || fail "no build is being served for pid $WORKBENCH_RUN_PID"
+  printf '%s' "$(<"$file")"
 }
 
 # The directory of the build with this pid, only when that process is still the one we started from it.
@@ -88,6 +102,7 @@ remove_stale() {
   [[ -d "$PIDS" ]] || return 0
   for file in "$PIDS"/*; do
     [[ -f "$file" ]] || continue
+    [[ "$(basename "$file")" == serve-* ]] && continue  # a live `serve` owns its file and removes it on exit
     pid="$(basename "$file")"
     kill -0 "$pid" 2>/dev/null || remove_build "$pid"
   done
@@ -175,12 +190,15 @@ SWIFT
 }
 
 list() {
-  build_dir "$1" >/dev/null
-  TRIAGE_PID="$1" swift "$ROOT/scripts/ax.swift"
+  local pid
+  pid="$(resolve_pid "$1")"
+  build_dir "$pid" >/dev/null
+  TRIAGE_PID="$pid" swift "$ROOT/scripts/ax.swift"
 }
 
 press() {
-  local pid="$1" label="${2:-}"
+  local pid label="${2:-}"
+  pid="$(resolve_pid "$1")"
   build_dir "$pid" >/dev/null
   [[ -n "$label" ]] || fail "press needs a label"
   if [[ "$label" =~ $REFUSED ]]; then fail "refused: press $label (it acts on a forge, opens another app or costs money)"; fi
@@ -189,7 +207,8 @@ press() {
 }
 
 shot() {
-  local pid="$1" name="${2:-}" info id
+  local pid name="${2:-}" info id
+  pid="$(resolve_pid "$1")"
   build_dir "$pid" >/dev/null
   [[ "$name" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || fail "bad screenshot name: $name"
   : "${WORKBENCH_PROOF_DIR:?WORKBENCH_PROOF_DIR is not set}"
@@ -209,9 +228,25 @@ stop() {
   echo "stopped $pid"
 }
 
+# What Workbench's `[run]` runs: the same build as `start`, held until Workbench ends it, so the process Workbench owns is the
+# one that cleans up. `WORKBENCH_RUN_PID` is this script's pid, which is how `run` finds the build in the other commands.
+serve() {
+  start "$@"
+  serve_file="$PIDS/serve-$$"
+  printf '%s' "$pid" >"$serve_file"
+  # `pid` is start's global: the build to remove, here and on any way out.
+  trap 'remove_build "$pid"; forget_settings; rm -f "$serve_file"' EXIT
+  trap 'exit 143' TERM
+  trap 'exit 130' INT
+  echo "Triage is up"
+  while kill -0 "$pid" 2>/dev/null; do sleep 0.5; done
+  fail "the build ended on its own; its output is in $tmp/triage.log"
+}
+
 command="${1:-}"
 case "$command" in
   start) shift; start "$@" ;;
+  serve) shift; serve "$@" ;;
   list | press | shot | stop)
     shift
     [[ $# -ge 1 ]] || usage

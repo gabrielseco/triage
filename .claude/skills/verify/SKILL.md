@@ -20,7 +20,9 @@ touch `~/Applications/Triage.app`.
 1. **What to show.** Read `$WORKBENCH_GOAL`: each criterion and its `proof:`. A `proof: screenshot: <name>` line names
    `<name>.png`, which you leave in `$WORKBENCH_PROOF_DIR`. Read the diff-relevant files named in the criteria with `Read`
    when you need to know what should be on screen.
-2. **Start the build.** `scripts/verify-app.sh start` builds this worktree into a throwaway bundle with its own bundle id, opens
+2. **The build.** If `WORKBENCH_RUN_PID` is set, Workbench has already built and started it (`[run]` in its config, which runs
+   `scripts/verify-app.sh serve`) on mock data and will end it when you finish: use the word `run` wherever a command below takes
+   a pid, and skip `start` and `stop`. Otherwise `scripts/verify-app.sh start` builds this worktree into a throwaway bundle with its own bundle id, opens
    it on mock data (`Mocks/default.json`, or `start Mocks/<file>.json` for a state the goal names) and prints
    `pid=`, `window=` and `size=`. Keep the pid: every other command needs it, and refuses any other. Read the scenario file
    first if you need to know which states it has. If the state a criterion needs is in no scenario, say so in your report;
@@ -33,7 +35,8 @@ touch `~/Applications/Triage.app`.
    `$WORKBENCH_PROOF_DIR/<name>.png`. `Read` that file and look at it: if it does not show the state, press again and take it
    again under the same name. A criterion that names several screenshots (before and after a press, a second window size)
    gets one `shot` each, in the order the goal names them.
-5. **Stop it, always.** `scripts/verify-app.sh stop <pid>`, also when a step failed. It ends only that build and removes
+5. **Stop it, always.** With `start`: `scripts/verify-app.sh stop <pid>`, also when a step failed. With `run`, do nothing: Workbench
+   ends it. It ends only that build and removes
    its settings.
 6. **Report.** One line per criterion: its id, `holds` or `does not hold`, and what you saw, naming the file. Say plainly when
    the goal needed a state you could not reach or a button you may not press. Workbench shows this as a note beside the
