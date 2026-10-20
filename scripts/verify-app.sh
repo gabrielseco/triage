@@ -102,6 +102,7 @@ remove_stale() {
   [[ -d "$PIDS" ]] || return 0
   for file in "$PIDS"/*; do
     [[ -f "$file" ]] || continue
+    [[ "$(basename "$file")" == serve-* ]] && continue  # a live `serve` owns its file and removes it on exit
     pid="$(basename "$file")"
     kill -0 "$pid" 2>/dev/null || remove_build "$pid"
   done
