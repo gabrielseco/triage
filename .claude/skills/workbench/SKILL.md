@@ -16,8 +16,10 @@ This file adds only what is specific to Triage.
 1. `workbench doctor`
 2. `workbench goal new <name>`, fill in the goal, show it, `goal approve` only when the user says go
 3. `workbench run` (background), then `status` / `log`
-4. `workbench review`, look at the verifier screenshots with `Read`; `open --editor cursor` once a worktree exists
-5. `send-back` if wrong; `accept`; `ship --yes`
+4. `workbench review`, look at the verifier screenshots with `Read`; `open --editor cursor` once a worktree exists;
+   optionally `workbench judge` (advisory, never runs on its own)
+5. `send-back` if wrong; `accept`; `ship --yes`; then open the PR and confirm the screenshots are in it. If a visible change
+   has none, run `workbench ship --screenshots` and say so if it fails (CLAUDE.md requires them for app changes)
 6. `workbench pr-review --pr <n>` after the PR is open, then post the result on the PR (CLAUDE.md step 5); fix findings and run again
 7. Stop. Merge only when the user asks (CLAUDE.md step 6)
 
@@ -34,6 +36,9 @@ This file adds only what is specific to Triage.
   unrelated is there, `git rm --cached` it in the worktree and amend. Put "do not commit untracked files" in the goal's out of scope.
 - **Allowlist.** `git rm` and `git commit --amend` are not in `[tools] allowed`, so a send-back asking for them is denied. The user
   edits the allowlist; do not edit `.workbench/config.toml` yourself.
+- **Screenshots and the PR body.** `ship` attaches the verifier's screenshots with `pr-shots` but can skip it silently (PR #81 had
+  none). Check the PR after `ship`. The description is written before any fix you push afterwards, so re-read it and correct stale
+  lines (for example a file that was since removed).
 - **`workbench open` needs a worktree**, which exists only after `run` starts and is removed by `ship`.
 - **Repo rules still apply**: one PR per change, the PR template, no work data in PRs, Co-Authored-By on commits. Workbench's
   description turn writes the PR body, so check it against `.github/pull_request_template.md` and tick only Testing boxes that ran.
