@@ -36,6 +36,10 @@ Do this without being asked:
    `post-merge` hook (`.githooks/`, enabled with `git config core.hooksPath .githooks`) rebuilds and restarts
    `~/Applications/Triage.app` when the app changed. Report the notification or `~/Library/Logs/Triage/rebuild.log`.
 
+## Workbench
+
+When the user says to use Workbench, read `.claude/skills/workbench/SKILL.md` first and follow it, including `workbench pr-review`.
+
 ## Conventions
 
 - Logic goes in `TriageCore` (pure, tested). The `Triage` app target is SwiftUI, persistence and OS integration, and has no tests.
