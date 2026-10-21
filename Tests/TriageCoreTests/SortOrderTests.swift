@@ -62,3 +62,43 @@ private func item(_ number: Int, createdAt: Date, updatedAt: Date = start, tag: 
     let new = item(2, createdAt: start.addingTimeInterval(3600), updatedAt: start.addingTimeInterval(3600))
     #expect([old, new].sortedByCreation().map(\.pr.number) == [2, 1])
 }
+
+// MARK: - Repo
+
+private let gitlab = Forge.gitlab(host: "gitlab.example.com")
+
+private func gitlabItem(
+    _ number: Int, repo: RepoRef, createdAt: Date, updatedAt: Date, severity: Severity = .low
+) -> AttentionItem {
+    let pr = PullRequest(
+        repo: repo, number: number, title: "MR \(number)",
+        url: URL(string: "https://gitlab.example.com/\(repo.owner)/\(repo.name)/-/merge_requests/\(number)")!,
+        author: "alice", createdAt: createdAt, updatedAt: updatedAt, headSha: "abc")
+    return AttentionItem(
+        id: "\(pr.id)|waiting", kind: .awaitingReview, severity: severity, pr: pr, headline: "Waiting for review",
+        evidence: [])
+}
+
+@Test func repoOrderPutsTheNewerGitLabMergeRequestFirstEvenIfTheOldOneWasJustUpdated() {
+    let api = RepoRef(owner: "platform", name: "api", forge: gitlab)
+    let web = RepoRef(owner: "platform", name: "web", forge: gitlab)
+    let hour = start.addingTimeInterval(3600)
+    // activeItems' order: worst first, then most recently updated, so the old MR leads.
+    let items = [
+        gitlabItem(1, repo: api, createdAt: start, updatedAt: start.addingTimeInterval(90_000), severity: .high),
+        gitlabItem(5, repo: web, createdAt: start.addingTimeInterval(9000), updatedAt: start),
+        gitlabItem(2, repo: api, createdAt: hour, updatedAt: hour),
+    ]
+    #expect(items.inRepo(api.id).map(\.pr.number) == [2, 1])
+}
+
+@Test func repoOrderKeepsOnlyThatRepoAndBreaksTiesByTheHighestNumber() {
+    let api = RepoRef(owner: "platform", name: "api", forge: gitlab)
+    let items = [
+        gitlabItem(3, repo: api, createdAt: start, updatedAt: start),
+        item(8, createdAt: start.addingTimeInterval(7200)),
+        gitlabItem(4, repo: api, createdAt: start, updatedAt: start),
+    ]
+    #expect(items.inRepo(api.id).map(\.pr.number) == [4, 3])
+    #expect(items.inRepo("acme/web").map(\.pr.number) == [8])
+}
