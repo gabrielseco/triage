@@ -366,7 +366,8 @@ you are on that forge, nothing counts as yours and the fix actions stay.
 
 **Everything list:** Everything lists pull requests newest opened first, whoever opened it, ties by PR number
 (`sortedByCreation`, as Waiting for review does), so a push to an old PR doesn't move it up. A PR's items stay
-together, most severe first, then most recently updated.
+together, most severe first, then most recently updated. A repo picked in the sidebar lists its PRs the same way
+(`inRepo`).
 
 **Readable comments (`CommentText.readable`).** Danger, Sonar and coverage bots write HTML inside their
 Markdown, and SwiftUI's Markdown renderer shows those tags as text. `readable` turns the HTML into the Markdown

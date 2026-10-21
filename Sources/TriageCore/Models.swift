@@ -332,6 +332,11 @@ extension [AttentionItem] {
             }
             .map(\.element)
     }
+
+    /// A repo's list in the sidebar, on any forge: its items, newest opened PR first, as Everything reads.
+    public func inRepo(_ repoID: String) -> [AttentionItem] {
+        filter { $0.pr.repo.id == repoID }.sortedByCreation()
+    }
 }
 
 public struct PRStats: Sendable, Hashable {

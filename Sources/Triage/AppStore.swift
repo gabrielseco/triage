@@ -194,7 +194,7 @@ final class AppStore {
         case .kind(.botFinding):
             activeItems.filter { $0.kind == .botFinding }.sortedAsBotFindings(viewer: viewer(for:))
         case .kind(let k): activeItems.filter { $0.kind == k }
-        case .repo(let r): activeItems.filter { $0.pr.repo.id == r }
+        case .repo(let r): activeItems.inRepo(r)
         case .lastDigest: activeItems.filter { lastDigestItemIDs.contains($0.id) }
         case .linear, .gitlabMentions: []
         }
