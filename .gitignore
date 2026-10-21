@@ -7,3 +7,5 @@ xcuserdata/
 .claude/worktrees/
 # pr-shots' uploader (wrangler) caches here when it runs in a worktree, which would keep `workbench ship` from removing it
 .wrangler/
+# Editor-generated config (the Swift extension writes .vscode/launch.json when Cursor/VS Code opens the repo)
+.vscode/
