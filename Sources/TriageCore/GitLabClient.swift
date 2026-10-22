@@ -96,7 +96,9 @@ public struct GitLabClient: Sendable {
         guard let mr = d.project?.mergeRequest, let repo = RepoRef(gitlabPath: ref.projectPath, host: host) else {
             throw GitLabError.graphql("merge request not found or not accessible")
         }
-        return Detail(pr: mr.toModel(repo: repo), warnings: mr.truncationWarnings(repo: repo))
+        return Detail(
+            pr: mr.toModel(repo: repo, squashOption: d.project?.squashOption),
+            warnings: mr.truncationWarnings(repo: repo))
     }
 
     // MARK: - Plumbing
@@ -137,6 +139,7 @@ public struct GitLabClient: Sendable {
     static let detailQuery = """
         query($path: ID!, $iid: String!) {
           project(fullPath: $path) {
+            squashOption
             mergeRequest(iid: $iid) {
               iid title description webUrl draft createdAt updatedAt sourceBranch diffHeadSha
               detailedMergeStatus conflicts approved approvalsLeft squashOnMerge userPermissions { canMerge }
@@ -216,7 +219,11 @@ struct ListData: Decodable {
 }
 
 struct DetailData: Decodable {
-    struct Project: Decodable { let mergeRequest: MRNode? }
+    struct Project: Decodable {
+        /// Raw, so a value Triage doesn't know reads as missing instead of failing the MR.
+        let squashOption: String?
+        let mergeRequest: MRNode?
+    }
     let project: Project?
 }
 
@@ -296,7 +303,9 @@ struct MRNode: Decodable {
     let headPipeline: Pipeline?
     let discussions: Discussions
 
-    func toModel(repo: RepoRef) -> PullRequest {
+    /// Without a `squashOption` both methods are offered and the MR's `squashOnMerge` picks the default.
+    func toModel(repo: RepoRef, squashOption raw: String? = nil) -> PullRequest {
+        let squashOption = raw.flatMap(SquashOption.init(rawValue:))
         let hostURL = URL(string: "/", relativeTo: repo.url)?.absoluteURL ?? repo.url
         let approvers = Set(approvedBy?.nodes.map(\.username) ?? [])
         // System notes ("added 3 commits", "changed the title") aren't comments; left in, every push would read
@@ -319,7 +328,8 @@ struct MRNode: Decodable {
             threads: threads,
             comments: human.filter { !$0.0.resolvable }.flatMap { $0.1.map { $0.model(hostURL, mr: webUrl) } },
             summary: PRSummary.extract(description),
-            mergeMethod: squashOnMerge == true ? .squash : .merge, allowedMergeMethods: [.merge, .squash],
+            mergeMethod: squashOnMerge == true || squashOption == .encouraged ? .squash : .merge,
+            allowedMergeMethods: squashOption?.allowedMergeMethods ?? [.merge, .squash],
             viewerCanMerge: userPermissions?.canMerge ?? true,
             detailedMergeStatus: detailedMergeStatus.flatMap(DetailedMergeStatus.init(rawValue:)))
     }
@@ -360,41 +370,5 @@ struct MRNode: Decodable {
         if (approvalsLeft ?? 0) > 0 { return .reviewRequired }
         if approved == true, !approvers.isEmpty { return .approved }
         return .none
-    }
-}
-
-extension MRNode.Job {
-    /// Job and pipeline statuses share these values. Nil when there's no status.
-    static func state(_ status: String?) -> CheckState? {
-        switch status {
-        case nil: nil
-        case "SUCCESS": .success
-        case "FAILED": .failure
-        case "CREATED", "WAITING_FOR_RESOURCE", "PREPARING", "PENDING", "RUNNING", "SCHEDULED",
-            "WAITING_FOR_CALLBACK":
-            .pending
-        default: .neutral  // CANCELED, CANCELING, SKIPPED, MANUAL
-        }
-    }
-
-    func model(_ hostURL: URL) -> CheckInfo {
-        var state = Self.state(status) ?? .neutral
-        if state == .failure, allowFailure == true { state = .neutral }
-        // "gid://gitlab/Ci::Build/123": the number is the job id, for its log.
-        let jobID = id.split(separator: "/").last.flatMap { Int($0) }
-        return CheckInfo(
-            name: name ?? "job", state: state,
-            url: webPath.flatMap { URL(string: $0, relativeTo: hostURL)?.absoluteURL }, checkRunID: jobID)
-    }
-}
-
-extension MRNode.Note {
-    /// The URL is what item ids are built from, so a note without one gets its anchor on the MR
-    /// (`#note_<id>`), never nil: a nil URL would keep a dismissed item hidden after a new reply.
-    func model(_ hostURL: URL, mr: URL) -> CommentInfo {
-        let anchor = id.split(separator: "/").last.flatMap { URL(string: "\(mr.absoluteString)#note_\($0)") }
-        return CommentInfo(
-            author: author?.login ?? "ghost", isBot: author?.isBot ?? false, body: body,
-            url: url.flatMap { URL(string: $0, relativeTo: hostURL)?.absoluteURL } ?? anchor, createdAt: createdAt)
     }
 }

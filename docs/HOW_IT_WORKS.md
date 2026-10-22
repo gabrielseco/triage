@@ -322,6 +322,7 @@ error. The GitHub data stays either way.
 | A reviewer's `REQUESTED_CHANGES` | `reviewDecision = .changesRequested` |
 | `approvalsLeft > 0` / someone approved | `.reviewRequired` / `.approved`. With no approval rules GitLab calls every MR "approved"; that alone isn't enough |
 | `detailedMergeStatus` `CONFLICT`, `NEED_REBASE` / `CHECKING`… | `.conflicting` / `.unknown`, and kept as `pr.detailedMergeStatus` for Merge's blocker and note |
+| `project.squashOption` | `allowedMergeMethods`: `REQUIRED` only Squash and merge, `NEVER` only Merge, `ALLOWED`/`ENCOURAGED` (or missing) both; `ENCOURAGED` defaults to squash |
 | `squashOnMerge` / `userPermissions.canMerge` | default method Squash and merge or Merge / `viewerCanMerge` |
 | Access-token bots (`project_<id>_bot_<hash>`) | a bot, named by its display name (`cursor` for Cursor Bugbot, as on GitHub) |
 
@@ -556,7 +557,9 @@ the environment. It holds:
   conflicts, or branch protection per `mergeStateStatus` unless `viewerCanMergeAsAdmin` lets you bypass it; on
   GitLab, from `detailedMergeStatus`, conflicts, a needed rebase, a draft or a status GitLab is still checking.
   A missing approval, a pipeline that must succeed or unresolved threads don't disable it (GitLab refuses if it
-  enforces them). Each entry opens a confirmation that names the method and lists `pr.mergeWarnings`.
+  enforces them); like GitHub's failing checks or missing review, they head the enabled entries as a caption
+  (`pr.mergeNote`). Each entry opens a confirmation that names the method and lists `pr.mergeWarnings`
+  (unresolved threads included).
 - **`SettingsView`**: API key → Keychain, model, digest hours, weekdays only, open at login, "send a
   digest now", GitLab (on/off, host, token → Keychain, Test, "Signed in as …"), and which GitHub token source
   is in use.
