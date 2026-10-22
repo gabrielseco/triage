@@ -6,7 +6,7 @@
     {
       "repo": "acme/web", "number": 412, "title": "Add keyboard shortcuts to the command palette", "author": "gabi",
       "createdHoursAgo": 70, "updatedHoursAgo": 2, "headRef": "gabi/palette-shortcuts",
-      "reviewDecision": "REVIEW_REQUIRED",
+      "reviewDecision": "REVIEW_REQUIRED", "mergeMethod": "SQUASH", "mergeStateStatus": "UNSTABLE",
       "checks": [
         { "name": "build", "state": "failure", "summary": "Build failed: 2 errors in CommandPalette.tsx", "checkRunID": 9001 },
         { "name": "lint", "state": "success" }
@@ -16,7 +16,7 @@
     {
       "repo": "acme/web", "number": 398, "title": "Fix the flaky checkout test", "author": "gabi",
       "createdHoursAgo": 20, "updatedHoursAgo": 4, "headRef": "gabi/flaky-checkout", "mergeable": "CONFLICTING",
-      "reviewDecision": "REVIEW_REQUIRED",
+      "reviewDecision": "REVIEW_REQUIRED", "mergeMethod": "SQUASH", "mergeStateStatus": "DIRTY",
       "checks": [{ "name": "build", "state": "success" }, { "name": "e2e", "state": "success" }]
     },
     {
@@ -28,7 +28,7 @@
     {
       "repo": "acme/web", "number": 405, "title": "Move session handling into a hook", "author": "gabi",
       "createdHoursAgo": 45, "updatedHoursAgo": 8, "headRef": "gabi/session-hook",
-      "reviewDecision": "REVIEW_REQUIRED",
+      "reviewDecision": "REVIEW_REQUIRED", "mergeMethod": "SQUASH", "mergeStateStatus": "BLOCKED",
       "checks": [{ "name": "build", "state": "success" }],
       "threads": [
         {
@@ -52,8 +52,13 @@
     {
       "repo": "acme/web", "number": 420, "title": "Docs: how the cache invalidates", "author": "gabi",
       "createdHoursAgo": 3, "updatedHoursAgo": 1, "headRef": "gabi/cache-docs",
-      "reviewDecision": "APPROVED", "approvedBy": ["maria"],
+      "reviewDecision": "APPROVED", "approvedBy": ["maria"], "mergeMethod": "SQUASH", "mergeStateStatus": "CLEAN",
       "checks": [{ "name": "build", "state": "success" }, { "name": "docs", "state": "success" }]
+    },
+    {
+      "repo": "acme/api", "number": 86, "title": "Stream the CSV export", "author": "gabi", "draft": true,
+      "createdHoursAgo": 4, "updatedHoursAgo": 2, "headRef": "gabi/stream-export", "mergeStateStatus": "DRAFT",
+      "checks": [{ "name": "test", "state": "failure", "summary": "2 tests failed in export_test.go", "checkRunID": 9002 }]
     },
     {
       "repo": "acme/web", "number": 409, "title": "Refactor the billing form", "author": "maria",

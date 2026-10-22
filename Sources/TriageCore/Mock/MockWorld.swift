@@ -122,8 +122,11 @@ struct MockForge: ForgeClient, MentionsSource {
 
     func approve(_ pr: PullRequest) async throws { store.approve(pr, as: viewerLogin) }
 
-    func merge(_ pr: PullRequest) async throws {
+    func merge(_ pr: PullRequest, method: MergeMethod) async throws {
         guard forge.capabilities.contains(.merge) else { throw ForgeError.unsupported(forge) }
+        guard pr.mergeMethods.contains(method) else {
+            throw MockError.blocked("\(method.title) in \(pr.repo.fullName)")
+        }
         store.remove(pr)
     }
 
@@ -199,7 +202,11 @@ extension MockWorld {
                     firstComment: first, commentCount: 1 + replies.count, replies: replies)
             },
             comments: (p.comments ?? []).map { comment($0, now: now) }, summary: p.summary,
-            mergeMethod: try pick(p.mergeMethod, .merge, "mergeMethod"))
+            mergeMethod: try pick(p.mergeMethod, .merge, "mergeMethod"),
+            allowedMergeMethods: try p.mergeMethods.map { Set(try $0.map { try pick($0, .merge, "mergeMethods") }) }
+                ?? Set(MergeMethod.allCases),
+            viewerCanMerge: p.viewerCanMerge ?? true,
+            mergeState: try pick(p.mergeStateStatus, .unknown, "mergeStateStatus"))
     }
 
     private static func comment(_ c: MockScenario.Comment, now: Date) -> CommentInfo {

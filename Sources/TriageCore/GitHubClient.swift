@@ -64,10 +64,7 @@ public struct GitHubClient: Sendable {
         }
         warnings += prs.flatMap { $0.truncationWarnings(repo: repo) }
         let rateLimit = d.rateLimit.map { RepoSnapshot.RateLimit(remaining: $0.remaining, resetAt: $0.resetAt) }
-        let method = r.viewerDefaultMergeMethod.flatMap(MergeMethod.init(rawValue:)) ?? .merge
-        return RepoSnapshot(
-            pullRequests: prs.map { $0.toModel(repo: repo, mergeMethod: method) }, warnings: warnings,
-            rateLimit: rateLimit)
+        return RepoSnapshot(pullRequests: r.pullRequestModels(repo), warnings: warnings, rateLimit: rateLimit)
     }
 
     func graphql<T: Decodable>(_ query: String, variables: [String: String]) async throws -> T {
@@ -178,11 +175,12 @@ public struct GitHubClient: Sendable {
         query($owner: String!, $name: String!) {
           rateLimit { remaining resetAt }
           repository(owner: $owner, name: $name) {
-            viewerDefaultMergeMethod
+            viewerDefaultMergeMethod viewerPermission mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed
             pullRequests(states: OPEN, first: 30, orderBy: {field: UPDATED_AT, direction: DESC}) {
               totalCount
               nodes {
-                number title body url isDraft createdAt updatedAt mergeable reviewDecision headRefName
+                number title body url isDraft createdAt updatedAt mergeable mergeStateStatus reviewDecision headRefName
+                viewerCanMergeAsAdmin
                 author { login __typename avatarUrl(size: 64) }
                 latestOpinionatedReviews(first: 30) { nodes { state author { login } } }
                 reviewRequests(first: 30) { nodes { requestedReviewer { ... on User { login } } } }
@@ -276,7 +274,26 @@ struct ContextNode: Decodable {
 struct RepoData: Decodable {
     struct Repo: Decodable {
         let viewerDefaultMergeMethod: String?
+        let viewerPermission: String?
+        let mergeCommitAllowed: Bool?, squashMergeAllowed: Bool?, rebaseMergeAllowed: Bool?
         let pullRequests: CountedConn<PRNode>
+
+        /// The PRs, each with how the viewer can merge in this repo.
+        func pullRequestModels(_ repo: RepoRef) -> [PullRequest] {
+            let method = viewerDefaultMergeMethod.flatMap(MergeMethod.init(rawValue:)) ?? .merge
+            let settings: [(MergeMethod, Bool?)] = [
+                (.merge, mergeCommitAllowed), (.squash, squashMergeAllowed), (.rebase, rebaseMergeAllowed),
+            ]
+            let allowed = Set(settings.filter { $0.1 ?? true }.map(\.0))
+            // Merging needs write access; READ and TRIAGE can't.
+            let canMerge = viewerPermission.map { ["ADMIN", "MAINTAIN", "WRITE"].contains($0) } ?? true
+            return pullRequests.nodes.map { node in
+                var pr = node.toModel(repo: repo, mergeMethod: method)
+                pr.allowedMergeMethods = allowed
+                pr.viewerCanMerge = canMerge
+                return pr
+            }
+        }
     }
     struct RateLimit: Decodable {
         let remaining: Int
@@ -314,7 +331,8 @@ struct PRNode: Decodable {
     }
 
     let number: Int, title: String, body: String?, url: URL, isDraft: Bool, createdAt: Date, updatedAt: Date
-    let mergeable: String, reviewDecision: String?, headRefName: String
+    let mergeable: String, mergeStateStatus: String?, reviewDecision: String?, headRefName: String
+    let viewerCanMergeAsAdmin: Bool?
     let author: ActorNode?
     let latestOpinionatedReviews: Conn<ReviewNode>?
     let reviewRequests: Conn<ReviewRequestNode>?
@@ -357,7 +375,9 @@ struct PRNode: Decodable {
             threads: threads,
             comments: comments.nodes.map(\.model),
             summary: PRSummary.extract(body),
-            mergeMethod: mergeMethod
+            mergeMethod: mergeMethod,
+            mergeState: mergeStateStatus.flatMap(MergeState.init(rawValue:)) ?? .unknown,
+            viewerCanMergeAsAdmin: viewerCanMergeAsAdmin ?? false
         )
     }
 }

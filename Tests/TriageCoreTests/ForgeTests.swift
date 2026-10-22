@@ -147,7 +147,7 @@ private func mr(_ path: String, _ number: Int, host: String = "gitlab.com") thro
     let forge = GitLabForge(host: "gitlab.com", token: "t")
     let pr = try mr("acme/web", 1)
     #expect(forge.forge == .gitlab(host: "gitlab.com"))
-    await #expect(throws: ForgeError.self) { try await forge.merge(pr) }
+    await #expect(throws: ForgeError.self) { try await forge.merge(pr, method: .merge) }
     await #expect(throws: ForgeError.self) { try await forge.close(pr) }
     #expect(await forge.diff(pr) == nil)
     #expect(await forge.ciLog(pr, checkRunID: 1) == nil)

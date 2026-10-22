@@ -22,9 +22,86 @@ private func pr(
 }
 
 @Test func draftsAndConflictsCantBeMerged() {
-    #expect(pr(draft: true).mergeBlocker == "It's a draft")
-    #expect(pr(mergeable: .conflicting).mergeBlocker == "It conflicts with the base branch")
+    #expect(pr(draft: true).mergeBlocker == "Draft")
+    #expect(pr(mergeable: .conflicting).mergeBlocker == "Merge conflicts")
+    #expect(pr(draft: true, mergeable: .conflicting).mergeBlocker == "Draft")
     #expect(pr(mergeable: .unknown).mergeBlocker == nil)
+}
+
+@Test func failingChecksAndReviewsBlockOnlyWhenBranchProtectionDoes() {
+    func blocked(_ p: PullRequest, _ state: MergeState = .blocked) -> String? {
+        var p = p
+        p.mergeState = state
+        return p.mergeBlocker
+    }
+    #expect(pr(review: .reviewRequired, checks: [.failure]).mergeBlocker == nil)
+    #expect(blocked(pr(review: .reviewRequired, checks: [.failure])) == "Checks failing")
+    #expect(blocked(pr(review: .reviewRequired)) == "Review required")
+    #expect(blocked(pr(review: .changesRequested)) == "Changes requested")
+    #expect(blocked(pr(checks: [.pending])) == "Checks running")
+    #expect(blocked(pr()) == "Blocked by branch protection")
+    #expect(blocked(pr(), .behind) == "Branch out of date")
+    #expect(blocked(pr(draft: true)) == "Draft")
+    for state in [MergeState.clean, .unstable, .hasHooks, .unknown] { #expect(blocked(pr(), state) == nil) }
+}
+
+@Test func anAdminCanMergePastBranchProtection() {
+    func blocked(_ p: PullRequest, admin: Bool) -> PullRequest {
+        var p = p
+        p.mergeState = .blocked
+        p.viewerCanMergeAsAdmin = admin
+        return p
+    }
+    let failing = pr(review: .reviewRequired, checks: [.failure])
+    #expect(blocked(failing, admin: false).mergeBlocker == "Checks failing")
+    #expect(blocked(failing, admin: true).mergeBlocker == nil)
+    #expect(blocked(failing, admin: true).mergeNote == "Checks failing")
+    #expect(blocked(pr(review: .reviewRequired), admin: true).mergeNote == "Review required")
+    #expect(blocked(pr(), admin: true).mergeBlocker == nil)
+    #expect(blocked(pr(), admin: true).mergeNote == "Blocked by branch protection")
+    // Drafts and conflicts still block an admin.
+    #expect(blocked(pr(draft: true), admin: true).mergeBlocker == "Draft")
+    #expect(blocked(pr(mergeable: .conflicting), admin: true).mergeBlocker == "Merge conflicts")
+}
+
+@Test func anAdminCanMergeABranchThatIsBehind() {
+    func behind(admin: Bool) -> PullRequest {
+        var p = pr()
+        p.mergeState = .behind
+        p.viewerCanMergeAsAdmin = admin
+        return p
+    }
+    #expect(behind(admin: false).mergeBlocker == "Branch out of date")
+    #expect(behind(admin: false).mergeNote == "Branch out of date")
+    #expect(behind(admin: true).mergeBlocker == nil)
+    #expect(behind(admin: true).mergeNote == "Branch out of date")
+}
+
+@Test func conflictingPRShowsTheConflictBlocker() {
+    let p = pr(mergeable: .conflicting, review: .reviewRequired, checks: [.failure])
+    #expect(p.mergeBlocker == "Merge conflicts")
+    #expect(p.mergeNote == "Merge conflicts")
+}
+
+@Test func failingChecksAndReviewsAreNotedBesideAnEnabledMerge() {
+    #expect(pr().mergeNote == nil)
+    #expect(pr(review: .reviewRequired, checks: [.failure]).mergeNote == "Checks failing")
+    #expect(pr(review: .reviewRequired, checks: [.failure]).mergeBlocker == nil)
+    #expect(pr(review: .reviewRequired).mergeNote == "Review required")
+    #expect(pr(review: .changesRequested).mergeNote == "Changes requested")
+    #expect(pr(checks: [.pending]).mergeNote == "Checks running")
+    #expect(pr(draft: true, checks: [.failure]).mergeNote == "Draft")
+}
+
+@Test func defaultMethodFallsBackToTheFirstAllowedOne() {
+    var p = pr()
+    #expect(p.mergeMethods == [.merge, .squash, .rebase])
+    #expect(p.defaultMergeMethod == .merge)
+    p.mergeMethod = .squash
+    #expect(p.defaultMergeMethod == .squash)
+    p.allowedMergeMethods = [.rebase, .merge]
+    #expect(p.mergeMethods == [.merge, .rebase])
+    #expect(p.defaultMergeMethod == .merge)
 }
 
 @Test func warningsCoverChecksReviewsAndMergeability() {

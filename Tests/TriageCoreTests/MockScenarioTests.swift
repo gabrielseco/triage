@@ -159,13 +159,29 @@ private let pr = """
     }
     let first = try await fetched()
     try await client.approve(first[0])
-    try await client.merge(first[1])
+    try await client.merge(first[1], method: .squash)
     try await client.close(first[2])
     let after = try await fetched()
     #expect(after.map(\.number) == [1])
     #expect(after[0].approvedBy == ["me"])
     #expect(after[0].requestedReviewers.isEmpty)
     #expect(after[0].reviewDecision == .approved)
+}
+
+@Test func mockForgeMergesOnlyWithAMethodTheRepoAllows() async throws {
+    let w = try world(
+        prs: """
+            {"repo":"acme/web","number":1,"title":"A","author":"x","createdHoursAgo":1,"mergeMethods":["SQUASH"],
+             "viewerCanMerge":false,"mergeStateStatus":"BLOCKED","reviewDecision":"REVIEW_REQUIRED"}
+            """)
+    let client = try w.forgeClient(.github, repos: w.repos)
+    let pr = try #require(try await client.fetch().first?.result.get().pullRequests.first)
+    #expect(pr.mergeMethods == [.squash])
+    #expect(!pr.viewerCanMerge)
+    #expect(pr.mergeBlocker == "Review required")
+    await #expect(throws: MockError.self) { try await client.merge(pr, method: .merge) }
+    try await client.merge(pr, method: .squash)
+    #expect(try await client.fetch().first?.result.get().pullRequests.isEmpty == true)
 }
 
 @Test func mockForgeAnswersWithTheScenarioDiffAndLog() async throws {

@@ -111,10 +111,48 @@ private func decodePR() throws -> PullRequest {
     #expect(pr.headSha == "abc123")
     #expect(pr.createdAt == ISO8601DateFormatter().date(from: "2026-09-23T10:00:00Z"))
     #expect(pr.mergeable == .conflicting)
+    #expect(pr.mergeBlocker == "Merge conflicts")
     #expect(pr.reviewDecision == .none)
     #expect(pr.approvedBy == ["alice"])
     // A team request has no login, and a deleted user no reviewer: only people count.
     #expect(pr.requestedReviewers == ["gabriel"])
+}
+
+@Test func repoSettingsSayHowTheViewerCanMerge() throws {
+    let settings = #""viewerPermission": "TRIAGE", "mergeCommitAllowed": false, "squashMergeAllowed": true,"#
+    let json = String(decoding: truncated, as: UTF8.self)
+        .replacingOccurrences(of: #""repository": {"#, with: #""repository": {\#(settings)"#)
+        .replacingOccurrences(
+            of: #""mergeable": "MERGEABLE","#, with: #""mergeable": "MERGEABLE", "mergeStateStatus": "BLOCKED","#)
+    let pr = try #require(try decode(Data(json.utf8)).repository?.pullRequestModels(repo).first)
+    #expect(pr.mergeMethod == .squash)
+    #expect(pr.mergeMethods == [.squash, .rebase])
+    #expect(!pr.viewerCanMerge)
+    #expect(pr.mergeState == .blocked)
+    #expect(pr.mergeBlocker == "Checks failing")
+
+    // Fields missing from the response don't hide Merge.
+    let bare = try #require(try decode(truncated).repository?.pullRequestModels(repo).first)
+    #expect(bare.mergeMethods == MergeMethod.allCases)
+    #expect(bare.viewerCanMerge)
+    #expect(bare.mergeState == .unknown)
+}
+
+@Test func viewerCanMergeAsAdminIsDecodedAndDefaultsToFalse() throws {
+    let blocked = String(decoding: truncated, as: UTF8.self)
+        .replacingOccurrences(
+            of: #""mergeable": "MERGEABLE","#, with: #""mergeable": "MERGEABLE", "mergeStateStatus": "BLOCKED","#)
+    let admin = blocked.replacingOccurrences(
+        of: #""headRefName": "b","#, with: #""headRefName": "b", "viewerCanMergeAsAdmin": true,"#)
+
+    let bypass = try #require(try decode(Data(admin.utf8)).repository?.pullRequestModels(repo).first)
+    #expect(bypass.viewerCanMergeAsAdmin)
+    #expect(bypass.mergeBlocker == nil)
+    #expect(bypass.mergeNote == "Checks failing")
+
+    let absent = try #require(try decode(Data(blocked.utf8)).repository?.pullRequestModels(repo).first)
+    #expect(!absent.viewerCanMergeAsAdmin)
+    #expect(absent.mergeBlocker == "Checks failing")
 }
 
 @Test func noReviewsMeansNoApprovals() throws {

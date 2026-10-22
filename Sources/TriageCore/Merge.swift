@@ -16,12 +16,49 @@ public enum MergeMethod: String, Sendable, CaseIterable {
     }
 }
 
+/// GitHub's `MergeStateStatus`: whether the merge box would let the PR in, branch protection included.
+public enum MergeState: String, Sendable, CaseIterable {
+    case clean = "CLEAN", blocked = "BLOCKED", behind = "BEHIND", dirty = "DIRTY", draft = "DRAFT"
+    case hasHooks = "HAS_HOOKS", unstable = "UNSTABLE", unknown = "UNKNOWN"
+}
+
 extension PullRequest {
-    /// Why GitHub would refuse to merge this PR outright, or nil if it can be tried.
+    /// Why GitHub would refuse to merge this PR, short enough to sit beside the Merge button, or nil if it can be
+    /// tried. Failing checks, missing reviews and an out-of-date branch only block when branch protection says so
+    /// (`mergeState`), and not for an admin who can merge past it.
     public var mergeBlocker: String? {
-        if isDraft { return "It's a draft" }
-        if mergeable == .conflicting { return "It conflicts with the base branch" }
+        if isDraft { return "Draft" }
+        if mergeable == .conflicting { return "Merge conflicts" }
+        switch mergeState {
+        case .blocked where !viewerCanMergeAsAdmin: return mergeCaution ?? "Blocked by branch protection"
+        case .behind where !viewerCanMergeAsAdmin: return "Branch out of date"
+        default: return nil
+        }
+    }
+
+    /// What to show beside the Merge button: the blocker, else the main reason to think twice (which doesn't
+    /// disable it). Nil when the PR is clear to merge.
+    public var mergeNote: String? {
+        if let mergeBlocker { return mergeBlocker }
+        if mergeState == .behind { return "Branch out of date" }
+        return mergeCaution ?? (mergeState == .blocked ? "Blocked by branch protection" : nil)
+    }
+
+    /// The checks or reviews in the way, short: what branch protection blocks on when it does.
+    var mergeCaution: String? {
+        if checks.contains(where: { $0.state == .failure }) { return "Checks failing" }
+        if reviewDecision == .changesRequested { return "Changes requested" }
+        if reviewDecision == .reviewRequired { return "Review required" }
+        if checks.contains(where: { $0.state == .pending }) { return "Checks running" }
         return nil
+    }
+
+    /// The methods the repo allows, in GitHub's menu order.
+    public var mergeMethods: [MergeMethod] { MergeMethod.allCases.filter(allowedMergeMethods.contains) }
+
+    /// What the primary Merge click uses: the viewer's default, or the first allowed method if that's turned off.
+    public var defaultMergeMethod: MergeMethod {
+        mergeMethods.contains(mergeMethod) ? mergeMethod : mergeMethods.first ?? mergeMethod
     }
 
     /// Whether the viewer can approve it: someone else's PR, ready for review, not approved by them yet.

@@ -3,7 +3,8 @@ import TriageCore
 
 /// Merge (optionally approving first) or close: asked for from the item detail or the Pull Request menu, confirmed in the item detail.
 struct PRConfirmation: Identifiable {
-    enum Action { case merge, close }
+    /// A merge carries the method picked for it, which applies to this merge only.
+    enum Action: Equatable { case merge(MergeMethod), close }
     let action: Action
     let item: AttentionItem
     var id: String { "\(action)|\(item.id)" }
@@ -55,12 +56,15 @@ extension AppStore {
 
     // MARK: - Merge
 
+    /// The forge can merge and the viewer has write access. Whether this PR can go in now is `mergeBlocker`.
+    func canMerge(_ pr: PullRequest) -> Bool { can(.merge, pr) && pr.viewerCanMerge }
+
     /// `approvingFirst`: approve as the viewer, then merge, for someone else's PR you haven't approved.
     /// Two steps, so a failed merge doesn't read as a failed approval.
-    func mergePullRequest(_ item: AttentionItem, approvingFirst: Bool = false) async {
+    func mergePullRequest(_ item: AttentionItem, method: MergeMethod, approvingFirst: Bool = false) async {
         if approvingFirst, !(await sendApproval(item)) { return }
         let pr = item.pr
-        await mutate(item, doing: "Merging", failed: "merge") { try await $0.merge(pr) }
+        await mutate(item, doing: "Merging", failed: "merge") { try await $0.merge(pr, method: method) }
     }
 
     // MARK: - Close

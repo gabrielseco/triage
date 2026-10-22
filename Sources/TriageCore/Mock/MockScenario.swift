@@ -62,6 +62,12 @@ public struct MockScenario: Decodable, Sendable {
         public var comments: [Comment]?
         public var summary: String?
         public var mergeMethod: String?
+        /// The methods the repo allows (`MERGE`, `SQUASH`, `REBASE`); default all three.
+        public var mergeMethods: [String]?
+        /// False when the viewer only has read access; default true.
+        public var viewerCanMerge: Bool?
+        /// GitHub's `mergeStateStatus`, e.g. `BLOCKED` when branch protection holds the merge back.
+        public var mergeStateStatus: String?
     }
 
     public struct Ping: Decodable, Sendable {
