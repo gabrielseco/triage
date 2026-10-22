@@ -138,6 +138,23 @@ private func decodePR() throws -> PullRequest {
     #expect(bare.mergeState == .unknown)
 }
 
+@Test func viewerCanMergeAsAdminIsDecodedAndDefaultsToFalse() throws {
+    let blocked = String(decoding: truncated, as: UTF8.self)
+        .replacingOccurrences(
+            of: #""mergeable": "MERGEABLE","#, with: #""mergeable": "MERGEABLE", "mergeStateStatus": "BLOCKED","#)
+    let admin = blocked.replacingOccurrences(
+        of: #""headRefName": "b","#, with: #""headRefName": "b", "viewerCanMergeAsAdmin": true,"#)
+
+    let bypass = try #require(try decode(Data(admin.utf8)).repository?.pullRequestModels(repo).first)
+    #expect(bypass.viewerCanMergeAsAdmin)
+    #expect(bypass.mergeBlocker == nil)
+    #expect(bypass.mergeNote == "Checks failing")
+
+    let absent = try #require(try decode(Data(blocked.utf8)).repository?.pullRequestModels(repo).first)
+    #expect(!absent.viewerCanMergeAsAdmin)
+    #expect(absent.mergeBlocker == "Checks failing")
+}
+
 @Test func noReviewsMeansNoApprovals() throws {
     let node = try #require(try decode(truncated).repository?.pullRequests.nodes.first)
     #expect(node.toModel(repo: repo).approvedBy.isEmpty)

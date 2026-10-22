@@ -180,6 +180,7 @@ public struct GitHubClient: Sendable {
               totalCount
               nodes {
                 number title body url isDraft createdAt updatedAt mergeable mergeStateStatus reviewDecision headRefName
+                viewerCanMergeAsAdmin
                 author { login __typename avatarUrl(size: 64) }
                 latestOpinionatedReviews(first: 30) { nodes { state author { login } } }
                 reviewRequests(first: 30) { nodes { requestedReviewer { ... on User { login } } } }
@@ -331,6 +332,7 @@ struct PRNode: Decodable {
 
     let number: Int, title: String, body: String?, url: URL, isDraft: Bool, createdAt: Date, updatedAt: Date
     let mergeable: String, mergeStateStatus: String?, reviewDecision: String?, headRefName: String
+    let viewerCanMergeAsAdmin: Bool?
     let author: ActorNode?
     let latestOpinionatedReviews: Conn<ReviewNode>?
     let reviewRequests: Conn<ReviewRequestNode>?
@@ -374,7 +376,8 @@ struct PRNode: Decodable {
             comments: comments.nodes.map(\.model),
             summary: PRSummary.extract(body),
             mergeMethod: mergeMethod,
-            mergeState: mergeStateStatus.flatMap(MergeState.init(rawValue:)) ?? .unknown
+            mergeState: mergeStateStatus.flatMap(MergeState.init(rawValue:)) ?? .unknown,
+            viewerCanMergeAsAdmin: viewerCanMergeAsAdmin ?? false
         )
     }
 }

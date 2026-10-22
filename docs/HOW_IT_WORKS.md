@@ -271,7 +271,7 @@ whatever repos your `gh` login can see.
 repository(owner, name) {
   viewerDefaultMergeMethod viewerPermission mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed
   pullRequests(states: OPEN, first: 30, orderBy: UPDATED_AT DESC) {
-    number title url isDraft mergeable mergeStateStatus reviewDecision headRefName author
+    number title url isDraft mergeable mergeStateStatus reviewDecision headRefName viewerCanMergeAsAdmin author
     commits(last: 1) → statusCheckRollup.contexts(first: 60)   # CheckRun | StatusContext
     reviewThreads(first: 50) → isResolved isOutdated path line + first comment
     comments(last: 20) → author (login + __typename: User | Bot) body url
@@ -548,7 +548,8 @@ the environment. It holds:
   Fix in iTerm (Approve works), and Explain PR copies a prompt instead of opening iTerm. **Merge** works like
   GitHub's merge box, on every PR in a repo you can write to: Merge uses the default method, the Merge
   method menu lists the methods the repo allows (`pr.mergeMethods`) for this merge only. It's disabled when
-  GitHub would refuse (`pr.mergeBlocker`: draft, conflicts, or branch protection per `mergeStateStatus`).
+  GitHub would refuse (`pr.mergeBlocker`: draft, conflicts, or branch protection per `mergeStateStatus`
+  unless `viewerCanMergeAsAdmin` lets you bypass it).
   The reason, or failing checks and missing reviews that don't block, shows under the row (`pr.mergeNote`).
   The confirmation names the method and lists `pr.mergeWarnings`.
 - **`SettingsView`**: API key → Keychain, model, digest hours, weekdays only, open at login, "send a

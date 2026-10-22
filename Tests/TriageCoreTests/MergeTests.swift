@@ -45,6 +45,25 @@ private func pr(
     for state in [MergeState.clean, .unstable, .hasHooks, .unknown] { #expect(blocked(pr(), state) == nil) }
 }
 
+@Test func anAdminCanMergePastBranchProtection() {
+    func blocked(_ p: PullRequest, admin: Bool) -> PullRequest {
+        var p = p
+        p.mergeState = .blocked
+        p.viewerCanMergeAsAdmin = admin
+        return p
+    }
+    let failing = pr(review: .reviewRequired, checks: [.failure])
+    #expect(blocked(failing, admin: false).mergeBlocker == "Checks failing")
+    #expect(blocked(failing, admin: true).mergeBlocker == nil)
+    #expect(blocked(failing, admin: true).mergeNote == "Checks failing")
+    #expect(blocked(pr(review: .reviewRequired), admin: true).mergeNote == "Review required")
+    #expect(blocked(pr(), admin: true).mergeBlocker == nil)
+    #expect(blocked(pr(), admin: true).mergeNote == "Blocked by branch protection")
+    // Drafts and conflicts still block an admin.
+    #expect(blocked(pr(draft: true), admin: true).mergeBlocker == "Draft")
+    #expect(blocked(pr(mergeable: .conflicting), admin: true).mergeBlocker == "Merge conflicts")
+}
+
 @Test func conflictingPRShowsTheConflictBlocker() {
     let p = pr(mergeable: .conflicting, review: .reviewRequired, checks: [.failure])
     #expect(p.mergeBlocker == "Merge conflicts")
