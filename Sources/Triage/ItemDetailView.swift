@@ -48,8 +48,41 @@ struct ItemDetailView: View {
     }
 
     private var actions: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            actionRow
+            if store.canMerge(item.pr) { MergeNote(pr: item.pr) }
+        }
+        .confirmationDialog(
+            confirmTitle, isPresented: confirmShown, titleVisibility: .visible, presenting: store.confirming
+        ) { c in
+            switch c.action {
+            case .merge(let method):
+                let title = method.title
+                // Someone else's PR you haven't approved: approving is the default, merging as-is the fallback.
+                if store.canApprove(c.item.pr) {
+                    Button("Approve, then \(title.lowercased())") {
+                        Task { await store.mergePullRequest(c.item, method: method, approvingFirst: true) }
+                    }
+                    Button("\(title) without approving") {
+                        Task { await store.mergePullRequest(c.item, method: method) }
+                    }
+                } else {
+                    Button(title) { Task { await store.mergePullRequest(c.item, method: method) } }
+                }
+            case .close:
+                Button("Close PR", role: .destructive) { Task { await store.closePullRequest(c.item) } }
+            }
+        } message: { c in
+            switch c.action {
+            case .merge(let method): Text(mergeMessage(method))
+            case .close: Text(closeMessage)
+            }
+        }
+    }
+
+    private var actionRow: some View {
         HStack {
-            if store.canMerge(item.pr) { merge }
+            if store.canMerge(item.pr) { MergeButton(item: item) }
             if store.canApprove(item.pr) {
                 Button {
                     Task { await store.approvePullRequest(item) }
@@ -140,62 +173,6 @@ struct ItemDetailView: View {
                 item.pr.primaryURL(viewer: viewer) == item.pr.url
                     ? "Open your PR's conversation on \(forgeName) (arrow: more)"
                     : "Open the PR's changes on \(forgeName) (arrow: more)")
-        }
-        .confirmationDialog(
-            confirmTitle, isPresented: confirmShown, titleVisibility: .visible, presenting: store.confirming
-        ) { c in
-            switch c.action {
-            case .merge(let method):
-                let title = method.title
-                // Someone else's PR you haven't approved: approving is the default, merging as-is the fallback.
-                if store.canApprove(c.item.pr) {
-                    Button("Approve, then \(title.lowercased())") {
-                        Task { await store.mergePullRequest(c.item, method: method, approvingFirst: true) }
-                    }
-                    Button("\(title) without approving") {
-                        Task { await store.mergePullRequest(c.item, method: method) }
-                    }
-                } else {
-                    Button(title) { Task { await store.mergePullRequest(c.item, method: method) } }
-                }
-            case .close:
-                Button("Close PR", role: .destructive) { Task { await store.closePullRequest(c.item) } }
-            }
-        } message: { c in
-            switch c.action {
-            case .merge(let method): Text(mergeMessage(method))
-            case .close: Text(closeMessage)
-            }
-        }
-    }
-
-    /// GitHub's merge box: the primary click uses the default method, the arrow picks another for this merge.
-    /// Shown disabled, with the reason beside it, when GitHub would refuse the merge.
-    @ViewBuilder private var merge: some View {
-        let pr = item.pr
-        let blocker = pr.mergeBlocker
-        Menu {
-            ForEach(pr.mergeMethods, id: \.self) { method in
-                // Checked is what the primary click uses; picking one asks to confirm a merge with it.
-                Toggle(
-                    "\(method.title)…",
-                    isOn: Binding(
-                        get: { method == pr.defaultMergeMethod },
-                        set: { _ in store.confirming = PRConfirmation(action: .merge(method), item: item) }))
-            }
-        } label: {
-            Label("Merge", systemImage: "arrow.triangle.merge")
-        } primaryAction: {
-            store.confirming = PRConfirmation(action: .merge(pr.defaultMergeMethod), item: item)
-        }
-        .prominent(item.kind == .readyToMerge)
-        .fixedSize()
-        .disabled(blocker != nil)
-        .help(
-            blocker.map { "Can't merge: \($0.lowercased())" }
-                ?? "\(pr.defaultMergeMethod.title) on \(forgeName) (⇧⌘M; arrow: pick another method)")
-        if let blocker {
-            Text(blocker).font(.caption).foregroundStyle(.secondary).lineLimit(1).fixedSize()
         }
     }
 
@@ -315,11 +292,6 @@ struct CIBadge: View {
 }
 
 extension View {
-    /// A menu drawn as the state's `.borderedProminent` primary action, or left as is.
-    @ViewBuilder func prominent(_ isPrimary: Bool) -> some View {
-        if isPrimary { menuStyle(.button).buttonStyle(.borderedProminent) } else { self }
-    }
-
     @ViewBuilder func shortcut(
         _ key: KeyEquivalent, modifiers: EventModifiers = .command, if enabled: Bool
     ) -> some View {

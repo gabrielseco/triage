@@ -111,6 +111,7 @@ private func decodePR() throws -> PullRequest {
     #expect(pr.headSha == "abc123")
     #expect(pr.createdAt == ISO8601DateFormatter().date(from: "2026-09-23T10:00:00Z"))
     #expect(pr.mergeable == .conflicting)
+    #expect(pr.mergeBlocker == "Merge conflicts")
     #expect(pr.reviewDecision == .none)
     #expect(pr.approvedBy == ["alice"])
     // A team request has no login, and a deleted user no reviewer: only people count.

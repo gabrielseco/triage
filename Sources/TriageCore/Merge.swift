@@ -29,15 +29,23 @@ extension PullRequest {
         if isDraft { return "Draft" }
         if mergeable == .conflicting { return "Merge conflicts" }
         switch mergeState {
-        case .blocked:
-            if checks.contains(where: { $0.state == .failure }) { return "Checks failing" }
-            if reviewDecision == .changesRequested { return "Changes requested" }
-            if reviewDecision == .reviewRequired { return "Review required" }
-            if checks.contains(where: { $0.state == .pending }) { return "Checks running" }
-            return "Blocked by branch protection"
+        case .blocked: return mergeCaution ?? "Blocked by branch protection"
         case .behind: return "Branch out of date"
         default: return nil
         }
+    }
+
+    /// What to show beside the Merge button: the blocker, else the main reason to think twice (which doesn't
+    /// disable it). Nil when the PR is clear to merge.
+    public var mergeNote: String? { mergeBlocker ?? mergeCaution }
+
+    /// The checks or reviews in the way, short: what branch protection blocks on when it does.
+    var mergeCaution: String? {
+        if checks.contains(where: { $0.state == .failure }) { return "Checks failing" }
+        if reviewDecision == .changesRequested { return "Changes requested" }
+        if reviewDecision == .reviewRequired { return "Review required" }
+        if checks.contains(where: { $0.state == .pending }) { return "Checks running" }
+        return nil
     }
 
     /// The methods the repo allows, in GitHub's menu order.

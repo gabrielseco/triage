@@ -546,10 +546,11 @@ the environment. It holds:
   failed), and evidence cards. Markdown in comments/answers is rendered inline, comments after
   `CommentText.readable`. Buttons the PR's forge can't do are hidden: for a GitLab MR that's Merge, Close and
   Fix in iTerm (Approve works), and Explain PR copies a prompt instead of opening iTerm. **Merge** works like
-  GitHub's merge box, on every PR in a repo you can write to: the click uses the default method, the arrow
-  lists the methods the repo allows (`pr.mergeMethods`) for this merge only, and when GitHub would refuse
-  (`pr.mergeBlocker`: draft, conflicts, or branch protection per `mergeStateStatus`) it's disabled with the
-  reason beside it. The confirmation names the method and lists `pr.mergeWarnings`.
+  GitHub's merge box, on every PR in a repo you can write to: Merge uses the default method, the Merge
+  method menu lists the methods the repo allows (`pr.mergeMethods`) for this merge only. It's disabled when
+  GitHub would refuse (`pr.mergeBlocker`: draft, conflicts, or branch protection per `mergeStateStatus`).
+  The reason, or failing checks and missing reviews that don't block, shows under the row (`pr.mergeNote`).
+  The confirmation names the method and lists `pr.mergeWarnings`.
 - **`SettingsView`**: API key → Keychain, model, digest hours, weekdays only, open at login, "send a
   digest now", GitLab (on/off, host, token → Keychain, Test, "Signed in as …"), and which GitHub token source
   is in use.

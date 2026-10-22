@@ -45,6 +45,22 @@ private func pr(
     for state in [MergeState.clean, .unstable, .hasHooks, .unknown] { #expect(blocked(pr(), state) == nil) }
 }
 
+@Test func conflictingPRShowsTheConflictBlocker() {
+    let p = pr(mergeable: .conflicting, review: .reviewRequired, checks: [.failure])
+    #expect(p.mergeBlocker == "Merge conflicts")
+    #expect(p.mergeNote == "Merge conflicts")
+}
+
+@Test func failingChecksAndReviewsAreNotedBesideAnEnabledMerge() {
+    #expect(pr().mergeNote == nil)
+    #expect(pr(review: .reviewRequired, checks: [.failure]).mergeNote == "Checks failing")
+    #expect(pr(review: .reviewRequired, checks: [.failure]).mergeBlocker == nil)
+    #expect(pr(review: .reviewRequired).mergeNote == "Review required")
+    #expect(pr(review: .changesRequested).mergeNote == "Changes requested")
+    #expect(pr(checks: [.pending]).mergeNote == "Checks running")
+    #expect(pr(draft: true, checks: [.failure]).mergeNote == "Draft")
+}
+
 @Test func defaultMethodFallsBackToTheFirstAllowedOne() {
     var p = pr()
     #expect(p.mergeMethods == [.merge, .squash, .rebase])
