@@ -135,10 +135,11 @@ struct SettingsView: View {
     }
 
     static let gitlabHelp = """
-        Merge requests assigned to you or waiting for your review, across your projects. Read-only for now: \
-        approve, merge and close them on GitLab; Fix in iTerm isn't available for them yet. The token needs the \
-        read_api scope. Token source is a 1Password secret reference or a helper script that prints the token; \
-        it's read once per session, and the Keychain isn't used, so rebuilds don't ask for your password. \
+        Merge requests assigned to you or waiting for your review, across your projects. You can approve \
+        and merge them here; close them on GitLab, and Fix in iTerm isn't available for them yet. Watching needs \
+        the read_api scope; approving and merging need api. Token source is a 1Password secret reference or a \
+        helper script that prints the token; it's read once per session, and the Keychain isn't used, so \
+        rebuilds don't ask for your password. \
         Otherwise a pasted token is kept in the Keychain (or set GITLAB_TOKEN). \
         Mentions come from your GitLab To-Do list, checked every 30 s; bots' mentions don't notify.
         """

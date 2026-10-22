@@ -4,15 +4,16 @@ public enum GitLabError: LocalizedError {
     case noToken
     case http(Int, String)
     case graphql(String)
-    case cannotApprove
+    case cannotApprove, cannotMerge
 
     public var errorDescription: String? {
         switch self {
         case .noToken: "No GitLab token. Add one in Settings → GitLab."
         case .http(401, _): "GitLab rejected the token (expired or revoked?). Create a new one with read_api."
         case .http(403, let body) where Self.message(in: body) == "insufficient_scope":
-            "The GitLab token is read-only. Approving needs a token with the api scope."
+            "The GitLab token is read-only. Approving and merging need a token with the api scope."
         case .cannotApprove: "GitLab didn't let you approve it: already approved, or you aren't an eligible approver."
+        case .cannotMerge: "GitLab didn't let you merge it: you don't have permission to merge into its target branch."
         case .http(let code, let body): "GitLab HTTP \(code): \(Self.message(in: body) ?? String(body.prefix(300)))"
         case .graphql(let msg): "GitLab GraphQL: \(msg)"
         }
@@ -30,7 +31,7 @@ public enum GitLabError: LocalizedError {
 }
 
 /// GitLab's API for the merge requests assigned to the viewer or waiting on their review, across all projects.
-/// Read-only for now: actions arrive with the capabilities that allow them (docs/plans/GITLAB.md).
+/// Approve and merge are in `GitLabClient+Actions`; other actions arrive with their capabilities (GITLAB.md).
 public struct GitLabClient: Sendable {
     let host: String
     let token: String
@@ -138,7 +139,7 @@ public struct GitLabClient: Sendable {
           project(fullPath: $path) {
             mergeRequest(iid: $iid) {
               iid title description webUrl draft createdAt updatedAt sourceBranch diffHeadSha
-              detailedMergeStatus conflicts approved approvalsLeft
+              detailedMergeStatus conflicts approved approvalsLeft squashOnMerge userPermissions { canMerge }
               author { username name avatarUrl bot }
               approvedBy { nodes { username } }
               reviewers { nodes { username mergeRequestInteraction { reviewState } } }
@@ -285,7 +286,10 @@ struct MRNode: Decodable {
 
     let iid: String, title: String, description: String?, webUrl: URL, draft: Bool
     let createdAt: Date, updatedAt: Date, sourceBranch: String, diffHeadSha: String?
+    struct Permissions: Decodable { let canMerge: Bool? }
     let detailedMergeStatus: String?, conflicts: Bool?, approved: Bool?, approvalsLeft: Int?
+    /// `squashOnMerge`: the project's squash option, or the MR's own checkbox when the project leaves it open.
+    let squashOnMerge: Bool?, userPermissions: Permissions?
     let author: GLUser?
     let approvedBy: Conn<GLUser>?
     let reviewers: Conn<Reviewer>?
@@ -314,7 +318,10 @@ struct MRNode: Decodable {
             checks: headPipeline?.checks(hostURL) ?? [],
             threads: threads,
             comments: human.filter { !$0.0.resolvable }.flatMap { $0.1.map { $0.model(hostURL, mr: webUrl) } },
-            summary: PRSummary.extract(description))
+            summary: PRSummary.extract(description),
+            mergeMethod: squashOnMerge == true ? .squash : .merge, allowedMergeMethods: [.merge, .squash],
+            viewerCanMerge: userPermissions?.canMerge ?? true,
+            detailedMergeStatus: detailedMergeStatus.flatMap(DetailedMergeStatus.init(rawValue:)))
     }
 
     func truncationWarnings(repo: RepoRef) -> [String] {

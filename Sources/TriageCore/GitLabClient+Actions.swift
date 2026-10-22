@@ -22,6 +22,28 @@ extension GitLabClient {
         return req
     }
 
+    /// Merges, squashing for `.squash`, only if the source branch is still at `pr.headSha`: a push after you
+    /// looked is refused (409). GitLab's merge checks apply; a failing one comes back as its message.
+    public func merge(_ pr: PullRequest, method: MergeMethod) async throws {
+        do {
+            _ = try await send(try acceptRequest(pr, method: method))
+        } catch GitLabError.http(401, _) {
+            // As with approve: the token was fine for the refresh, so this is "not allowed to merge".
+            throw GitLabError.cannotMerge
+        }
+    }
+
+    /// GitLab calls merging "accepting" the merge request.
+    func acceptRequest(_ pr: PullRequest, method: MergeMethod) throws -> URLRequest {
+        var req = try restRequest("projects/\(Self.projectID(pr.repo))/merge_requests/\(pr.number)/merge")
+        req.httpMethod = "PUT"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: [
+            "sha": pr.headSha, "squash": method == .squash,
+        ])
+        return req
+    }
+
     /// REST takes a project's full path as its id, with the slashes encoded.
     static func projectID(_ repo: RepoRef) -> String {
         var allowed = CharacterSet.alphanumerics

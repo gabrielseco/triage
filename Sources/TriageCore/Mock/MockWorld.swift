@@ -125,7 +125,7 @@ struct MockForge: ForgeClient, MentionsSource {
     func merge(_ pr: PullRequest, method: MergeMethod) async throws {
         guard forge.capabilities.contains(.merge) else { throw ForgeError.unsupported(forge) }
         guard pr.mergeMethods.contains(method) else {
-            throw MockError.blocked("\(method.title) in \(pr.repo.fullName)")
+            throw MockError.blocked("\(method.title(on: forge)) in \(pr.repo.fullName)")
         }
         store.remove(pr)
     }

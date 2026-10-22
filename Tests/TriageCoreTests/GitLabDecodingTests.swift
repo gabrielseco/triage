@@ -169,6 +169,22 @@ private func model(_ json: String) throws -> (PullRequest, [String]) {
     #expect(try model(detail(status: "NOT_APPROVED")).0.mergeable == .mergeable)
 }
 
+@Test func mergeStatusSquashAndPermissionDecode() throws {
+    let (plain, _) = try model(detail(status: "NOT_APPROVED"))
+    #expect(plain.detailedMergeStatus == .notApproved)
+    #expect(plain.mergeMethods == [.merge, .squash])
+    #expect(plain.defaultMergeMethod == .merge)
+    #expect(plain.viewerCanMerge)
+    #expect(try model(detail(status: "LOCKED_PATHS")).0.detailedMergeStatus == nil)
+
+    let squashing = detail().replacingOccurrences(
+        of: #""conflicts": false,"#,
+        with: #""conflicts": false, "squashOnMerge": true, "userPermissions": {"canMerge": false},"#)
+    let (pr, _) = try model(squashing)
+    #expect(pr.defaultMergeMethod == .squash)
+    #expect(!pr.viewerCanMerge)
+}
+
 /// A pipeline that failed before any job ran (a config error), as seen on gitlab.com: without the pipeline as
 /// a check, an approved MR would read as ready to merge.
 @Test func aPipelineThatFailedWithoutJobsIsAFailingCheck() throws {

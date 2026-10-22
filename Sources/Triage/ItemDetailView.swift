@@ -48,16 +48,12 @@ struct ItemDetailView: View {
     }
 
     private var actions: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            actionRow
-            if store.canMerge(item.pr) { MergeNote(pr: item.pr) }
-        }
-        .confirmationDialog(
+        actionRow.confirmationDialog(
             confirmTitle, isPresented: confirmShown, titleVisibility: .visible, presenting: store.confirming
         ) { c in
             switch c.action {
             case .merge(let method):
-                let title = method.title
+                let title = method.title(on: c.item.pr.repo.forge)
                 // Someone else's PR you haven't approved: approving is the default, merging as-is the fallback.
                 if store.canApprove(c.item.pr) {
                     Button("Approve, then \(title.lowercased())") {
@@ -82,7 +78,6 @@ struct ItemDetailView: View {
 
     private var actionRow: some View {
         HStack {
-            if store.canMerge(item.pr) { MergeButton(item: item) }
             if store.canApprove(item.pr) {
                 Button {
                     Task { await store.approvePullRequest(item) }
@@ -190,7 +185,7 @@ struct ItemDetailView: View {
 
     private func mergeMessage(_ method: MergeMethod) -> String {
         let warnings = item.pr.mergeWarnings.map { "⚠︎ \($0)" }.joined(separator: "\n")
-        return "\(item.pr.title)\n\n\(method.title): \(item.pr.headRef) → base branch"
+        return "\(item.pr.title)\n\n\(method.title(on: item.pr.repo.forge)): \(item.pr.headRef) → base branch"
             + (warnings.isEmpty ? "" : "\n\n\(warnings)")
     }
 
@@ -319,9 +314,7 @@ struct PullRequestActions: View {
                 .shortcut("a", modifiers: [.command, .shift], if: inMenuBar)
         }
         if store.canMerge(item.pr) {
-            Button("Merge…") { confirm(.merge(item.pr.defaultMergeMethod)) }
-                .shortcut("m", modifiers: [.command, .shift], if: inMenuBar)
-                .disabled(item.pr.mergeBlocker != nil)
+            MergeMenuItems(pr: item.pr, inMenuBar: inMenuBar) { confirm(.merge($0)) }
         }
         if store.can(.close, item.pr) {
             Button("Close PR…") { confirm(.close) }
@@ -336,10 +329,6 @@ struct PullRequestActions: View {
         } else {
             openChanges.shortcut("o", if: inMenuBar)
             openConversation.shortcut("o", modifiers: [.command, .shift], if: inMenuBar)
-        }
-        if store.canMerge(item.pr), let blocker = item.pr.mergeBlocker {
-            Divider()
-            Text("Can't merge: \(blocker.lowercased())")
         }
     }
 

@@ -114,6 +114,63 @@ private func pr(
     #expect(pr(review: .reviewRequired).mergeWarnings == ["It isn't approved yet"])
 }
 
+private func mr(
+    _ status: DetailedMergeStatus?, draft: Bool = false, checks: [CheckState] = [.success]
+) throws -> PullRequest {
+    var p = pr(draft: draft, checks: checks)
+    p.repo = try #require(RepoRef(gitlabPath: "acme/web", host: "gitlab.example.com"))
+    p.detailedMergeStatus = status
+    p.allowedMergeMethods = [.merge, .squash]
+    return p
+}
+
+@Test func gitlabConflictsRebaseDraftsAndCheckingDisableMerge() throws {
+    let cases: [(DetailedMergeStatus, String)] = [
+        (.conflict, "Merge conflicts"), (.needRebase, "Branch needs a rebase"), (.draft, "Draft"),
+        (.checking, "GitLab is checking mergeability"), (.unchecked, "GitLab is checking mergeability"),
+    ]
+    for (status, reason) in cases {
+        let p = try mr(status)
+        #expect(p.mergeBlocker == reason, "\(status)")
+        #expect(p.mergeNote == reason, "\(status)")
+    }
+    #expect(try mr(.mergeable, draft: true).mergeBlocker == "Draft")
+}
+
+@Test func gitlabApprovalsPipelinesAndThreadsAreNotedBesideAnEnabledMerge() throws {
+    let cases: [(DetailedMergeStatus, String)] = [
+        (.notApproved, "Approval required"), (.ciMustPass, "Pipeline must succeed"),
+        (.discussionsNotResolved, "Unresolved threads"),
+    ]
+    for (status, note) in cases {
+        let p = try mr(status)
+        #expect(p.mergeBlocker == nil, "\(status)")
+        #expect(p.mergeNote == note, "\(status)")
+    }
+    #expect(try mr(.mergeable).mergeBlocker == nil)
+    #expect(try mr(.mergeable).mergeNote == nil)
+    // No status to go on: the checks and reviews say what to think twice about, as on GitHub.
+    #expect(try mr(nil, checks: [.failure]).mergeNote == "Checks failing")
+}
+
+@Test func gitlabIgnoresGitHubsBranchProtectionState() throws {
+    var p = try mr(.mergeable)
+    p.mergeState = .blocked
+    #expect(p.mergeBlocker == nil)
+    #expect(p.mergeNote == nil)
+}
+
+@Test func gitlabOffersMergeAndSquashDefaultingToTheProjectsChoice() throws {
+    var p = try mr(.mergeable)
+    p.allowedMergeMethods = Set(MergeMethod.allCases)
+    #expect(p.mergeMethods == [.merge, .squash])
+    p.mergeMethod = .squash
+    #expect(p.defaultMergeMethod == .squash)
+    #expect(MergeMethod.merge.title(on: p.repo.forge) == "Merge")
+    #expect(MergeMethod.squash.title(on: p.repo.forge) == "Squash and merge")
+    #expect(MergeMethod.merge.title(on: .github) == "Create a merge commit")
+}
+
 @Test func mergeMethodMapsToRESTValues() {
     #expect(MergeMethod.allCases.map(\.restValue) == ["merge", "squash", "rebase"])
 }
