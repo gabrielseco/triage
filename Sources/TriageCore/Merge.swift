@@ -30,6 +30,19 @@ public enum DetailedMergeStatus: String, Sendable, CaseIterable {
     case ciMustPass = "CI_MUST_PASS", ciStillRunning = "CI_STILL_RUNNING", requestedChanges = "REQUESTED_CHANGES"
 }
 
+/// A GitLab project's `squashOption`: which methods Merge offers there, and whether it defaults to squash.
+enum SquashOption: String, Sendable {
+    case allowed = "ALLOWED", encouraged = "ENCOURAGED", required = "REQUIRED", never = "NEVER"
+
+    var allowedMergeMethods: Set<MergeMethod> {
+        switch self {
+        case .required: [.squash]
+        case .never: [.merge]
+        case .allowed, .encouraged: [.merge, .squash]
+        }
+    }
+}
+
 /// GitHub's `MergeStateStatus`: whether the merge box would let the PR in, branch protection included.
 public enum MergeState: String, Sendable, CaseIterable {
     case clean = "CLEAN", blocked = "BLOCKED", behind = "BEHIND", dirty = "DIRTY", draft = "DRAFT"
@@ -121,6 +134,10 @@ extension PullRequest {
         case .changesRequested: w.append("A reviewer requested changes")
         case .reviewRequired: w.append("It isn't approved yet")
         case .approved, .none: break
+        }
+        if detailedMergeStatus == .discussionsNotResolved {
+            let open = threads.filter { !$0.isResolved }.count
+            w.append(open > 0 ? "\(open) thread\(open == 1 ? " is" : "s are") unresolved" : "Threads are unresolved")
         }
         if mergeable == .unknown { w.append("\(repo.forge.name) is still checking mergeability") }
         return w

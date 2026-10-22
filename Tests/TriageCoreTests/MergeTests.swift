@@ -153,6 +153,28 @@ private func mr(
     #expect(try mr(nil, checks: [.failure]).mergeNote == "Checks failing")
 }
 
+@Test func gitlabCautionsHeadAnEnabledMergeAndPipelineRunningToo() throws {
+    let cases: [(DetailedMergeStatus, String)] = [
+        (.ciStillRunning, "Pipeline running"), (.requestedChanges, "Changes requested"),
+    ]
+    for (status, note) in cases {
+        #expect(try mr(status).mergeBlocker == nil, "\(status)")
+        #expect(try mr(status).mergeNote == note, "\(status)")
+    }
+}
+
+@Test func gitlabUnresolvedDiscussionsAreAMergeWarning() throws {
+    var p = try mr(.discussionsNotResolved)
+    #expect(p.mergeWarnings == ["Threads are unresolved"])
+    let open = ReviewThreadInfo(isResolved: false, firstComment: CommentInfo(author: "rita", isBot: false, body: "?"))
+    let done = ReviewThreadInfo(isResolved: true, firstComment: CommentInfo(author: "rita", isBot: false, body: "ok"))
+    p.threads = [open, done]
+    #expect(p.mergeWarnings == ["1 thread is unresolved"])
+    p.threads = [open, open, done]
+    #expect(p.mergeWarnings == ["2 threads are unresolved"])
+    #expect(try mr(.mergeable).mergeWarnings.isEmpty)
+}
+
 @Test func gitlabIgnoresGitHubsBranchProtectionState() throws {
     var p = try mr(.mergeable)
     p.mergeState = .blocked

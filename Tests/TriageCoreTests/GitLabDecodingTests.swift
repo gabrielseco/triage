@@ -63,7 +63,7 @@ private func model(_ json: String) throws -> (PullRequest, [String]) {
     let d: DetailData = try GitLabClient.decode(Data(json.utf8))
     let mr = try #require(d.project?.mergeRequest)
     let repo = try #require(RepoRef(gitlabPath: "acme/platform/web", host: host))
-    return (mr.toModel(repo: repo), mr.truncationWarnings(repo: repo))
+    return (mr.toModel(repo: repo, squashOption: d.project?.squashOption), mr.truncationWarnings(repo: repo))
 }
 
 @Test func mapsAMergeRequestOntoAPullRequest() throws {
@@ -183,6 +183,32 @@ private func model(_ json: String) throws -> (PullRequest, [String]) {
     let (pr, _) = try model(squashing)
     #expect(pr.defaultMergeMethod == .squash)
     #expect(!pr.viewerCanMerge)
+}
+
+/// The project's `squashOption`, next to `mergeRequest` in the detail response.
+private func project(squashOption: String?, squashOnMerge: Bool = false) -> String {
+    let field = squashOption.map { #""squashOption": "\#($0)", "# } ?? ""
+    return detail()
+        .replacingOccurrences(of: #"{"project": {"#, with: #"{"project": {\#(field)"#)
+        .replacingOccurrences(
+            of: #""conflicts": false,"#, with: #""conflicts": false, "squashOnMerge": \#(squashOnMerge),"#)
+}
+
+@Test func squashOptionDecidesTheMethodsAndTheDefault() throws {
+    // The default method first, then the others.
+    let cases: [(String?, [MergeMethod])] = [
+        ("ALLOWED", [.merge, .squash]), ("ENCOURAGED", [.squash, .merge]), ("REQUIRED", [.squash]),
+        ("NEVER", [.merge]), (nil, [.merge, .squash]), ("SOMETHING_NEW", [.merge, .squash]),
+    ]
+    for (option, methods) in cases {
+        let pr = try model(project(squashOption: option)).0
+        #expect(Set(pr.mergeMethods) == Set(methods), "\(option ?? "missing")")
+        #expect(pr.defaultMergeMethod == methods[0], "\(option ?? "missing")")
+    }
+    // Where the project leaves it open, the MR's own checkbox picks; NEVER wins over it.
+    #expect(try model(project(squashOption: "ALLOWED", squashOnMerge: true)).0.defaultMergeMethod == .squash)
+    #expect(try model(project(squashOption: nil, squashOnMerge: true)).0.defaultMergeMethod == .squash)
+    #expect(try model(project(squashOption: "NEVER", squashOnMerge: true)).0.defaultMergeMethod == .merge)
 }
 
 /// A pipeline that failed before any job ran (a config error), as seen on gitlab.com: without the pipeline as
