@@ -1,7 +1,7 @@
 # Plan: GitLab merge requests assigned to me
 
-Status: phases 1–4 shipped (#33–#36), GitLab MRs show read-only. Phase 5 is on hold until it's needed:
-see [Still missing](#still-missing). Updated: 2026-09-28.
+Status: phases 1–4 shipped (#33–#36); of phase 5, GitLab MRs can be approved and merged. The rest is on hold
+until it's needed: see [Still missing](#still-missing). Updated: 2026-10-22.
 
 ## Goal
 
@@ -176,7 +176,8 @@ is slower per refresh. `glab` stays only as an optional checkout command.
 ## Still missing
 
 Phases 1–4 are in: GitLab MRs assigned to you or waiting on your review show in the inbox and the sidebar,
-classified like GitHub PRs, with every action GitLab can't do yet hidden (`Forge.gitlab.capabilities == []`).
+classified like GitHub PRs, with every action GitLab can't do yet hidden (`Forge.gitlab.capabilities` is
+`[.approve, .merge]`).
 What's below is parked on purpose: none of it was needed day to day yet. Pick an item up when it is. Each is
 one PR, and most start by adding a capability to `Forge.capabilities` for `.gitlab`, which un-hides the UI
 that's already there for GitHub.
@@ -216,11 +217,12 @@ Settings should say which scope is missing when a write gets a 403, rather than 
 6. **Approve** (`.approve`). `POST /api/v4/projects/:id/merge_requests/:iid/approve` with `sha` = head, so the
    approval is for the commit you saw (like GitHub's `commit_id`). `PullRequest.canBeApproved` already works from
    `approvedBy`; GitLab also allows approving your own MR if the project permits it, so check that rule.
-7. **Merge** (`.merge`). `PUT /api/v4/projects/:id/merge_requests/:iid/merge` with `sha` (GitLab answers 409 if
-   the head moved) and `squash`. Fetch the project's `mergeMethod` (merge / rebase_merge / ff) and
-   `squashOption` in the detail query and map them onto `MergeMethod` (or a GitLab variant). `mergeBlocker`
-   should read `detailedMergeStatus` (`DISCUSSIONS_NOT_RESOLVED`, `CI_MUST_PASS`, `NOT_APPROVED`, …), and
-   "Merge when pipeline succeeds" is worth considering.
+7. **Merge** (`.merge`). **Done:** `PUT /api/v4/projects/:id/merge_requests/:iid/merge` with `sha` (GitLab
+   answers 409 if the head moved) and `squash`. The menu offers Merge and Squash and merge, defaulting from the
+   MR's `squashOnMerge` (the project's squash option applied); `userPermissions.canMerge` hides it from
+   non-maintainers. `mergeBlocker` reads `detailedMergeStatus`: `CONFLICT`, `NEED_REBASE`, `DRAFT_STATUS` and
+   `CHECKING` disable Merge; `NOT_APPROVED`, `CI_MUST_PASS` and `DISCUSSIONS_NOT_RESOLVED` are a note beside
+   it. Still open: "Merge when pipeline succeeds" (auto-merge) and rebase-and-merge.
 8. **Close** (`.close`). `PUT /api/v4/projects/:id/merge_requests/:iid` with `state_event=close`.
 
 ### Not GitLab, found on the way

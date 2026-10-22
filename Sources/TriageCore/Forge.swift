@@ -42,7 +42,16 @@ public enum Forge: Hashable, Sendable {
         switch self {
         case .github: .all
         // Each GitLab capability is turned on as it's built.
-        case .gitlab: [.approve]
+        case .gitlab: [.approve, .merge]
+        }
+    }
+
+    /// The merge methods the forge has. GitLab's merge (a merge commit or fast-forward, per project) can squash;
+    /// rebase-and-merge isn't offered.
+    public var mergeMethods: [MergeMethod] {
+        switch self {
+        case .github: MergeMethod.allCases
+        case .gitlab: [.merge, .squash]
         }
     }
 }
@@ -176,7 +185,7 @@ public struct GitHubForge: ForgeClient {
 }
 
 /// GitLab behind `ForgeClient`: the merge requests assigned to the viewer or waiting on their review, across
-/// projects. Approve works; the other actions throw until their capability is turned on.
+/// projects. Approve and merge work; the other actions throw until their capability is turned on.
 public struct GitLabForge: ForgeClient {
     let client: GitLabClient
 
@@ -205,6 +214,8 @@ public struct GitLabForge: ForgeClient {
     public func approve(_ pr: PullRequest) async throws { try await client.approve(pr) }
     /// The viewer's newest @mentions, from their To-Do list.
     public func mentions() async throws -> [GitLabMention] { try await client.mentions() }
-    public func merge(_ pr: PullRequest, method: MergeMethod) async throws { throw ForgeError.unsupported(forge) }
+    public func merge(_ pr: PullRequest, method: MergeMethod) async throws {
+        try await client.merge(pr, method: method)
+    }
     public func close(_ pr: PullRequest) async throws { throw ForgeError.unsupported(forge) }
 }

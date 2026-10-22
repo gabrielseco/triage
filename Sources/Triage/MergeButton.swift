@@ -2,7 +2,7 @@ import SwiftUI
 import TriageCore
 
 /// GitHub's merge box: Merge uses the default method, the Merge method menu picks one for this merge. Both ask to
-/// confirm in the item detail. Disabled when GitHub would refuse; `MergeNote` says why, on the line below the row.
+/// confirm in the item detail. Disabled when the forge would refuse; `MergeNote` says why, on the line below the row.
 struct MergeButton: View {
     @Environment(AppStore.self) private var store
     let item: AttentionItem
@@ -18,12 +18,12 @@ struct MergeButton: View {
             }
             .help(
                 blocker.map { "Can't merge: \($0.lowercased())" }
-                    ?? "\(pr.defaultMergeMethod.title) on \(pr.repo.forge.name) (⇧⌘M)")
+                    ?? "\(pr.defaultMergeMethod.title(on: pr.repo.forge)) on \(pr.repo.forge.name) (⇧⌘M)")
             Menu {
                 ForEach(pr.mergeMethods, id: \.self) { method in
                     // Checked is the default, what Merge uses; picking one asks to confirm a merge with it.
                     Toggle(
-                        method.title,
+                        method.title(on: pr.repo.forge),
                         isOn: Binding(get: { method == pr.defaultMergeMethod }, set: { _ in confirm(method) }))
                 }
             } label: {

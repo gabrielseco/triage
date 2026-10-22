@@ -57,7 +57,7 @@ struct ItemDetailView: View {
         ) { c in
             switch c.action {
             case .merge(let method):
-                let title = method.title
+                let title = method.title(on: c.item.pr.repo.forge)
                 // Someone else's PR you haven't approved: approving is the default, merging as-is the fallback.
                 if store.canApprove(c.item.pr) {
                     Button("Approve, then \(title.lowercased())") {
@@ -190,7 +190,7 @@ struct ItemDetailView: View {
 
     private func mergeMessage(_ method: MergeMethod) -> String {
         let warnings = item.pr.mergeWarnings.map { "⚠︎ \($0)" }.joined(separator: "\n")
-        return "\(item.pr.title)\n\n\(method.title): \(item.pr.headRef) → base branch"
+        return "\(item.pr.title)\n\n\(method.title(on: item.pr.repo.forge)): \(item.pr.headRef) → base branch"
             + (warnings.isEmpty ? "" : "\n\n\(warnings)")
     }
 

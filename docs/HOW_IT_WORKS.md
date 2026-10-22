@@ -43,7 +43,7 @@ Two design rules drive everything:
 | Launch / rebuild | `triage` in the terminal (zsh function in `~/.zshrc`) |
 | Watch a repo | Type `owner/repo` (or paste a GitHub URL) in the sidebar field → Enter |
 | Stop watching | Right-click the repo in the sidebar → Stop watching |
-| GitLab | Settings → GitLab → Show GitLab merge requests, then paste a token (or point to one in 1Password or a helper script). `read_api` is enough to watch; **Approve** needs the `api` scope. Projects appear in the sidebar by themselves |
+| GitLab | Settings → GitLab → Show GitLab merge requests, then paste a token (or point to one in 1Password or a helper script). `read_api` is enough to watch; **Approve** and **Merge** need the `api` scope. Projects appear in the sidebar by themselves |
 | GitLab mentions | GitLab › **Mentioned** in the sidebar: @mentions from people on open MRs and issues, from the last 30 days, until you reply in that thread. Each new one also sends a notification |
 | Linear | Settings → Linear → Show Linear pings, then paste a personal API key with Read access. Mentions and replies in your threads appear under **Linear** in the sidebar until you answer them in Linear. Each new one sends a notification (click it to open the comment), then reminders after 1 h, 4 h and daily |
 | Refresh | ⌘R, or wait. It auto-refreshes every 2 minutes, Linear every 30 seconds |
@@ -90,7 +90,7 @@ triage/
 │   │   ├── Models.swift           ← types: PullRequest, AttentionItem, Severity…
 │   │   ├── Forge.swift            ← ForgeClient protocol, what each forge can do, the GitHub/GitLab adapters
 │   │   ├── GitHubClient.swift     ← GraphQL + REST calls, token lookup
-│   │   ├── GitLabClient.swift     ← GitLab GraphQL: your MRs → PullRequest (+Actions: approve over REST)
+│   │   ├── GitLabClient.swift     ← GitLab GraphQL: your MRs → PullRequest (+Actions: approve, merge over REST)
 │   │   ├── GitLabMentions.swift   ← your GitLab To-Do mentions → the ones still waiting on your reply
 │   │   ├── LinearClient.swift     ← Linear GraphQL: your notifications from the last 30 days
 │   │   ├── LinearPings.swift      ← notifications → the mentions and replies still waiting on you
@@ -253,7 +253,7 @@ protocol ForgeClient {
 - **`fetch()` hides how each forge fetches.** GitHub runs one query per watched repo; GitLab one query for
   "my MRs" across all projects, grouped into one result per project.
 - **Capabilities** (`Forge.capabilities`, an option set of `ciLogs`, `diff`, `checkout`, `approve`, `merge`,
-  `close`) say what Triage can do for a forge's PRs. GitHub has all of them; GitLab has only `approve` so
+  `close`) say what Triage can do for a forge's PRs. GitHub has all of them; GitLab has `approve` and `merge` so
   far. Views ask `store.can(.merge, pr)` and **hide** what's missing, rather than showing a button that
   fails. Turning a GitLab feature on is implementing the method and adding the
   capability (see `docs/plans/GITLAB.md` › Still missing).
@@ -321,18 +321,20 @@ error. The GitHub data stays either way.
 | **System notes** ("added 3 commits", "changed the title") | dropped: otherwise every push would change item ids |
 | A reviewer's `REQUESTED_CHANGES` | `reviewDecision = .changesRequested` |
 | `approvalsLeft > 0` / someone approved | `.reviewRequired` / `.approved`. With no approval rules GitLab calls every MR "approved"; that alone isn't enough |
-| `detailedMergeStatus` `CONFLICT`, `NEED_REBASE` / `CHECKING`… | `.conflicting` / `.unknown` |
+| `detailedMergeStatus` `CONFLICT`, `NEED_REBASE` / `CHECKING`… | `.conflicting` / `.unknown`, and kept as `pr.detailedMergeStatus` for Merge's blocker and note |
+| `squashOnMerge` / `userPermissions.canMerge` | default method Squash and merge or Merge / `viewerCanMerge` |
 | Access-token bots (`project_<id>_bot_<hash>`) | a bot, named by its display name (`cursor` for Cursor Bugbot, as on GitHub) |
 
 Threads are never marked outdated: GitLab has no simple flag, and guessing would hide real unresolved threads
 after a push.
 
-**Approve** (`GitLabClient+Actions.swift`) is the one write action: `POST
-/api/v4/projects/:id/merge_requests/:iid/approve` with `sha` set to the head commit Triage saw, so GitLab
-answers 409 instead of approving a commit you haven't seen. The project id is its full path, percent-encoded.
-Two errors are reworded: a `read_api` token gets 403 `insufficient_scope` ("needs a token with the api scope"),
-and a 401 on this endpoint means "not allowed to approve" (already approved, or not an eligible approver),
-not a bad token.
+**Approve** and **Merge** (`GitLabClient+Actions.swift`) are the write actions: `POST
+/api/v4/projects/:id/merge_requests/:iid/approve` and `PUT …/merge`, both with `sha` set to the head commit
+Triage saw, so GitLab answers 409 instead of approving or merging a commit you haven't seen. Merge also sends
+`squash` (true for Squash and merge). The project id is its full path, percent-encoded. Errors are reworded: a
+`read_api` token gets 403 `insufficient_scope` ("needs a token with the api scope"), and a 401 on these
+endpoints means "not allowed to approve" (already approved, or not an eligible approver) or "not allowed to
+merge", not a bad token.
 
 ### 6.5 Classifier (`Classifier.swift`), the heart of it
 
@@ -544,12 +546,15 @@ the environment. It holds:
   waiting on your reply", so they share views, Dismiss and Snooze.
 - **`ItemDetailView`**: header, action buttons with keyboard shortcuts, Claude's answer (loading / done /
   failed), and evidence cards. Markdown in comments/answers is rendered inline, comments after
-  `CommentText.readable`. Buttons the PR's forge can't do are hidden: for a GitLab MR that's Merge, Close and
-  Fix in iTerm (Approve works), and Explain PR copies a prompt instead of opening iTerm. **Merge** works like
-  GitHub's merge box, on every PR in a repo you can write to: Merge uses the default method, the Merge
-  method menu lists the methods the repo allows (`pr.mergeMethods`) for this merge only. It's disabled when
-  GitHub would refuse (`pr.mergeBlocker`: draft, conflicts, or branch protection per `mergeStateStatus`
-  unless `viewerCanMergeAsAdmin` lets you bypass it).
+  `CommentText.readable`. Buttons the PR's forge can't do are hidden: for a GitLab MR that's Close and
+  Fix in iTerm (Approve and Merge work), and Explain PR copies a prompt instead of opening iTerm. **Merge**
+  works like GitHub's merge box, on every PR in a repo you can write to: Merge uses the default method, the
+  Merge method menu lists the methods the repo allows (`pr.mergeMethods`) for this merge only. It's disabled
+  when GitHub would refuse (`pr.mergeBlocker`: draft, conflicts, or branch protection per `mergeStateStatus`
+  unless `viewerCanMergeAsAdmin` lets you bypass it). On a GitLab MR the menu has Merge and Squash and merge
+  (the default follows the project's squash option), and the blocker comes from `detailedMergeStatus`:
+  conflicts, a needed rebase, a draft or a status GitLab is still checking disable Merge; a missing approval,
+  a pipeline that must succeed or unresolved threads only show as a note, and GitLab refuses if it enforces them.
   The reason, or failing checks and missing reviews that don't block, shows under the row (`pr.mergeNote`).
   The confirmation names the method and lists `pr.mergeWarnings`.
 - **`SettingsView`**: API key → Keychain, model, digest hours, weekdays only, open at login, "send a
@@ -636,7 +641,7 @@ every refresh (2 min):
 | `scripts/verify-app.sh` | The throwaway build on mock data that `/verify` drives under Workbench: `start` prints a pid, `list`, `press`, `shot` and `stop` take it; never the installed app |
 | `scripts/render-icon.sh` | Renders `Resources/AppIcon.svg` → `AppIcon.png` (1024px, transparent) with headless Chrome |
 | `swift run Triage` | Quick dev run, no bundle (no notifications or login item) |
-| `swift test` | Swift Testing suite: classifier rules, dedup ids, bot severity, prompt assembly, digest diff and schedule, GitHub and GitLab decoding (fixtures, no network), the mock scenario and fake clients, forge ids and wording, readable comments, GitLab approve requests and mentions, Linear pings, alerts, the handoff script |
+| `swift test` | Swift Testing suite: classifier rules, dedup ids, bot severity, prompt assembly, digest diff and schedule, GitHub and GitLab decoding (fixtures, no network), the mock scenario and fake clients, forge ids and wording, readable comments, GitLab approve and merge requests and mentions, Linear pings, alerts, the handoff script |
 | `scripts/check.sh [--fix]` | What CI runs: swift-format, SwiftLint, Swift 6 build, tests, TriageCore coverage gate |
 | `scripts/render-docs.py` | Renders this file into `docs/HOW_IT_WORKS.html` (sidebar table of contents, light and dark) |
 
@@ -681,6 +686,7 @@ project; SwiftPM + a shell script is enough for a personal tool.
 | Every 30 s, GitLab on | 1 To-Do query for mentions | Free |
 | Every 30 s, Linear on | 1 notifications query | Free |
 | Approve (GitLab) | 1 REST `POST …/approve` | Free |
+| Merge (GitLab) | 1 REST `PUT …/merge` | Free |
 | Explain | 1–3 job-log fetches + 1 diff fetch + **1 Claude request** | One Opus request per click (prompt up to ~60KB of diff + log tails) |
 | Copy prompt | Same GitHub fetches, no Claude call | Free |
 | Digest | Nothing extra (uses the latest refresh) | Free |
@@ -700,7 +706,8 @@ project; SwiftPM + a shell script is enough for a personal tool.
 - **Timing:** macOS may delay a sleeping app's timers (App Nap), so a digest can arrive a few minutes
   late.
 - **Claude answers aren't saved**, and "Fix it" (an agent that pushes a commit) doesn't exist yet.
-- **GitLab can only approve.** No diff or CI logs in prompts, no Fix in iTerm, no merge or close. Each is
+- **GitLab can only approve and merge.** No diff or CI logs in prompts, no Fix in iTerm, no close, no
+  auto-merge when the pipeline succeeds, no rebase-and-merge. Each is
   written up, with how to build it, in `docs/plans/GITLAB.md` › Still missing.
 - **A mention counts as answered only by a reply in its thread.** A reply elsewhere (another thread, Slack)
   doesn't clear it; dismiss it instead.
