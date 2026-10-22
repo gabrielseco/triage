@@ -279,3 +279,9 @@ private func project(squashOption: String?, squashOnMerge: Bool = false) -> Stri
     #expect(throws: RepoError.self) { try GitLabClient.snapshot([.failure(failed)], warnings: []) }
     #expect(try GitLabClient.snapshot([], warnings: []).pullRequests.isEmpty)
 }
+
+/// GitLab rejects a whole query that names a field its `Project` type doesn't have (`squashOption` is not one), which
+/// empties every merge request. The detail query must not ask for it.
+@Test func detailQueryDoesNotAskForProjectSquashOption() {
+    #expect(!GitLabClient.detailQuery.contains("squashOption"))
+}
