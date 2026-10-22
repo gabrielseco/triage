@@ -29,8 +29,10 @@ touch `~/Applications/Triage.app`.
    do not look for it in the installed app.
 3. **Drive it.** `scripts/verify-app.sh list <pid>` shows what is on screen (role and label). `scripts/verify-app.sh press
    <pid> "<label>"` presses a button or selects a row (an exact label, else a prefix). Wait about two seconds after a press
-   before you look: SwiftUI animates. It refuses `Approve`, `Merge`, `Squash`, `Rebase`, `Close`, `Open`, `Fix in iTerm` and
-   `Explain`; a criterion about one of those buttons is checked by seeing that it is listed, not by pressing it.
+   before you look: SwiftUI animates. It refuses `Open`, `Fix in iTerm` and
+   `Explain` (they open a browser or another app, or cost money); a criterion about one of those buttons is checked by seeing that
+   it is listed, not by pressing it. `Approve`, `Merge`, `Squash`, `Rebase` and `Close` can be pressed: the build is in mock mode,
+   where they change only the mock's own in-memory copy.
 4. **Capture.** In the state a criterion needs, `scripts/verify-app.sh shot <pid> <name>` writes
    `$WORKBENCH_PROOF_DIR/<name>.png`. `Read` that file and look at it: if it does not show the state, press again and take it
    again under the same name. A criterion that names several screenshots (before and after a press, a second window size)

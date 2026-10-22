@@ -18,7 +18,7 @@
 #   - the build has a bundle id of its own, new for each start (dev.rogal.triage.verify-<number>), and the app is in mock mode (docs/plans/MOCK.md): it
 #     reaches no GitHub, GitLab or Keychain, reads none of the installed app's settings, and shows no private titles
 #   - the window is found by pid, never by name, and only that pid is ever killed
-#   - `press` refuses the buttons that act on a forge, open another app or spend money, by label, here and again in
+#   - `press` refuses the buttons that open a browser or another app, or spend money, by label, here and again in
 #     scripts/ax.swift on the label it resolves to; a scenario file cannot widen the list
 # Environment for `start`:
 #   VERIFY_WINDOW_SIZE      <width>x<height> in points the window is set to before any capture (default 1440x900). Needs
@@ -33,8 +33,10 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # nothing else says why. The id of a running build is kept in its directory.
 ID_PREFIX="dev.rogal.triage.verify"
 MOCK_DOMAIN="dev.rogal.triage.mock-state"  # MockMode.defaultsSuite
-# The buttons a verification never presses, by the start of their label.
-REFUSED='^(Approve|Merge|Squash|Rebase|Close|Open|Fix in iTerm|Explain)'
+# The buttons a verification never presses, by the start of their label: the ones with an effect outside the mock build.
+# Approve, Merge, Squash, Rebase and Close are not here: the build is in mock mode, where they change only the mock's own
+# in-memory copy (docs/plans/MOCK.md), so a verification can open a merge menu or confirmation and press through it.
+REFUSED='^(Open|Fix in iTerm|Explain)'
 STATE_ROOT="${TMPDIR:-/tmp}"
 STATE_ROOT="${STATE_ROOT%/}/triage-verify"
 PIDS="$STATE_ROOT/pids"
@@ -201,7 +203,7 @@ press() {
   pid="$(resolve_pid "$1")"
   build_dir "$pid" >/dev/null
   [[ -n "$label" ]] || fail "press needs a label"
-  if [[ "$label" =~ $REFUSED ]]; then fail "refused: press $label (it acts on a forge, opens another app or costs money)"; fi
+  if [[ "$label" =~ $REFUSED ]]; then fail "refused: press $label (it opens a browser or another app, or costs money)"; fi
   # The check above is for a clear message; ax.swift checks the label the prefix resolves to.
   TRIAGE_PID="$pid" TRIAGE_REFUSE="$REFUSED" swift "$ROOT/scripts/ax.swift" press "$label"
 }
