@@ -19,6 +19,9 @@ This file adds only what is specific to Triage.
 4. `workbench review`, look at the verifier screenshots with `Read`; `open --editor cursor` once a worktree exists;
    then `workbench judge` (a read-only second opinion on each criterion, `judge_model` in the config; it never runs on its own,
    so run it before `accept`; its words are a note, not a pass)
+   Two strikes, then the human (see the Workbench skill): the verifier cannot press `Merge`, `Approve`, `Close`, `Open`, `Squash`,
+   `Rebase`, `Explain` or `Fix in iTerm`, so a criterion about what those buttons open goes to a person's check in the `/verify`
+   build without a second turn, and the PR says it was checked by hand
 5. `send-back` if wrong; `accept`; `ship --yes`; then open the PR and confirm the screenshots are in it. If a visible change
    has none, run `workbench ship --screenshots` and say so if it fails (CLAUDE.md requires them for app changes)
 6. `workbench pr-review --pr <n>` after the PR is open, then post the result on the PR (CLAUDE.md step 5); fix findings and run again
