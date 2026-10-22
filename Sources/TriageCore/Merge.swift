@@ -24,14 +24,14 @@ public enum MergeState: String, Sendable, CaseIterable {
 
 extension PullRequest {
     /// Why GitHub would refuse to merge this PR, short enough to sit beside the Merge button, or nil if it can be
-    /// tried. Failing checks and missing reviews only block when branch protection says so (`mergeState`), and
-    /// not for an admin who can merge past it.
+    /// tried. Failing checks, missing reviews and an out-of-date branch only block when branch protection says so
+    /// (`mergeState`), and not for an admin who can merge past it.
     public var mergeBlocker: String? {
         if isDraft { return "Draft" }
         if mergeable == .conflicting { return "Merge conflicts" }
         switch mergeState {
         case .blocked where !viewerCanMergeAsAdmin: return mergeCaution ?? "Blocked by branch protection"
-        case .behind: return "Branch out of date"
+        case .behind where !viewerCanMergeAsAdmin: return "Branch out of date"
         default: return nil
         }
     }
@@ -39,7 +39,9 @@ extension PullRequest {
     /// What to show beside the Merge button: the blocker, else the main reason to think twice (which doesn't
     /// disable it). Nil when the PR is clear to merge.
     public var mergeNote: String? {
-        mergeBlocker ?? mergeCaution ?? (mergeState == .blocked ? "Blocked by branch protection" : nil)
+        if let mergeBlocker { return mergeBlocker }
+        if mergeState == .behind { return "Branch out of date" }
+        return mergeCaution ?? (mergeState == .blocked ? "Blocked by branch protection" : nil)
     }
 
     /// The checks or reviews in the way, short: what branch protection blocks on when it does.

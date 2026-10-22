@@ -64,6 +64,19 @@ private func pr(
     #expect(blocked(pr(mergeable: .conflicting), admin: true).mergeBlocker == "Merge conflicts")
 }
 
+@Test func anAdminCanMergeABranchThatIsBehind() {
+    func behind(admin: Bool) -> PullRequest {
+        var p = pr()
+        p.mergeState = .behind
+        p.viewerCanMergeAsAdmin = admin
+        return p
+    }
+    #expect(behind(admin: false).mergeBlocker == "Branch out of date")
+    #expect(behind(admin: false).mergeNote == "Branch out of date")
+    #expect(behind(admin: true).mergeBlocker == nil)
+    #expect(behind(admin: true).mergeNote == "Branch out of date")
+}
+
 @Test func conflictingPRShowsTheConflictBlocker() {
     let p = pr(mergeable: .conflicting, review: .reviewRequired, checks: [.failure])
     #expect(p.mergeBlocker == "Merge conflicts")
