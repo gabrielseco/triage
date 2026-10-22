@@ -548,15 +548,15 @@ the environment. It holds:
   failed), and evidence cards. Markdown in comments/answers is rendered inline, comments after
   `CommentText.readable`. Buttons the PR's forge can't do are hidden: for a GitLab MR that's Close and
   Fix in iTerm (Approve and Merge work), and Explain PR copies a prompt instead of opening iTerm. **Merge**
-  works like GitHub's merge box, on every PR in a repo you can write to: Merge uses the default method, the
-  Merge method menu lists the methods the repo allows (`pr.mergeMethods`) for this merge only. It's disabled
-  when GitHub would refuse (`pr.mergeBlocker`: draft, conflicts, or branch protection per `mergeStateStatus`
-  unless `viewerCanMergeAsAdmin` lets you bypass it). On a GitLab MR the menu has Merge and Squash and merge
-  (the default follows the project's squash option), and the blocker comes from `detailedMergeStatus`:
-  conflicts, a needed rebase, a draft or a status GitLab is still checking disable Merge; a missing approval,
-  a pipeline that must succeed or unresolved threads only show as a note, and GitLab refuses if it enforces them.
-  The reason, or failing checks and missing reviews that don't block, shows under the row (`pr.mergeNote`).
-  The confirmation names the method and lists `pr.mergeWarnings`.
+  isn't a button: it lives in the Open menu (and the Pull Request menu in the menu bar), on every PR in a repo
+  you can write to, as one entry per method the repo allows (`pr.mergeMethods`), the default first: "Create a
+  merge commit…", "Squash and merge…", "Rebase and merge…" on GitHub, "Merge…" and "Squash and merge…" on
+  GitLab (the default follows the project's squash option). ⇧⌘M uses the default. The entries are disabled,
+  with the reason as the item above them, when the forge would refuse (`pr.mergeBlocker`): on GitHub a draft,
+  conflicts, or branch protection per `mergeStateStatus` unless `viewerCanMergeAsAdmin` lets you bypass it; on
+  GitLab, from `detailedMergeStatus`, conflicts, a needed rebase, a draft or a status GitLab is still checking.
+  A missing approval, a pipeline that must succeed or unresolved threads don't disable it (GitLab refuses if it
+  enforces them). Each entry opens a confirmation that names the method and lists `pr.mergeWarnings`.
 - **`SettingsView`**: API key → Keychain, model, digest hours, weekdays only, open at login, "send a
   digest now", GitLab (on/off, host, token → Keychain, Test, "Signed in as …"), and which GitHub token source
   is in use.

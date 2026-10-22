@@ -221,8 +221,8 @@ Settings should say which scope is missing when a write gets a 403, rather than 
    answers 409 if the head moved) and `squash`. The menu offers Merge and Squash and merge, defaulting from the
    MR's `squashOnMerge` (the project's squash option applied); `userPermissions.canMerge` hides it from
    non-maintainers. `mergeBlocker` reads `detailedMergeStatus`: `CONFLICT`, `NEED_REBASE`, `DRAFT_STATUS` and
-   `CHECKING` disable Merge; `NOT_APPROVED`, `CI_MUST_PASS` and `DISCUSSIONS_NOT_RESOLVED` are a note beside
-   it. Still open: "Merge when pipeline succeeds" (auto-merge) and rebase-and-merge.
+   `CHECKING` disable Merge's entries in the Open menu; `NOT_APPROVED`, `CI_MUST_PASS` and
+   `DISCUSSIONS_NOT_RESOLVED` don't. Still open: "Merge when pipeline succeeds" (auto-merge) and rebase-and-merge.
 8. **Close** (`.close`). `PUT /api/v4/projects/:id/merge_requests/:iid` with `state_event=close`.
 
 ### Not GitLab, found on the way

@@ -60,8 +60,8 @@ At most three sizes visible in one component. Hierarchy comes from weight and `.
 - **Pills / badges:** text in a `Capsule()` background, `.padding(.horizontal, 4–6)`, `.padding(.vertical, 2)`
   when they sit next to other text. Short, lowercase for states ("draft", "you").
 - **Cards** (`EvidenceCard`): `padding(10)`, `RoundedRectangle(cornerRadius: 8)`, full width.
-- **Buttons:** one `.borderedProminent` primary action per state (Merge, or Explain & propose fix); the rest
-  default. Secondary actions sit on the leading side, and state changes (Snooze, Dismiss, Open) sit on the
+- **Buttons:** at most one `.borderedProminent` primary action per state (Explain & propose fix); the rest
+  default. Merge is not a button: it lives in the Open menu, one entry per method. Secondary actions sit on the leading side, and state changes (Snooze, Dismiss, Open) sit on the
   trailing side after a `Spacer()`. Menus that sit in a button row get `.fixedSize()`. The one exception is
   a Linear ping: answering happens in Linear, so **Open in Linear** is its primary action, on the leading side.
 - **Icons:** SF Symbols only, via `Label` where there's text. Filled variants for status (`xmark.circle.fill`),
