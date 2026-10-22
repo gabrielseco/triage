@@ -139,7 +139,6 @@ public struct GitLabClient: Sendable {
     static let detailQuery = """
         query($path: ID!, $iid: String!) {
           project(fullPath: $path) {
-            squashOption
             mergeRequest(iid: $iid) {
               iid title description webUrl draft createdAt updatedAt sourceBranch diffHeadSha
               detailedMergeStatus conflicts approved approvalsLeft squashOnMerge userPermissions { canMerge }
