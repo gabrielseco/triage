@@ -22,9 +22,38 @@ private func pr(
 }
 
 @Test func draftsAndConflictsCantBeMerged() {
-    #expect(pr(draft: true).mergeBlocker == "It's a draft")
-    #expect(pr(mergeable: .conflicting).mergeBlocker == "It conflicts with the base branch")
+    #expect(pr(draft: true).mergeBlocker == "Draft")
+    #expect(pr(mergeable: .conflicting).mergeBlocker == "Merge conflicts")
+    #expect(pr(draft: true, mergeable: .conflicting).mergeBlocker == "Draft")
     #expect(pr(mergeable: .unknown).mergeBlocker == nil)
+}
+
+@Test func failingChecksAndReviewsBlockOnlyWhenBranchProtectionDoes() {
+    func blocked(_ p: PullRequest, _ state: MergeState = .blocked) -> String? {
+        var p = p
+        p.mergeState = state
+        return p.mergeBlocker
+    }
+    #expect(pr(review: .reviewRequired, checks: [.failure]).mergeBlocker == nil)
+    #expect(blocked(pr(review: .reviewRequired, checks: [.failure])) == "Checks failing")
+    #expect(blocked(pr(review: .reviewRequired)) == "Review required")
+    #expect(blocked(pr(review: .changesRequested)) == "Changes requested")
+    #expect(blocked(pr(checks: [.pending])) == "Checks running")
+    #expect(blocked(pr()) == "Blocked by branch protection")
+    #expect(blocked(pr(), .behind) == "Branch out of date")
+    #expect(blocked(pr(draft: true)) == "Draft")
+    for state in [MergeState.clean, .unstable, .hasHooks, .unknown] { #expect(blocked(pr(), state) == nil) }
+}
+
+@Test func defaultMethodFallsBackToTheFirstAllowedOne() {
+    var p = pr()
+    #expect(p.mergeMethods == [.merge, .squash, .rebase])
+    #expect(p.defaultMergeMethod == .merge)
+    p.mergeMethod = .squash
+    #expect(p.defaultMergeMethod == .squash)
+    p.allowedMergeMethods = [.rebase, .merge]
+    #expect(p.mergeMethods == [.merge, .rebase])
+    #expect(p.defaultMergeMethod == .merge)
 }
 
 @Test func warningsCoverChecksReviewsAndMergeability() {

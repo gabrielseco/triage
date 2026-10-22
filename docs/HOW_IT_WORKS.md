@@ -245,7 +245,7 @@ protocol ForgeClient {
     func ciLog(_ pr: PullRequest, checkRunID: Int) async -> String?
     func diff(_ pr: PullRequest) async -> String?
     func approve(_ pr: PullRequest) async throws
-    func merge(_ pr: PullRequest) async throws
+    func merge(_ pr: PullRequest, method: MergeMethod) async throws
     func close(_ pr: PullRequest) async throws
 }
 ```
@@ -269,8 +269,9 @@ whatever repos your `gh` login can see.
 
 ```graphql
 repository(owner, name) {
+  viewerDefaultMergeMethod viewerPermission mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed
   pullRequests(states: OPEN, first: 30, orderBy: UPDATED_AT DESC) {
-    number title url isDraft mergeable reviewDecision headRefName author
+    number title url isDraft mergeable mergeStateStatus reviewDecision headRefName author
     commits(last: 1) → statusCheckRollup.contexts(first: 60)   # CheckRun | StatusContext
     reviewThreads(first: 50) → isResolved isOutdated path line + first comment
     comments(last: 20) → author (login + __typename: User | Bot) body url
@@ -544,7 +545,11 @@ the environment. It holds:
 - **`ItemDetailView`**: header, action buttons with keyboard shortcuts, Claude's answer (loading / done /
   failed), and evidence cards. Markdown in comments/answers is rendered inline, comments after
   `CommentText.readable`. Buttons the PR's forge can't do are hidden: for a GitLab MR that's Merge, Close and
-  Fix in iTerm (Approve works), and Explain PR copies a prompt instead of opening iTerm.
+  Fix in iTerm (Approve works), and Explain PR copies a prompt instead of opening iTerm. **Merge** works like
+  GitHub's merge box, on every PR in a repo you can write to: the click uses the default method, the arrow
+  lists the methods the repo allows (`pr.mergeMethods`) for this merge only, and when GitHub would refuse
+  (`pr.mergeBlocker`: draft, conflicts, or branch protection per `mergeStateStatus`) it's disabled with the
+  reason beside it. The confirmation names the method and lists `pr.mergeWarnings`.
 - **`SettingsView`**: API key → Keychain, model, digest hours, weekdays only, open at login, "send a
   digest now", GitLab (on/off, host, token → Keychain, Test, "Signed in as …"), and which GitHub token source
   is in use.

@@ -117,6 +117,26 @@ private func decodePR() throws -> PullRequest {
     #expect(pr.requestedReviewers == ["gabriel"])
 }
 
+@Test func repoSettingsSayHowTheViewerCanMerge() throws {
+    let settings = #""viewerPermission": "TRIAGE", "mergeCommitAllowed": false, "squashMergeAllowed": true,"#
+    let json = String(decoding: truncated, as: UTF8.self)
+        .replacingOccurrences(of: #""repository": {"#, with: #""repository": {\#(settings)"#)
+        .replacingOccurrences(
+            of: #""mergeable": "MERGEABLE","#, with: #""mergeable": "MERGEABLE", "mergeStateStatus": "BLOCKED","#)
+    let pr = try #require(try decode(Data(json.utf8)).repository?.pullRequestModels(repo).first)
+    #expect(pr.mergeMethod == .squash)
+    #expect(pr.mergeMethods == [.squash, .rebase])
+    #expect(!pr.viewerCanMerge)
+    #expect(pr.mergeState == .blocked)
+    #expect(pr.mergeBlocker == "Checks failing")
+
+    // Fields missing from the response don't hide Merge.
+    let bare = try #require(try decode(truncated).repository?.pullRequestModels(repo).first)
+    #expect(bare.mergeMethods == MergeMethod.allCases)
+    #expect(bare.viewerCanMerge)
+    #expect(bare.mergeState == .unknown)
+}
+
 @Test func noReviewsMeansNoApprovals() throws {
     let node = try #require(try decode(truncated).repository?.pullRequests.nodes.first)
     #expect(node.toModel(repo: repo).approvedBy.isEmpty)

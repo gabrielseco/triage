@@ -80,8 +80,8 @@ public protocol ForgeClient: Sendable {
 
     /// Approves as the viewer, pinned to `pr.headSha`.
     func approve(_ pr: PullRequest) async throws
-    /// Merges with `pr.mergeMethod`, only if the head is still `pr.headSha`.
-    func merge(_ pr: PullRequest) async throws
+    /// Merges with `method`, only if the head is still `pr.headSha`.
+    func merge(_ pr: PullRequest, method: MergeMethod) async throws
     /// Closes without merging.
     func close(_ pr: PullRequest) async throws
 }
@@ -166,8 +166,8 @@ public struct GitHubForge: ForgeClient {
         try await client.approvePullRequest(pr.repo, number: pr.number, sha: pr.headSha)
     }
 
-    public func merge(_ pr: PullRequest) async throws {
-        try await client.mergePullRequest(pr.repo, number: pr.number, sha: pr.headSha, method: pr.mergeMethod)
+    public func merge(_ pr: PullRequest, method: MergeMethod) async throws {
+        try await client.mergePullRequest(pr.repo, number: pr.number, sha: pr.headSha, method: method)
     }
 
     public func close(_ pr: PullRequest) async throws {
@@ -205,6 +205,6 @@ public struct GitLabForge: ForgeClient {
     public func approve(_ pr: PullRequest) async throws { try await client.approve(pr) }
     /// The viewer's newest @mentions, from their To-Do list.
     public func mentions() async throws -> [GitLabMention] { try await client.mentions() }
-    public func merge(_ pr: PullRequest) async throws { throw ForgeError.unsupported(forge) }
+    public func merge(_ pr: PullRequest, method: MergeMethod) async throws { throw ForgeError.unsupported(forge) }
     public func close(_ pr: PullRequest) async throws { throw ForgeError.unsupported(forge) }
 }

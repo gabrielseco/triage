@@ -175,6 +175,8 @@ public struct PullRequest: Identifiable, Hashable, Sendable {
     public var summary: String?
     /// The method GitHub's merge button would use for the viewer: their last one, or the repo's default.
     public var mergeMethod: MergeMethod
+    /// The methods the repo allows, whether the viewer may merge there (write access), and GitHub's merge state.
+    public var allowedMergeMethods: Set<MergeMethod>, viewerCanMerge: Bool, mergeState: MergeState
 
     public var id: String { "\(repo.id)#\(number)" }
     /// The number as the forge writes it: `#12`, or `!12` for a GitLab merge request.
@@ -198,7 +200,9 @@ public struct PullRequest: Identifiable, Hashable, Sendable {
         approvedBy: Set<String> = [], requestedReviewers: Set<String> = [], checks: [CheckInfo] = [],
         threads: [ReviewThreadInfo] = [],
         comments: [CommentInfo] = [],
-        summary: String? = nil, mergeMethod: MergeMethod = .merge
+        summary: String? = nil, mergeMethod: MergeMethod = .merge,
+        allowedMergeMethods: Set<MergeMethod> = Set(MergeMethod.allCases), viewerCanMerge: Bool = true,
+        mergeState: MergeState = .unknown
     ) {
         self.repo = repo
         self.number = number
@@ -220,6 +224,9 @@ public struct PullRequest: Identifiable, Hashable, Sendable {
         self.comments = comments
         self.summary = summary
         self.mergeMethod = mergeMethod
+        self.allowedMergeMethods = allowedMergeMethods
+        self.viewerCanMerge = viewerCanMerge
+        self.mergeState = mergeState
     }
 }
 

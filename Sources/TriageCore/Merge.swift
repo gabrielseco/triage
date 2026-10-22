@@ -16,12 +16,36 @@ public enum MergeMethod: String, Sendable, CaseIterable {
     }
 }
 
+/// GitHub's `MergeStateStatus`: whether the merge box would let the PR in, branch protection included.
+public enum MergeState: String, Sendable, CaseIterable {
+    case clean = "CLEAN", blocked = "BLOCKED", behind = "BEHIND", dirty = "DIRTY", draft = "DRAFT"
+    case hasHooks = "HAS_HOOKS", unstable = "UNSTABLE", unknown = "UNKNOWN"
+}
+
 extension PullRequest {
-    /// Why GitHub would refuse to merge this PR outright, or nil if it can be tried.
+    /// Why GitHub would refuse to merge this PR, short enough to sit beside the Merge button, or nil if it can be
+    /// tried. Failing checks and missing reviews only block when branch protection says so (`mergeState`).
     public var mergeBlocker: String? {
-        if isDraft { return "It's a draft" }
-        if mergeable == .conflicting { return "It conflicts with the base branch" }
-        return nil
+        if isDraft { return "Draft" }
+        if mergeable == .conflicting { return "Merge conflicts" }
+        switch mergeState {
+        case .blocked:
+            if checks.contains(where: { $0.state == .failure }) { return "Checks failing" }
+            if reviewDecision == .changesRequested { return "Changes requested" }
+            if reviewDecision == .reviewRequired { return "Review required" }
+            if checks.contains(where: { $0.state == .pending }) { return "Checks running" }
+            return "Blocked by branch protection"
+        case .behind: return "Branch out of date"
+        default: return nil
+        }
+    }
+
+    /// The methods the repo allows, in GitHub's menu order.
+    public var mergeMethods: [MergeMethod] { MergeMethod.allCases.filter(allowedMergeMethods.contains) }
+
+    /// What the primary Merge click uses: the viewer's default, or the first allowed method if that's turned off.
+    public var defaultMergeMethod: MergeMethod {
+        mergeMethods.contains(mergeMethod) ? mergeMethod : mergeMethods.first ?? mergeMethod
     }
 
     /// Whether the viewer can approve it: someone else's PR, ready for review, not approved by them yet.

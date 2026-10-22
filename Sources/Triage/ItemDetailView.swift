@@ -49,16 +49,7 @@ struct ItemDetailView: View {
 
     private var actions: some View {
         HStack {
-            if item.kind == .readyToMerge, store.can(.merge, item.pr) {
-                Button {
-                    store.confirming = PRConfirmation(action: .merge, item: item)
-                } label: {
-                    Label("Merge", systemImage: "arrow.triangle.merge")
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(item.pr.mergeBlocker != nil)
-                .help("\(item.pr.mergeMethod.title) on \(forgeName) (⇧⌘M)")
-            }
+            if store.canMerge(item.pr) { merge }
             if store.canApprove(item.pr) {
                 Button {
                     Task { await store.approvePullRequest(item) }
@@ -154,22 +145,57 @@ struct ItemDetailView: View {
             confirmTitle, isPresented: confirmShown, titleVisibility: .visible, presenting: store.confirming
         ) { c in
             switch c.action {
-            case .merge:
-                let method = c.item.pr.mergeMethod.title
+            case .merge(let method):
+                let title = method.title
                 // Someone else's PR you haven't approved: approving is the default, merging as-is the fallback.
                 if store.canApprove(c.item.pr) {
-                    Button("Approve, then \(method.lowercased())") {
-                        Task { await store.mergePullRequest(c.item, approvingFirst: true) }
+                    Button("Approve, then \(title.lowercased())") {
+                        Task { await store.mergePullRequest(c.item, method: method, approvingFirst: true) }
                     }
-                    Button("\(method) without approving") { Task { await store.mergePullRequest(c.item) } }
+                    Button("\(title) without approving") {
+                        Task { await store.mergePullRequest(c.item, method: method) }
+                    }
                 } else {
-                    Button(method) { Task { await store.mergePullRequest(c.item) } }
+                    Button(title) { Task { await store.mergePullRequest(c.item, method: method) } }
                 }
             case .close:
                 Button("Close PR", role: .destructive) { Task { await store.closePullRequest(c.item) } }
             }
         } message: { c in
-            Text(c.action == .merge ? mergeMessage : closeMessage)
+            switch c.action {
+            case .merge(let method): Text(mergeMessage(method))
+            case .close: Text(closeMessage)
+            }
+        }
+    }
+
+    /// GitHub's merge box: the primary click uses the default method, the arrow picks another for this merge.
+    /// Shown disabled, with the reason beside it, when GitHub would refuse the merge.
+    @ViewBuilder private var merge: some View {
+        let pr = item.pr
+        let blocker = pr.mergeBlocker
+        Menu {
+            ForEach(pr.mergeMethods, id: \.self) { method in
+                // Checked is what the primary click uses; picking one asks to confirm a merge with it.
+                Toggle(
+                    "\(method.title)…",
+                    isOn: Binding(
+                        get: { method == pr.defaultMergeMethod },
+                        set: { _ in store.confirming = PRConfirmation(action: .merge(method), item: item) }))
+            }
+        } label: {
+            Label("Merge", systemImage: "arrow.triangle.merge")
+        } primaryAction: {
+            store.confirming = PRConfirmation(action: .merge(pr.defaultMergeMethod), item: item)
+        }
+        .prominent(item.kind == .readyToMerge)
+        .fixedSize()
+        .disabled(blocker != nil)
+        .help(
+            blocker.map { "Can't merge: \($0.lowercased())" }
+                ?? "\(pr.defaultMergeMethod.title) on \(forgeName) (⇧⌘M; arrow: pick another method)")
+        if let blocker {
+            Text(blocker).font(.caption).foregroundStyle(.secondary).lineLimit(1).fixedSize()
         }
     }
 
@@ -185,9 +211,10 @@ struct ItemDetailView: View {
         return "\(verb) \(item.pr.repo.fullName) \(item.pr.ref)?"
     }
 
-    private var mergeMessage: String {
+    private func mergeMessage(_ method: MergeMethod) -> String {
         let warnings = item.pr.mergeWarnings.map { "⚠︎ \($0)" }.joined(separator: "\n")
-        return "\(item.pr.title)\n\n\(item.pr.headRef) → base branch" + (warnings.isEmpty ? "" : "\n\n\(warnings)")
+        return "\(item.pr.title)\n\n\(method.title): \(item.pr.headRef) → base branch"
+            + (warnings.isEmpty ? "" : "\n\n\(warnings)")
     }
 
     /// Leads with the author when it's someone else's PR, so a teammate's work isn't closed by mistake.
@@ -288,6 +315,11 @@ struct CIBadge: View {
 }
 
 extension View {
+    /// A menu drawn as the state's `.borderedProminent` primary action, or left as is.
+    @ViewBuilder func prominent(_ isPrimary: Bool) -> some View {
+        if isPrimary { menuStyle(.button).buttonStyle(.borderedProminent) } else { self }
+    }
+
     @ViewBuilder func shortcut(
         _ key: KeyEquivalent, modifiers: EventModifiers = .command, if enabled: Bool
     ) -> some View {
@@ -314,15 +346,15 @@ struct PullRequestActions: View {
             Button("Approve") { Task { await store.approvePullRequest(item) } }
                 .shortcut("a", modifiers: [.command, .shift], if: inMenuBar)
         }
-        if store.can(.merge, item.pr) {
-            Button("Merge…") { confirm(.merge) }
+        if store.canMerge(item.pr) {
+            Button("Merge…") { confirm(.merge(item.pr.defaultMergeMethod)) }
                 .shortcut("m", modifiers: [.command, .shift], if: inMenuBar)
                 .disabled(item.pr.mergeBlocker != nil)
         }
         if store.can(.close, item.pr) {
             Button("Close PR…") { confirm(.close) }
         }
-        if store.can(.approve, item.pr) || store.can(.merge, item.pr) || store.can(.close, item.pr) {
+        if store.can(.approve, item.pr) || store.canMerge(item.pr) || store.can(.close, item.pr) {
             Divider()
         }
         // ⌘O goes where Open does (the conversation for your own PR, the changes otherwise), ⌘⇧O to the other.
@@ -333,7 +365,7 @@ struct PullRequestActions: View {
             openChanges.shortcut("o", if: inMenuBar)
             openConversation.shortcut("o", modifiers: [.command, .shift], if: inMenuBar)
         }
-        if store.can(.merge, item.pr), let blocker = item.pr.mergeBlocker {
+        if store.canMerge(item.pr), let blocker = item.pr.mergeBlocker {
             Divider()
             Text("Can't merge: \(blocker.lowercased())")
         }
