@@ -23,9 +23,9 @@ This file adds only what is specific to Triage.
    Two strikes, then the human (see the Workbench skill): the verifier cannot press `Open`, `Fix in iTerm` or `Explain` (a browser,
    another app, money; `Merge`, `Approve`, `Close` and the merge methods are pressable on the mock build), so a criterion about what
    those buttons open goes to a person's check in the `/verify` build without a second turn, and the PR says it was checked by hand
-5. `send-back` if wrong; `accept`; `ship --yes`; then open the PR and confirm the screenshots are in it. If a visible change
+5. `send-back` if wrong; `accept`; `ship --yes --watch` (in the background: it only follows CI); then open the PR and confirm the screenshots are in it. If a visible change
    has none, run `workbench ship --screenshots` and say so if it fails (CLAUDE.md requires them for app changes)
-6. `workbench pr-review --pr <n>` after the PR is open, then post the result on the PR (CLAUDE.md step 5); fix findings and run again
+6. `workbench pr-review --pr <n>` as soon as the PR is open, in parallel with the CI watch (do not wait for it), then post the result on the PR (CLAUDE.md step 5); fix findings and run again
 7. Stop. Merge only when the user asks (CLAUDE.md step 6)
 
 ## Triage specifics
