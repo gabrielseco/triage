@@ -14,7 +14,8 @@ This file adds only what is specific to Triage.
 ## The steps, in short (each is a gate)
 
 1. `workbench doctor`
-2. `workbench goal new <name>`, fill in the goal, show it, `goal approve` only when the user says go
+2. `workbench goal new <name>`, fill in the goal, open it for the user with `workbench open --goal --editor <name>` (`--print` gives
+   the path), `goal approve` only when the user says go
 3. `workbench run` (background), then `status` / `log`
 4. `workbench review`, look at the verifier screenshots with `Read`; `open --editor cursor` once a worktree exists;
    then `workbench judge` (a read-only second opinion on each criterion, `judge_model` in the config; it never runs on its own,
