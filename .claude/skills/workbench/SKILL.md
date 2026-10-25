@@ -39,6 +39,9 @@ This file adds only what is specific to Triage.
 - **Untracked files get committed.** The run's `git add -A` and `workbench accept` both commit untracked files from the worktree
   (`.vscode/launch.json` ended up in PR #81 twice). Before `accept`, run `workbench review` and read the file list; if something
   unrelated is there, `git rm --cached` it in the worktree and amend. Put "do not commit untracked files" in the goal's out of scope.
+- **Who commits at accept.** A Claude turn commits its own work, so `accept -m` prints `-m ignored: the work was already committed` and
+  leaves the commit; a Codex turn leaves changes uncommitted, so `accept -m` sets the message. To reword a run's commit, run
+  `git commit --amend -m "<message>"` in the worktree (`wb open --print`) before `ship`.
 - **Allowlist.** `git rm` and `git commit --amend` are not in `[tools] allowed`, so a send-back asking for them is denied. The user
   edits the allowlist; do not edit `.workbench/config.toml` yourself.
 - **Screenshots and the PR body.** `ship` attaches the verifier's screenshots with `pr-shots` but can skip it silently (PR #81 had
