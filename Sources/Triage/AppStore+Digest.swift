@@ -34,6 +34,9 @@ extension AppStore {
 
     // MARK: - Review requests
 
+    /// The Review requested list: oldest opened first (`sortedForReview`).
+    var reviewRequestedList: [AttentionItem] { activeItems.filter { $0.kind == .reviewRequested }.sortedForReview() }
+
     /// A banner per new review request. The state is saved before sending, so a slow send can't make the next
     /// refresh notify the same request again. With banners off it's still recorded, so turning them on doesn't
     /// announce everything that's already waiting.

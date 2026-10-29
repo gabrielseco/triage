@@ -193,7 +193,7 @@ final class AppStore {
         case .kind(.awaitingReview): activeItems.filter { $0.kind == .awaitingReview }.sortedByCreation()
         case .kind(.botFinding):
             activeItems.filter { $0.kind == .botFinding }.sortedAsBotFindings(viewer: viewer(for:))
-        case .kind(let k): activeItems.filter { $0.kind == k }
+        case .kind(let k): k == .reviewRequested ? reviewRequestedList : activeItems.filter { $0.kind == k }
         case .repo(let r): activeItems.inRepo(r)
         case .lastDigest: activeItems.filter { lastDigestItemIDs.contains($0.id) }
         case .linear, .gitlabMentions: []

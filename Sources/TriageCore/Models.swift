@@ -344,6 +344,18 @@ extension [AttentionItem] {
             .map(\.element)
     }
 
+    /// Review requested reads as a to-do list: the PR that has waited longest (oldest opened) first. Ties break by
+    /// repo id, then the lowest PR number, then the item id, so the order doesn't depend on how PRs arrive.
+    public func sortedForReview() -> [AttentionItem] {
+        sorted { a, b in
+            let (x, y) = (a.pr, b.pr)
+            if x.createdAt != y.createdAt { return x.createdAt < y.createdAt }
+            if x.repo.id != y.repo.id { return x.repo.id < y.repo.id }
+            if x.number != y.number { return x.number < y.number }
+            return a.id < b.id
+        }
+    }
+
     /// A repo's list in the sidebar, on any forge: its items, newest opened PR first, as Everything reads.
     public func inRepo(_ repoID: String) -> [AttentionItem] {
         filter { $0.pr.repo.id == repoID }.sortedByCreation()

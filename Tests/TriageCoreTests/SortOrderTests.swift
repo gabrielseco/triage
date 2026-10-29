@@ -63,6 +63,42 @@ private func item(_ number: Int, createdAt: Date, updatedAt: Date = start, tag: 
     #expect([old, new].sortedByCreation().map(\.pr.number) == [2, 1])
 }
 
+// MARK: - Review requested
+
+private func reviewItem(_ number: Int, repo: String = "web", createdAt: Date) -> AttentionItem {
+    let pr = PullRequest(
+        repo: RepoRef(owner: "acme", name: repo), number: number, title: "PR \(number)",
+        url: URL(string: "https://github.com/acme/\(repo)/pull/\(number)")!, author: "alice", createdAt: createdAt,
+        updatedAt: start, headSha: "abc")
+    return AttentionItem(
+        id: "\(pr.id)|review", kind: .reviewRequested, severity: .low, pr: pr, headline: "Review requested",
+        evidence: [])
+}
+
+@Test func reviewRequestedOrdering() {
+    let items = [
+        reviewItem(5, createdAt: start.addingTimeInterval(100)),
+        reviewItem(9, createdAt: start),
+        reviewItem(7, createdAt: start),
+        reviewItem(3, repo: "api", createdAt: start),
+    ]
+    // Oldest opened first; ties by repo id, then lowest number.
+    #expect(
+        items.sortedForReview().map(\.id) == [
+            "acme/api#3|review", "acme/web#7|review", "acme/web#9|review", "acme/web#5|review",
+        ])
+}
+
+@Test func reviewRequestedOrderIsStable() {
+    let items = [
+        reviewItem(1, createdAt: start), reviewItem(2, createdAt: start), reviewItem(3, repo: "api", createdAt: start),
+        reviewItem(4, createdAt: start.addingTimeInterval(5)),
+    ]
+    let expected = items.sortedForReview().map(\.id)
+    #expect(items.reversed().sortedForReview().map(\.id) == expected)
+    #expect(items.shuffled().sortedForReview().map(\.id) == expected)
+}
+
 // MARK: - Repo
 
 private let gitlab = Forge.gitlab(host: "gitlab.example.com")
