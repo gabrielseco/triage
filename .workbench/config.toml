@@ -1,0 +1,72 @@
+# Workbench project config. One fixed tool set per project.
+
+# claude_path = "claude"           # name on PATH, or an absolute path
+# safe_mode = true                 # no CLAUDE.md, skills, plugins, hooks or MCP in runs (default)
+# project_instructions = true     # put AGENTS.md (else CLAUDE.md) in the first prompt (default)
+check_command = "scripts/check.sh"
+editor = "code"
+# setup_command = "mix deps.get"   # run once in a new worktree before its first turn
+app_type = "desktop"                 # "desktop" if verify captures the screen: doctor checks Screen Recording
+default_budget_usd = 5.00        # used when drafting a goal
+# env_pass = ["ANTHROPIC_API_KEY"] # extra variables claude, setup and check may see (all run on an allowlist)
+# A version manager sets its own: for mise on Elixir, env_pass = ["MIX_HOME", "MIX_ARCHIVES"]
+
+# [pr_review]                      # `workbench pr-review`: Codex reviews the shipped pull request
+# checklist = "docs/REVIEW.md"     # optional: this project's review invariants, read from the PR head
+# max_rounds = 3                   # reviews of one pull request, counted from the event log (1 to 10)
+# (also accepted as [review.stage.pr-review]; `[review] stages = [...]` lists the review stages, in order)
+
+[tools]
+# Built-in tools that exist at all. File tools are confined to the worktree (--restricted).
+available = ["Read", "Grep", "Glob", "Edit", "Write", "Bash"]
+# Allowed without asking. Anything not listed is denied automatically. A narrow test command lets a
+# run check what it changed without repeating the full check: for a Swift project add
+# "Bash(swift build:*)" and "Bash(swift test --filter:*)".
+allowed = [
+  "Read", "Grep", "Glob", "Edit", "Write",
+  "Bash(git status:*)", "Bash(git diff:*)", "Bash(git add:*)", "Bash(git commit:*)",
+  "Bash(swift build:*)", "Bash(swift test --filter:*)", "Bash(bash -n:*)",
+  "Bash(swift format:*)", "Bash(python3 scripts/render-docs.py:*)",
+]
+denied = ["Bash(git push:*)", "Bash(gh pr merge:*)", "Bash(rm -rf:*)"]
+
+[agents.goal]
+provider = "codex"
+model = "gpt-6.1-terra"
+reasoning_effort = "medium"
+
+[agents.run]
+provider = "claude"
+
+[agents.judge]
+provider = "claude"
+model = "sonnet"
+
+[agents.ship]
+model = "haiku"
+
+[review]
+stages = ["pr-review", "design"]
+
+[review.stage.pr-review]
+skill = ".claude/skills/pr-review/SKILL.md"
+
+[review.stage.design]
+skill = ".claude/skills/design-review/SKILL.md"
+inputs = ["diff", "goal", "proof", "docs/DESIGN.md"]
+applies_to = ["Sources/Triage/**", "Resources/**"]
+max_rounds = 2
+
+[verifier]
+skill = ".claude/skills/verify/SKILL.md"
+model = "sonnet"
+tools = ["Read", "Bash(scripts/verify-app.sh:*)"]
+enabled = true
+budget_usd = 1.00
+timeout_min = 10
+
+[run]
+# Workbench builds the mock app and holds it while the verifier drives it; it ends it afterwards.
+command = "scripts/verify-app.sh serve"
+ready_line = "Triage is up"
+ready_timeout_s = 300
