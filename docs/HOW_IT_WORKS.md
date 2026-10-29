@@ -368,6 +368,10 @@ newest opened first (`sortedAsBotFindings`). On someone else's PR a bot finding 
 Fix in iTerm or Copy prompt, since you can't push to their branch (`showsFixActions`). Until Triage knows who
 you are on that forge, nothing counts as yours and the fix actions stay.
 
+**Review requested list:** ready PRs come before drafts, PRs whose checks aren't failing before failing ones, then
+the longest-open PR first so no request waits behind newer ones. Ties go to the repo, the PR number, then the item
+id, so the order depends only on the data and not on the order it arrived in (`sortedForReview`).
+
 **Everything list:** Everything lists pull requests newest opened first, whoever opened it, ties by PR number
 (`sortedByCreation`, as Waiting for review does), so a push to an old PR doesn't move it up. A PR's items stay
 together, most severe first, then most recently updated. A repo picked in the sidebar lists its PRs the same way
