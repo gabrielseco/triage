@@ -241,14 +241,6 @@ private let pr = """
     #expect(waiting.map(\.id) == ["gitlab-mention:1"])
 }
 
-@Test func mockExplainerAnswersWithTheScenarioTextOrAFallback() async throws {
-    let w = try world(prs: pr)
-    #expect(try await w.explainer().complete(system: "s", prompt: "p") == MockExplainer.fallback)
-    let custom = try MockWorld(
-        scenario(#"{"github":{"viewer":"me","repos":[]},"pullRequests":[],"explanation":"E"}"#), now: now)
-    #expect(try await custom.explainer().complete(system: "s", prompt: "p") == "E")
-}
-
 // MARK: - The default scenario cannot drift from the app
 
 @Test func theDefaultScenarioClassifiesIntoEveryKindTheInboxHas() async throws {
@@ -347,9 +339,8 @@ private let pr = """
         }
     }
     #expect(findings.count == 2)
-    // Yours first, though the other PR is newer, and only yours offers the actions that need your own branch.
+    // Yours first, though the other PR is newer.
     let sorted = findings.sortedAsBotFindings { _ in w.githubViewer }
     #expect(sorted.map(\.pr.number) == [81, 409])
-    #expect(sorted.map { $0.showsFixActions(viewer: w.githubViewer) } == [true, false])
     #expect(sorted.map { $0.pr.author == w.githubViewer } == [true, false])
 }

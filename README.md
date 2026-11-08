@@ -1,8 +1,7 @@
 # Triage
 
 Native macOS inbox for open PRs across the repos you watch. Collapses CI runs, bot chatter and review
-threads into a short list of things that actually need you, and turns each one into a prompt Claude
-can explain or fix.
+threads into a short list of things that actually need you, and lets you approve, merge or have an agent walk you through a PR.
 
 ```bash
 scripts/setup-signing.sh  # one-time: stable signing identity so Keychain "Always Allow" survives rebuilds
@@ -16,7 +15,7 @@ swift test           # classifier, prompt builder, digest
 previous digest ("3 new since 12:00 · 13 open · 4 cleared"). Clicking it opens the "New at …" filter.
 A missed slot (asleep / app closed) goes out on the next refresh after it.
 
-Auth: `GITHUB_TOKEN` or the `gh` CLI token; `ANTHROPIC_API_KEY` or a key saved in Settings (Keychain).
+Auth: `GITHUB_TOKEN` or the `gh` CLI token.
 
 ## Development
 
@@ -40,16 +39,14 @@ scripts/check.sh --fix   # auto-format first
 
 Full walkthrough (with Swift ↔ React/TS/Elixir mappings): [docs/HOW_IT_WORKS.md](docs/HOW_IT_WORKS.md)
 
-`GitHub GraphQL snapshot → Classifier → attention items → you decide → Claude explains / you fix`
+`GitHub GraphQL snapshot → Classifier → attention items → you decide / Explain PR`
 
 - **Sources/TriageCore/Classifier.swift** — deterministic rules. One item per (PR, kind): all failing
   checks on a head sha are one item, all findings from one bot are one item. Noise bots (coverage,
   deploy previews, dependabot…) are counted and muted. Item ids include the head sha / latest comment,
   so dismissing is sticky until something new happens.
-- **PromptBuilder** — assembles evidence + failing job log tails + the diff into one prompt
-  (same pattern as expenses-backend's `get_*_prompt` tools). Two modes: "explain" (sent to Claude from
-  the app) and "Claude Code" (paste into a local checkout to fix).
-- **AnthropicClient** — raw Messages API call (`claude-opus-5`, server-side refusal fallback).
+- **PromptBuilder** — assembles the PR description + diff into the Explain PR prompt, for an agent in iTerm
+  or a chat. Triage makes no AI calls itself.
 
 ## Next: Phoenix backend (multi-tenant)
 

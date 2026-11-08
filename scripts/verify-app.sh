@@ -37,7 +37,7 @@ MOCK_DOMAIN="dev.rogal.triage.mock-state"  # MockMode.defaultsSuite
 # The buttons a verification never presses, by the start of their label: the ones with an effect outside the mock build.
 # Approve, Merge, Squash, Rebase and Close are not here: the build is in mock mode, where they change only the mock's own
 # in-memory copy (docs/plans/MOCK.md), so a verification can open a merge menu or confirmation and press through it.
-REFUSED='^(Open|Fix in iTerm|Explain)'
+REFUSED='^(Open|Explain)'
 STATE_ROOT="${TMPDIR:-/tmp}"
 STATE_ROOT="${STATE_ROOT%/}/triage-verify"
 PIDS="$STATE_ROOT/pids"
@@ -143,7 +143,7 @@ SWIFT
   # A second process with the installed app's bundle id (dev.rogal.triage) starts but opens no window.
   /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $bundle_id" "$app/Contents/Info.plist"
   # Changing the plist breaks the signature bundle.sh made. Sign with the same stable identity, as bundle.sh does: an ad hoc
-  # signature differs on every run, so macOS asks again for each Keychain item the app reads (GitLab, Linear, Anthropic).
+  # signature differs on every run, so macOS asks again for each Keychain item the app reads (GitLab, Linear).
   security find-identity -p codesigning | grep -qF "\"$sign\"" || sign="-"
   codesign --force --sign "$sign" "$app" >/dev/null 2>&1
 

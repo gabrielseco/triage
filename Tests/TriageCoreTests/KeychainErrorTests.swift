@@ -39,25 +39,25 @@ private final class FakeKeychain: @unchecked Sendable {  // only touched from on
 
 @Test func savingAddsTheFirstKeyAndUpdatesAfterThat() throws {
     let keychain = FakeKeychain()
-    try Keychain.set("sk-1", for: "anthropic", using: keychain.ops)
-    try Keychain.set("sk-2", for: "anthropic", using: keychain.ops)
-    #expect(keychain.value == "sk-2")
+    try Keychain.set("secret-1", for: "account", using: keychain.ops)
+    try Keychain.set("secret-2", for: "account", using: keychain.ops)
+    #expect(keychain.value == "secret-2")
 }
 
 @Test func aFailedSaveKeepsThePreviousKey() throws {
     let keychain = FakeKeychain()
-    try Keychain.set("sk-old", for: "anthropic", using: keychain.ops)
+    try Keychain.set("secret-old", for: "account", using: keychain.ops)
     keychain.failing = ["update", "add"]
-    #expect(throws: KeychainError.self) { try Keychain.set("sk-new", for: "anthropic", using: keychain.ops) }
-    #expect(keychain.value == "sk-old")
+    #expect(throws: KeychainError.self) { try Keychain.set("secret-new", for: "account", using: keychain.ops) }
+    #expect(keychain.value == "secret-old")
 }
 
 @Test func emptyRemovesTheKeyAndMissingIsFine() throws {
     let keychain = FakeKeychain()
-    try Keychain.set("sk-1", for: "anthropic", using: keychain.ops)
-    try Keychain.set("", for: "anthropic", using: keychain.ops)
+    try Keychain.set("secret-1", for: "account", using: keychain.ops)
+    try Keychain.set("", for: "account", using: keychain.ops)
     #expect(keychain.value == nil)
-    try Keychain.set(nil, for: "anthropic", using: keychain.ops)  // nothing stored: still not an error
+    try Keychain.set(nil, for: "account", using: keychain.ops)  // nothing stored: still not an error
     keychain.failing = ["delete"]
-    #expect(throws: KeychainError.self) { try Keychain.set(nil, for: "anthropic", using: keychain.ops) }
+    #expect(throws: KeychainError.self) { try Keychain.set(nil, for: "account", using: keychain.ops) }
 }

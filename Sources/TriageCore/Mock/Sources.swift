@@ -16,10 +16,3 @@ public protocol MentionsSource: Sendable {
 }
 
 extension GitLabForge: MentionsSource {}
-
-/// The Claude call behind Explain.
-public protocol Explainer: Sendable {
-    func complete(system: String, prompt: String) async throws -> String
-}
-
-extension AnthropicClient: Explainer {}

@@ -3,22 +3,12 @@ import TriageCore
 
 struct SettingsView: View {
     @Environment(AppStore.self) private var store
-    @State private var key = ""
-    @State private var saved = false
-    @State private var saveError: String?
     @State private var loginItem = LoginItem.isEnabled
     @State private var loginError: String?
-    @State private var testResult: String?
     @State private var gitlabHostDraft = ""
     @State private var gitlabToken = ""
     @State private var gitlabStatus: String?
     @State private var gitlabFailed = false
-
-    static let keySourceHelp = """
-        Key source is a 1Password secret reference (item → field menu → Copy Secret Reference) \
-        or a key helper script that prints the key, like Claude Code's apiKeyHelper. It wins over \
-        the other options; the key is read once per session and kept in memory only.
-        """
 
     static let harnessHelp = """
         Runs in a worktree next to your checkout (e.g. ~/remote/remote-flows-pr-1392), in an \
@@ -30,56 +20,11 @@ struct SettingsView: View {
         @Bindable var store = store
         Form {
             Section {
-                TextField(
-                    "Key source", text: $store.onePasswordRef,
-                    prompt: Text("op://Vault/Item/credential or ~/.claude/anthropic_key.sh")
-                )
-                .font(.body.monospaced())
-                HStack {
-                    Button("Test") {
-                        testResult = "Reading key…"
-                        Task {
-                            do {
-                                _ = try await store.resolveAPIKey()
-                                testResult = "✓ Key read from \(store.keySource.rawValue)"
-                            } catch { testResult = error.localizedDescription }
-                        }
-                    }
-                    .disabled(store.keySource == .none)
-                    if let testResult { Text(testResult).font(.caption).foregroundStyle(.secondary) }
-                }
-                if store.keySource != .onePassword {
-                    SecureField("…or paste a key (saved to Keychain)", text: $key)
-                    HStack {
-                        Button(saved ? "Saved to Keychain" : "Save key") {
-                            do {
-                                try MockMode.refuse("saving a key")
-                                try Keychain.set(key, for: "anthropic")
-                                saved = true
-                                saveError = nil
-                                key = ""
-                            } catch {
-                                saved = false
-                                saveError = error.localizedDescription
-                            }
-                        }
-                        .disabled(key.isEmpty)
-                        if let saveError { Text(saveError).font(.caption).foregroundStyle(.red) }
-                    }
-                }
-                TextField("Model", text: $store.model)
-            } header: {
-                Text("Claude")
-            } footer: {
-                Text("Using: \(store.keySource.rawValue). " + Self.keySourceHelp)
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            Section {
                 TextField("Harness command", text: $store.harnessCommand)
                     .font(.body.monospaced())
                 Button("Reset to Claude Code") { store.harnessCommand = Handoff.defaultHarnessCommand }
             } header: {
-                Text("Fix in iTerm")
+                Text("Explain PR in iTerm")
             } footer: {
                 Text(Self.harnessHelp)
                     .font(.caption).foregroundStyle(.secondary)
@@ -136,10 +81,10 @@ struct SettingsView: View {
 
     static let gitlabHelp = """
         Merge requests assigned to you or waiting for your review, across your projects. You can approve \
-        and merge them here; close them on GitLab, and Fix in iTerm isn't available for them yet. Watching needs \
-        the read_api scope; approving and merging need api. Token source is a 1Password secret reference or a \
-        helper script that prints the token; it's read once per session, and the Keychain isn't used, so \
-        rebuilds don't ask for your password. \
+        and merge them here; close them on GitLab, and Explain PR in iTerm isn't available for them yet. \
+        Watching needs the read_api scope; approving and merging need api. Token source is a 1Password \
+        secret reference or a helper script that prints the token; it's read once per session, and the \
+        Keychain isn't used, so rebuilds don't ask for your password. \
         Otherwise a pasted token is kept in the Keychain (or set GITLAB_TOKEN). \
         Mentions come from your GitLab To-Do list, checked every 30 s; bots' mentions don't notify.
         """

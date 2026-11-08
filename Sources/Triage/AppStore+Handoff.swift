@@ -2,9 +2,9 @@ import AppKit
 import Foundation
 import TriageCore
 
-/// Fix in iTerm: hand an item to a coding agent in a per-PR git worktree.
+/// Explain PR in iTerm: hand a PR to a coding agent in a per-PR git worktree.
 extension AppStore {
-    // MARK: - Fix in iTerm
+    // MARK: - Explain PR in iTerm
 
     static let checkoutRoots = ["~/remote", "~/rogal", "~/code", "~/src", "~/dev", "~/projects", "~/Developer", "~"]
         .map { ($0 as NSString).expandingTildeInPath }
@@ -29,10 +29,6 @@ extension AppStore {
         guard panel.runModal() == .OK, let url = panel.url else { return nil }
         checkoutPaths[repo.id] = url.path
         return url.path
-    }
-
-    func fixInTerminal(_ item: AttentionItem) async {
-        await handOff(item, name: item.kind.rawValue) { await self.buildPrompt(for: item, mode: .handoff) }
     }
 
     /// Explain PR: the agent starts in the PR's worktree with a read-only walkthrough prompt.

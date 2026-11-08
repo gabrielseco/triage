@@ -63,21 +63,3 @@ private func me(_ forge: Forge) -> String? { forge == .github ? "me" : nil }
     let mine = item(2, by: "gl-me", forge: gitlab)
     #expect([theirs, mine].sortedAsBotFindings(viewer: viewer).map(\.pr.number) == [2, 1])
 }
-
-@Test func fixActionsHiddenOnSomeoneElsesBotFinding() {
-    #expect(!item(1, by: "alice").showsFixActions(viewer: "me"))
-}
-
-@Test func fixActionsShownOnMyBotFinding() {
-    #expect(item(1, by: "me").showsFixActions(viewer: "me"))
-}
-
-@Test func fixActionsShownWhenViewerIsUnknown() {
-    #expect(item(1, by: "alice").showsFixActions(viewer: nil))
-}
-
-@Test func fixActionsShownForOtherKindsOnSomeoneElsesPR() {
-    for kind in AttentionKind.allCases where kind != .botFinding {
-        #expect(item(1, by: "alice", kind: kind).showsFixActions(viewer: "me"))
-    }
-}

@@ -3,12 +3,6 @@ import Foundation
 import Observation
 import TriageCore
 
-enum ExplainState: Equatable {
-    case loading
-    case done(String)
-    case failed(String)
-}
-
 enum SidebarFilter: Hashable {
     case all
     case kind(AttentionKind)
@@ -28,14 +22,6 @@ final class AppStore {
     /// When each repo started being watched and which new PRs were dismissed: the rest show a New PR item.
     var seenPRs: SeenPRs { didSet { save(seenPRs, "seenPRs") } }
     var onlyMine: Bool { didSet { defaults.set(onlyMine, forKey: "onlyMine") } }
-    var model: String { didSet { defaults.set(model, forKey: "model") } }
-    /// e.g. op://Employee/Anthropic API/credential. Only the reference is stored, never the key.
-    var onePasswordRef: String {
-        didSet {
-            defaults.set(onePasswordRef, forKey: "onePasswordRef")
-            cachedOnePasswordKey = nil
-        }
-    }
 
     // Digest: at each scheduled hour, notify what's new since the previous digest.
     var digestHours: [Int] { didSet { save(digestHours, "digestHours") } }
@@ -51,7 +37,7 @@ final class AppStore {
     var reviewRequestAlerts: ReviewRequestAlertState { didSet { save(reviewRequestAlerts, "reviewRequestAlerts") } }
     var openMainWindow: (() -> Void)?
 
-    // Fix in iTerm: repo full name → local clone, and the harness command template.
+    // Explain PR in iTerm: repo full name → local clone, and the harness command template.
     var checkoutPaths: [String: String] { didSet { save(checkoutPaths, "checkoutPaths") } }
     var harnessCommand: String { didSet { defaults.set(harnessCommand, forKey: "harnessCommand") } }
     /// The GitLab instance whose merge requests (assigned to you or waiting on your review) are shown, e.g.
@@ -107,8 +93,6 @@ final class AppStore {
     var confirming: PRConfirmation?
     private var autoRefreshStarted = false
     private var refreshAgain = false
-    /// Key read from the key source, held in memory only so it's fetched once per app session.
-    var cachedOnePasswordKey: String?
     /// The GitLab token, read from the Keychain once per session rather than on every refresh.
     var cachedGitLabToken: String?
     /// Why the GitLab key source last failed. Kept so the refresh loop doesn't ask for Touch ID every
@@ -127,7 +111,6 @@ final class AppStore {
     var errors: [String] = []
     /// Data the last refresh had to leave out (query caps, low rate limit). Unlike errors, doesn't block digests.
     var warnings: [String] = []
-    var explanations: [String: ExplainState] = [:]
     var linear = LinearState()
     var filter: SidebarFilter = .all {
         // The selected item may not be in the new list; move to its first item so the detail matches.
@@ -144,8 +127,6 @@ final class AppStore {
         snoozed = Self.load("snoozed") ?? [:]
         seenPRs = Self.load("seenPRs") ?? SeenPRs()
         onlyMine = Self.defaults.bool(forKey: "onlyMine")
-        model = Self.defaults.string(forKey: "model") ?? AnthropicClient.defaultModel
-        onePasswordRef = Self.defaults.string(forKey: "onePasswordRef") ?? ""
         checkoutPaths = Self.load("checkoutPaths") ?? [:]
         harnessCommand = Self.defaults.string(forKey: "harnessCommand") ?? Handoff.defaultHarnessCommand
         gitlabHost = Self.defaults.string(forKey: "gitlabHost") ?? ""

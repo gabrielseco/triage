@@ -12,7 +12,6 @@ struct ItemDetailView: View {
                 header
                 actions
                 status
-                explanation
                 Divider()
                 Text("Evidence").font(.headline)
                 ForEach(item.evidence, id: \.self) { EvidenceCard(evidence: $0) }
@@ -84,39 +83,8 @@ struct ItemDetailView: View {
                 } label: {
                     Label("Approve", systemImage: "checkmark.seal")
                 }
-                .help("Approve \(item.pr.author)'s PR on \(forgeName) (⇧⌘A)")
-            }
-            if item.kind.isFixable, item.showsFixActions(viewer: viewer) {
-                Button {
-                    Task { await store.explain(item) }
-                } label: {
-                    Label("Explain & propose fix", systemImage: "sparkles")
-                }
                 .buttonStyle(.borderedProminent)
-                .disabled(store.explanations[item.id] == .loading)
-                .keyboardShortcut("e")
-
-                if store.can(.checkout, item.pr) {
-                    Button {
-                        Task { await store.fixInTerminal(item) }
-                    } label: {
-                        Label("Fix in iTerm", systemImage: "terminal")
-                    }
-                    .help("Opens iTerm in a worktree for this PR and runs \(store.harnessCommand) with the prompt")
-                    .keyboardShortcut("f")
-                }
-
-                Menu {
-                    Button("For a chat (explain + propose)") {
-                        Task { await store.copyPrompt(for: item, mode: .explain) }
-                    }
-                    Button("For Claude Code in your checkout") {
-                        Task { await store.copyPrompt(for: item, mode: .claudeCode) }
-                    }
-                } label: {
-                    Label("Copy prompt", systemImage: "doc.on.doc")
-                }
-                .fixedSize()
+                .help("Approve \(item.pr.author)'s PR on \(forgeName) (⇧⌘A)")
             }
             if store.can(.checkout, item.pr) {
                 Menu {
@@ -164,6 +132,7 @@ struct ItemDetailView: View {
                 openURL(item.pr.primaryURL(viewer: viewer))
             }
             .fixedSize()
+            .prominent(if: !store.canApprove(item.pr))
             .help(
                 item.pr.primaryURL(viewer: viewer) == item.pr.url
                     ? "Open your PR's conversation on \(forgeName) (arrow: more)"
@@ -203,30 +172,6 @@ struct ItemDetailView: View {
             Text(s).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
         }
     }
-
-    @ViewBuilder private var explanation: some View {
-        switch store.explanations[item.id] {
-        case .loading:
-            HStack {
-                ProgressView().controlSize(.small)
-                Text("Gathering logs and diff, asking Claude…").foregroundStyle(.secondary)
-            }
-        case .done(let text):
-            GroupBox {
-                ScrollView(.vertical) {
-                    Text(markdown(text)).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .frame(maxHeight: 420)
-            } label: {
-                Label("Claude", systemImage: "sparkles")
-            }
-        case .failed(let msg):
-            Label(msg, systemImage: "exclamationmark.triangle").foregroundStyle(.red)
-        case nil:
-            EmptyView()
-        }
-    }
-
 }
 
 struct EvidenceCard: View {
@@ -287,6 +232,11 @@ struct CIBadge: View {
 }
 
 extension View {
+    /// The detail's one primary action, when this is it.
+    @ViewBuilder func prominent(if enabled: Bool) -> some View {
+        if enabled { buttonStyle(.borderedProminent) } else { self }
+    }
+
     @ViewBuilder func shortcut(
         _ key: KeyEquivalent, modifiers: EventModifiers = .command, if enabled: Bool
     ) -> some View {

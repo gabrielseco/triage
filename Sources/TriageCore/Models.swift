@@ -268,14 +268,6 @@ public enum AttentionKind: String, CaseIterable, Sendable, Codable {
         }
     }
 
-    /// Whether an AI "explain + propose fix" makes sense for this kind.
-    public var isFixable: Bool {
-        switch self {
-        case .ciFailure, .mergeConflict, .changesRequested, .reviewThreads, .botFinding: true
-        case .reviewRequested, .readyToMerge, .awaitingChecks, .awaitingReview, .newPR: false
-        }
-    }
-
     /// Nothing for you to do yet: listed under its own filter and its repo, but kept out of Everything,
     /// the badge counts and digests, so a repo full of other people's open PRs doesn't bury what needs you.
     public var isPassive: Bool {

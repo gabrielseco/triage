@@ -147,18 +147,6 @@ private func comment(_ author: String, bot: Bool, _ body: String = "hi", url: St
     #expect(RepoRef(string: "nope") == nil)
 }
 
-@Test func promptIncludesTailOfLogsAndLabelsIt() {
-    let item = Classifier.classify(pr(checks: [CheckInfo(name: "test", state: .failure, checkRunID: 7)])).items[0]
-    let log = (1...400).map { "line \($0)" }.joined(separator: "\n")
-    let p = PromptBuilder.prompt(
-        for: item, context: PromptContext(checkOutputs: [("test", log)], diff: "+x"), mode: .claudeCode)
-    #expect(p.contains("You're on PR #1020"))
-    #expect(p.contains("last 250 of 400 lines"))
-    #expect(p.contains("line 400"))
-    #expect(!p.contains("line 150\n"))
-    #expect(p.contains("gh pr checkout 1020"))
-}
-
 private func thread(
     _ n: Int, resolved: Bool = false, outdated: Bool = false, replies: [String] = [], bot: Bool = false
 ) -> ReviewThreadInfo {

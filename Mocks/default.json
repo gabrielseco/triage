@@ -112,7 +112,6 @@
       "body": "@gabi.g does this need the staging approval too?"
     }
   ],
-  "explanation": "The build fails because `CommandPalette.tsx` imports `useShortcut` from a file that moved in #398. Update the import path and the two call sites; the rest of the diff is unaffected.",
   "diff": "diff --git a/src/palette.ts b/src/palette.ts\n--- a/src/palette.ts\n+++ b/src/palette.ts\n@@ -10,3 +10,5 @@ export function open() {\n   show()\n+  bind('mod+k', open)\n+  bind('mod+p', openFiles)\n }\n",
   "ciLog": "build\n> tsc --noEmit\nsrc/CommandPalette.tsx(4,10): error TS2305: Module './hooks' has no exported member 'useShortcut'.\nsrc/CommandPalette.tsx(31,5): error TS2304: Cannot find name 'bind'.\n"
 }
