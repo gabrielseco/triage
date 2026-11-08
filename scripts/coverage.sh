@@ -5,6 +5,7 @@
 #   COVERAGE_MIN=70 scripts/coverage.sh   # stricter one-off
 set -euo pipefail
 cd "$(dirname "$0")/.."
+. scripts/use-xcode.sh  # build with the Xcode in .xcode-version, as CI does
 
 MIN="${COVERAGE_MIN:-60}"
 

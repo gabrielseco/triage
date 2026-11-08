@@ -29,6 +29,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+. "$ROOT/scripts/use-xcode.sh"  # build with the Xcode in .xcode-version, as CI does
 # One id per start: a process that shares a bundle id with an earlier one that was killed can start and open no window, and
 # nothing else says why. The id of a running build is kept in its directory.
 ID_PREFIX="dev.rogal.triage.verify"

@@ -7,6 +7,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+. "$ROOT/scripts/use-xcode.sh"  # build with the Xcode in .xcode-version, as CI does
 SCENARIO="${1:-$ROOT/Mocks/default.json}"
 [[ -f "$SCENARIO" ]] || { echo "No such scenario: $SCENARIO" >&2; exit 1; }
 SCENARIO="$(cd "$(dirname "$SCENARIO")" && pwd)/$(basename "$SCENARIO")"
