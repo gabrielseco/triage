@@ -104,8 +104,6 @@ public struct MockScenario: Decodable, Sendable {
     public var pullRequests: [PRSpec]
     public var linear: [Ping]?
     public var mentions: [Mention]?
-    /// What Explain answers, for any item.
-    public var explanation: String?
     /// The diff and the failed check's log any PR returns.
     public var diff: String?
     public var ciLog: String?

@@ -124,13 +124,8 @@ private func mr(_ path: String, _ number: Int, host: String = "gitlab.com") thro
     #expect(Forge.github.cli("view", 7) == "gh pr view 7")
 }
 
-@Test func gitlabPromptsUseGlab() throws {
+@Test func gitlabExplainPromptUsesGlab() throws {
     let pr = try mr("acme/web", 12)
-    let item = AttentionItem(id: "x", kind: .ciFailure, severity: .high, pr: pr, headline: "h", evidence: [])
-    let prompt = PromptBuilder.prompt(for: item, context: PromptContext(), mode: .claudeCode)
-    #expect(prompt.contains("PR !12 in acme/web"))
-    #expect(prompt.contains("`glab mr checkout 12`"))
-    #expect(!prompt.contains("gh pr"))
     let explain = PromptBuilder.explainPRPrompt(for: pr, diff: nil, inWorktree: true)
     #expect(explain.contains("`glab mr view 12`"))
 }

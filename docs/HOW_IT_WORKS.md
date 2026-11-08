@@ -20,10 +20,9 @@ GitHub (30 open PRs, ~150 checks, ~100 bot comments) + GitLab (your MRs)
 Classifier (plain rules, no AI)
         │  collapse + mute noise
         ▼
-~13 attention items   ──►  you decide: dismiss / snooze / open / explain / fix
+~13 attention items   ──►  you decide: dismiss / snooze / open / approve / merge / explain
         │
-        ├─► "Explain & propose fix" → one Claude API call
-        ├─► "Copy Claude Code prompt" → paste into a local checkout to fix
+        ├─► "Explain PR" → a walkthrough prompt for an agent in iTerm, or copied for a chat
         └─► 12:00 / 18:00 digest notification: "3 new since 12:00"
 ```
 
@@ -31,8 +30,8 @@ Two design rules drive everything:
 
 1. **The unit is the attention item, not the PR.** A PR is only a container. Five failing jobs on one
    commit are one item; ten comments from one bot are one item.
-2. **Deterministic first, AI on demand.** Classification is plain `if` rules, so it's free, instant and
-   testable. Claude is called only when you click "Explain", once per click.
+2. **Deterministic, no AI inside.** Classification is plain `if` rules, so it's free, instant and
+   testable. Triage makes no AI calls: Explain PR only builds a prompt for your own agent or chat.
 
 ---
 
@@ -47,12 +46,12 @@ Two design rules drive everything:
 | GitLab mentions | GitLab › **Mentioned** in the sidebar: @mentions from people on open MRs and issues, from the last 30 days, until you reply in that thread. Each new one also sends a notification |
 | Linear | Settings → Linear → Show Linear pings, then paste a personal API key with Read access. Mentions and replies in your threads appear under **Linear** in the sidebar until you answer them in Linear. Each new one sends a notification (click it to open the comment), then reminders after 1 h, 4 h and daily |
 | Refresh | ⌘R, or wait. It auto-refreshes every 2 minutes, Linear every 30 seconds |
-| Explain an item | Select it → **Explain & propose fix** (⌘E) |
+| Explain a PR | Select an item → **Explain PR** (⇧⌘E) |
 | Open PR in browser | **Open** (⌘O) |
 | Hide an item | **Dismiss** (Delete key) or **Snooze** 1h / 4h / until tomorrow. Linear pings and GitLab mentions too |
 | Bring hidden back | "Show N hidden" at the bottom of the sidebar |
 | Only your PRs | Person toggle in the toolbar |
-| Settings | ⌘, → API key, model, digest hours, weekdays only, open at login, GitLab |
+| Settings | ⌘, → harness command, digest hours, weekdays only, open at login, GitLab |
 | Menu bar | Tray icon, with `@2` next to it when 2 Linear pings or GitLab mentions are waiting: pings, mentions, top items, Send digest now, Refresh, Quit |
 
 **The three columns:**
@@ -63,9 +62,9 @@ Two design rules drive everything:
 │              │                           │                                  │
 │ Everything 13│ remote-flows #1392   🔇3  │ ✖ CI failing  High               │
 │ New at 12:00 │   ✖ Tests with Coverage…  │ Tests with Coverage is failing   │
-│ CI failing  1│ remote-flows #1385   🔇4  │ [Explain] [Copy prompt] [Snooze] │
+│ CI failing  1│ remote-flows #1385   🔇4  │ [Explain PR] [Snooze] [Dismiss]  │
 │ Merge confl 6│   ⤴ Conflicts with base   │                                  │
-│ …            │   ⚙ cursor: GBR schema…   │ Claude's answer (after Explain)  │
+│ …            │   ⚙ cursor: GBR schema…   │                                  │
 │ GitHub       │                           │ Evidence cards (checks, comments)│
 │  remote-flows│                           │                                  │
 │ GitLab       │ web !12              🔇1  │                                  │
@@ -96,12 +95,12 @@ triage/
 │   │   ├── LinearPings.swift      ← notifications → the mentions and replies still waiting on you
 │   │   ├── Classifier.swift       ← PR snapshot → attention items (the rules)
 │   │   ├── CommentText.swift      ← bots' HTML-in-Markdown → readable text
-│   │   ├── PromptBuilder.swift    ← evidence + logs + diff → one prompt string
-│   │   ├── AnthropicClient.swift  ← Messages API call + Keychain helper
+│   │   ├── PromptBuilder.swift    ← Explain PR prompt: description + diff
+│   │   ├── Keychain.swift         ← the Keychain wrapper for pasted tokens and keys
 │   │   ├── SecretSource.swift     ← keys from 1Password (`op://…`) or a helper script
-│   │   ├── Mock/                  ← mock mode: the scenario file, the fake forge, Linear and Explain (§10)
+│   │   ├── Mock/                  ← mock mode: the scenario file, the fake forge and Linear (§10)
 │   │   ├── Subprocess.swift       ← runs processes off the main actor
-│   │   ├── Handoff.swift          ← Fix in iTerm: worktree + prompt + script
+│   │   ├── Handoff.swift          ← Explain PR in iTerm: worktree + prompt + script
 │   │   ├── Digest.swift           ← "what's new since last time" + schedule math
 │   │   └── …                      ← ReviewRequestAlerts, PingAlerts, SeenPRs, Merge, CIStatus, PRSummary
 │   └── Triage/                    ← the macOS app (UI + state)
@@ -138,8 +137,7 @@ This works like an Elixir umbrella where `core` doesn't depend on `web`.
 | `struct PullRequest { … }` | A TS `type` / Elixir struct. **Value type**: copied on assignment, like immutable data |
 | `class AppStore` | A mutable object shared by reference |
 | `enum AttentionKind { case ciFailure, … }` | TS string-literal union / Elixir atoms, but it can have methods |
-| `enum ExplainState { case done(String); case failed(String) }` | Tagged union / `{:ok, v}` / `{:error, e}` |
-| `switch x { case .done(let text): … }` | Elixir `case` pattern match; the compiler checks it's exhaustive |
+| `switch x { case .ciFailure: … }` | Elixir `case` pattern match; the compiler checks it's exhaustive |
 | `String?` (optional) | `string \| undefined`; `if let x = maybe { }` is a guarded unwrap |
 | `guard cond else { return }` | Early return / `with` clause bail-out |
 | `protocol Codable` | Like a TS type + zod schema: JSON encode/decode is generated for you |
@@ -197,17 +195,15 @@ This works like an Elixir umbrella where `core` doesn't depend on `web`.
         ▼                                                                     │
  sendDigestIfDue()  → maybe a macOS notification (see §9)  ◄──────────────────┘
 
- User clicks "Explain & propose fix"
+ User clicks "Explain PR"
         │
         ▼
- AppStore.explain(item)
-   1. buildPrompt(item, .explain)
-        - CI failure: fetch job logs (REST) for up to 3 failing checks
+ AppStore.explainPRInTerminal(item)  (or copyExplainPRPrompt for a chat)
+   1. buildExplainPRPrompt(pr, inWorktree:)
         - fetch the PR diff (REST)
-        - (GitLab MRs skip both for now: see docs/plans/GITLAB.md › Still missing)
-        - PromptBuilder.prompt(...)  → one big string
-   2. AnthropicClient.complete(system:prompt:)  → POST /v1/messages
-   3. explanations[item.id] = .done(text)  → detail pane renders it
+        - (GitLab MRs skip it for now: see docs/plans/GITLAB.md › Still missing)
+        - PromptBuilder.explainPRPrompt(...)  → one string
+   2. the prompt goes to iTerm (an agent in the PR's worktree) or to the clipboard
 ```
 
 ---
@@ -283,7 +279,7 @@ The JSON is decoded into private `Decodable` structs (`PRNode`, `ContextNode`, �
 `toModel()` then converts them into the clean `PullRequest` model. This works like a GraphQL response
 type plus a mapper function, so the rest of the app never sees GitHub's shape.
 
-**REST calls** are made only when building a prompt:
+**REST calls** are made only when building the Explain PR prompt:
 
 | Call | Used for |
 |---|---|
@@ -364,10 +360,7 @@ first line with a letter or digit in it, from the readable text (below) and with
 bold or link syntax, e.g. `cursor: GBR schema pin exceeds latest version`.
 
 **Bot finding list:** the Bot finding filter lists findings on your own PRs first, then other people's, each
-newest opened first (`sortedAsBotFindings`). On someone else's PR a bot finding has no Explain & propose fix,
-Fix in iTerm or Copy prompt, since you can't push to their branch (`showsFixActions`). Until Triage knows who
-you are on that forge, nothing counts as yours and the fix actions stay.
-
+newest opened first (`sortedAsBotFindings`). 
 **Review requested list:** ready PRs come before drafts, PRs whose checks aren't failing before failing ones, then
 the longest-open PR first so no request waits behind newer ones. Ties go to the repo, the PR number, then the item
 id, so the order depends only on the data and not on the order it arrived in (`sortedForReview`).
@@ -400,61 +393,22 @@ done in the mapping, so the same rules and ids work for both.
 
 ### 6.6 Prompt builder (`PromptBuilder.swift`)
 
-This follows the same pattern as expenses-backend's `get_*_prompt` MCP tools: **assemble all the
-evidence into one string**, so whoever reads it (Claude, or you) doesn't need to fetch anything.
-
-The structure of a prompt:
+Builds the **Explain PR** prompt: one string, so whoever reads it (an agent or a chat) doesn't need to fetch
+anything. It's read-only, so it never asks for edits.
 
 ```
-You're on PR #1392 in remoteoss/remote-flows: "chore(deps-dev): update dependency jsdom…"
+Explain PR #1392 in remoteoss/remote-flows to me: "chore(deps-dev): update dependency jsdom…"
 Author · branch · head sha · url
-Problem: CI failing — Tests with Coverage is failing
 
-## Evidence            ← each evidence card (check name + url, comment bodies)
-## Output of <check> (last 250 of N lines)   ← log tail; the failure is almost always at the end
+## Description (summary)                     ← when the PR has one
 ## PR diff (first 60000 of N characters)     ← labelled when clipped
-## Task                ← depends on the mode
+## Task                                      ← what it does, a walkthrough, risks, what to ask before approving
 ```
 
-Two modes:
+`inWorktree` changes the task: in iTerm the agent is already in the PR's worktree and may read the code and
+run `gh pr view`; for a chat it works from the description and diff only.
 
-- **`.explain`** (sent to Claude from the app): explain in 2–4 sentences, classify it (real bug / flaky
-  or infra / needs a human decision), propose a fix as a unified diff, and draft a PR reply.
-- **`.claudeCode`** (copied to the clipboard): `gh pr checkout N`, read the code, propose a fix, **wait
-  for approval**, then fix, test, commit and push to the branch.
-
-The system prompt tells Claude to be concrete and to say when a failure looks flaky or unrelated
-(recommend a rerun rather than a code change).
-
-### 6.7 Anthropic client (`AnthropicClient.swift`)
-
-Raw HTTP, because there's no official Swift SDK. It's one non-streaming `POST
-https://api.anthropic.com/v1/messages`:
-
-```json
-{ "model": "claude-opus-5", "max_tokens": 16000, "fallbacks": "default",
-  "system": "<triage system prompt>", "messages": [{ "role": "user", "content": "<prompt>" }] }
-```
-
-The headers are `x-api-key`, `anthropic-version: 2023-06-01` and
-`anthropic-beta: server-side-fallback-2026-07-01`. The fallback means that if Claude's safety
-classifiers decline, the server reruns the request on a recommended fallback model instead of failing.
-The response's `text` blocks are joined and returned. A `stop_reason: "refusal"` becomes a readable error.
-
-- **When it's called:** only on "Explain & propose fix". Refresh, classification, copy buttons and
-  digests never call Anthropic.
-- **Key lookup**, in priority order (Settings shows which one is active):
-  1. **Key source** (Settings): either a 1Password reference (`op://Vault/Item/field`, read with `op read`
-     and Touch ID) or a **key helper script** that prints the key. That's the same contract as Claude Code's
-     `apiKeyHelper`. It's set to `~/.claude/anthropic_key.sh`, the work helper, which reads the Keychain first
-     and falls back to 1Password. The key is kept **in memory only** for the session, and a 401 clears it
-     so a rotated key gets re-read.
-  2. `$ANTHROPIC_API_KEY`: only visible when started from a terminal (`swift run`). Apps opened with
-     `open`/Finder/Dock don't inherit shell variables, so the bundled app won't see keys from `.zshrc`.
-  3. A key pasted in Settings, stored in the macOS **Keychain** (the OS's encrypted secret store).
-- **Model:** editable in Settings (default `claude-opus-5`).
-
-### 6.8 Digest (`Digest.swift`)
+### 6.7 Digest (`Digest.swift`)
 
 Two pure functions:
 
@@ -467,16 +421,15 @@ Two pure functions:
 
 ---
 
-### 6.9 Fix in iTerm (`Handoff.swift`)
+### 6.8 Explain PR in iTerm (`Handoff.swift`)
 
-Hands an item to a coding agent (your "harness") in a terminal, in its **own git worktree per PR**. That way
+Hands a PR to a coding agent (your "harness") in a terminal, in its **own git worktree per PR**. That way
 several agents can work on different PRs in parallel without touching your main checkout.
 
 1. **Find the local clone** by looking for `<root>/<repo name>` in `~/remote`, `~/rogal`, `~/code`, … whose
    `origin` points at the repo. It's remembered per repo. Override it by right-clicking the repo in the
    sidebar → *Set local checkout…*.
-2. **Write the prompt** (mode `.handoff`: "you're in a worktree on branch X; explain, propose, wait for my
-   OK, then fix, test, commit and push") and a zsh script to `~/Library/Caches/dev.rogal.triage/handoffs/`.
+2. **Write the prompt** (the Explain PR prompt, `inWorktree: true`) and a zsh script to `~/Library/Caches/dev.rogal.triage/handoffs/`.
 3. **Open iTerm** (AppleScript) running that script. The script:
    - reuses `<checkout>-pr-<N>` (e.g. `~/remote/remote-flows-pr-1392`) if it exists;
    - otherwise, if the branch is already checked out somewhere (e.g. your main checkout), uses that;
@@ -518,10 +471,10 @@ pings, so each source prunes only ids with its own prefix (`isMentionID`, `Linea
 the environment. It holds:
 
 - **Persisted** (saved to `UserDefaults` on every change via `didSet`): `repos`, `dismissed`, `snoozed`,
-  `onlyMine`, `model`, `digestHours`, `digestWeekdaysOnly`, `digestBaseline`, `lastDigestItemIDs`,
+  `onlyMine`, `digestHours`, `digestWeekdaysOnly`, `digestBaseline`, `lastDigestItemIDs`,
   `lastDigestAt`, `gitlabHost` (empty = GitLab off).
 - **In-memory**: `prs`, `items`, `stats`, `viewer` (GitHub) and `gitlabViewer`, `isRefreshing`, `errors`,
-  `explanations`, `filter`, `selection`, the cached GitLab token, and the last Linear and GitLab mentions polls
+  `filter`, `selection`, the cached GitLab token, and the last Linear and GitLab mentions polls
   (`linear`, `gitlabMentions`: what's waiting, when it last succeeded).
 - **Derived** (computed properties, like selectors / `useMemo`):
   - `activeItems`: items minus dismissed, minus snoozed-until-future, minus others' PRs if "Only mine",
@@ -534,7 +487,7 @@ the environment. It holds:
     feed the sidebar counts and the menu bar's `@N`.
   - `viewer(for: forge)` and `can(capability, pr)`: who you are on a PR's forge, and what Triage may do.
 - **Actions**: `refresh`, `addRepo`, `removeRepo`, `dismiss`, `snooze`, `dismissPing` / `snoozePing` (a
-  Linear ping or GitLab mention, by id), `restoreHidden`, `explain`, `copyPrompt`, `sendDigestIfDue`,
+  Linear ping or GitLab mention, by id), `restoreHidden`, `explainPRInTerminal`, `copyExplainPRPrompt`, `sendDigestIfDue`,
   `sendDigest`, `showMainWindow`, `saveGitLabToken`. PR actions (approve,
   merge, close) go through `forgeClient(_:repos:)` (`AppStore+Forge.swift`).
 
@@ -549,10 +502,9 @@ the environment. It holds:
   section (**Mentioned**, then projects by name, from the fetch; nothing to add or remove) and **Linear**.
 - **`PingViews`**: the list, row and detail for Linear pings and GitLab mentions. Both are "someone is
   waiting on your reply", so they share views, Dismiss and Snooze.
-- **`ItemDetailView`**: header, action buttons with keyboard shortcuts, Claude's answer (loading / done /
-  failed), and evidence cards. Markdown in comments/answers is rendered inline, comments after
-  `CommentText.readable`. Buttons the PR's forge can't do are hidden: for a GitLab MR that's Close and
-  Fix in iTerm (Approve and Merge work), and Explain PR copies a prompt instead of opening iTerm. **Merge**
+- **`ItemDetailView`**: header, action buttons with keyboard shortcuts, and evidence cards. Markdown in comments is rendered inline, comments after
+  `CommentText.readable`. Buttons the PR's forge can't do are hidden: for a GitLab MR that's Close
+  (Approve and Merge work), and Explain PR copies a prompt instead of opening iTerm. **Merge**
   isn't a button: it lives in the Open menu (and the Pull Request menu in the menu bar), on every PR in a repo
   you can write to, as one entry per method the repo allows (`pr.mergeMethods`), the default first: "Create a
   merge commit…", "Squash and merge…", "Rebase and merge…" on GitHub, "Merge…" and "Squash and merge…" on
@@ -564,7 +516,7 @@ the environment. It holds:
   enforces them); like GitHub's failing checks or missing review, they head the enabled entries as a caption
   (`pr.mergeNote`). Each entry opens a confirmation that names the method and lists `pr.mergeWarnings`
   (unresolved threads included).
-- **`SettingsView`**: API key → Keychain, model, digest hours, weekdays only, open at login, "send a
+- **`SettingsView`**: the harness command, digest hours, weekdays only, open at login, "send a
   digest now", GitLab (on/off, host, token → Keychain, Test, "Signed in as …"), and which GitHub token source
   is in use.
 
@@ -590,13 +542,11 @@ separators (`#1.392`). Use `Text(verbatim:)` or `String(…)` for ids.
 | Data | Where | Notes |
 |---|---|---|
 | Watched repos, dismissed/snoozed ids, prefs, digest state | `UserDefaults`, domain `dev.rogal.triage` | Like `localStorage`. Inspect with `defaults read dev.rogal.triage` |
-| Anthropic API key via 1Password | Only the `op://` reference in `UserDefaults`; the key lives in memory | Touch ID once per app session |
-| Anthropic API key (if pasted in Settings) | Keychain, service `dev.rogal.triage` | Encrypted by macOS |
 | GitHub token | Not stored; read from `$GITHUB_TOKEN` / `gh` each refresh | |
 | GitLab host | `UserDefaults` key `gitlabHost` | Empty means GitLab is off |
 | GitLab token | `$GITLAB_TOKEN`, else the token source in Settings (1Password `op://…` or a helper script; only the reference is saved, as `gitlabTokenRef`), else Keychain service `dev.rogal.triage.gitlab`, account = host | Read once per app session, then kept in memory. With a token source the Keychain isn't touched. Triage's certificate has no Team ID, so Keychain access is tied to each build's hash and every rebuild asks again |
 | Linear API key | `$LINEAR_API_KEY`, else the key source (`linearKeyRef`), else Keychain service `dev.rogal.triage.linear` | Same as GitLab. A failed key source isn't retried by the 30 s poll (no Touch ID loop) until the reference changes or Test is pressed |
-| PRs, items, Claude answers | Memory only | Refetched on launch; answers are lost on quit |
+| PRs, items | Memory only | Refetched on launch |
 
 Stale dismissals are cleaned up on each refresh: once an item id no longer exists, it's dropped. Linear
 pings (`linear:…`) and GitLab mentions (`gitlab-mention:…`) share the same `dismissed` / `snoozed` sets
@@ -663,13 +613,12 @@ settings. Views and rules run unchanged; only what the app reads from outside is
 | GitHub, GitLab pull requests | `GitHubForge`, `GitLabForge` (`ForgeClient`) | `MockForge` |
 | GitLab mentions | `GitLabForge` (`MentionsSource`) | `MockForge` |
 | Linear pings | `LinearClient` (`LinearSource`) | `MockLinear` |
-| Explain | `AnthropicClient` (`Explainer`) | `MockExplainer` |
 | Secrets, notifications, iTerm, login item, links | read or sent | refused, or a status line |
 | Settings and state | `UserDefaults.standard` | a throwaway `dev.rogal.triage.mock-state` domain, emptied at start |
 | Network | `URLSession.shared` | a `URLProtocol` that fails every request, so a missed client shows |
 
 The scenario holds the viewer on each forge, the watched repos, pull requests (times as hours ago, so "updated
-yesterday" stays true), Linear pings, GitLab mentions and the canned answers for Explain, the diff and a CI log.
+yesterday" stays true), Linear pings, GitLab mentions and the canned diff and CI log.
 `Mocks/default.json` has one of every item kind, the viewer's PRs and others' created in a different order than
 their numbers, and a GitLab project. A test decodes it with the real models and classifies it, so it cannot drift.
 `watchingHoursAgo` (default 24) says when the app started watching, so recent PRs of others show as new. Approve, merge
@@ -694,8 +643,7 @@ project; SwiftPM + a shell script is enough for a personal tool.
 | Every 30 s, Linear on | 1 notifications query | Free |
 | Approve (GitLab) | 1 REST `POST …/approve` | Free |
 | Merge (GitLab) | 1 REST `PUT …/merge` | Free |
-| Explain | 1–3 job-log fetches + 1 diff fetch + **1 Claude request** | One Opus request per click (prompt up to ~60KB of diff + log tails) |
-| Copy prompt | Same GitHub fetches, no Claude call | Free |
+| Explain PR | 1 diff fetch | Free; no AI call (prompt up to ~60KB of diff) |
 | Digest | Nothing extra (uses the latest refresh) | Free |
 
 ---
@@ -709,11 +657,11 @@ project; SwiftPM + a shell script is enough for a personal tool.
 - **"Only my PRs" = authored by you.** Review requests show anyway (as Review requested items), but GitHub
   team requests aren't expanded to their members.
 - **Rules are heuristics.** The noise-bot list and severity keywords will need tuning per team.
-- **Single user, local tokens.** It uses your `gh` token and your API key, and there's no server.
+- **Single user, local tokens.** It uses your `gh` token, and there's no server.
 - **Timing:** macOS may delay a sleeping app's timers (App Nap), so a digest can arrive a few minutes
   late.
-- **Claude answers aren't saved**, and "Fix it" (an agent that pushes a commit) doesn't exist yet.
-- **GitLab can only approve and merge.** No diff or CI logs in prompts, no Fix in iTerm, no close, no
+- **No in-app AI.** Triage makes no AI calls; "Fix it" (an agent that pushes a commit) doesn't exist yet.
+- **GitLab can only approve and merge.** No diff in the Explain PR prompt, no iTerm, no close, no
   auto-merge when the pipeline succeeds, no rebase-and-merge. Each is
   written up, with how to build it, in `docs/plans/GITLAB.md` › Still missing.
 - **A mention counts as answered only by a reply in its thread.** A reply elsewhere (another thread, Slack)
@@ -737,7 +685,7 @@ expenses-backend:
 | `PromptBuilder` | `get_attention_prompt(item)`, same read-prompt pattern as `get_holding_analysis_prompt`, exposed via REST **and** MCP |
 | Digest timer | Oban cron per user; deliver via push notification / Telegram |
 | Store refresh | **Phoenix Channels** push new items to the app live |
-| "Explain" | Server calls Claude, stores the answer (`agent_runs` table) |
+| "Explain PR" | Server calls Claude, stores the answer (`agent_runs` table) |
 | — (new) "Fix it" | Server-side agent loop: Claude + tools that are **GitHub API calls** (read file, search code, get logs, commit to branch). The PR's CI is the test runner, so no clones or sandboxes are needed. Status: `fixing` → `resolved` / back to `new` |
 
 The Swift code is already split to make this easy: `TriageCore`'s client, classifier and prompt

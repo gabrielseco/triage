@@ -55,4 +55,4 @@ Links related to this PR: issues, other PRs, Slack threads, etc. "N/A" if none.
 <!-- How to test this PR. "N/A" if not applicable. -->
 
 - [ ] `scripts/check.sh` passes (lint, Swift 6 build, tests)
-- [ ] Tried in the bundled app (`scripts/bundle.sh`) — needed for notifications, login item and Fix in iTerm
+- [ ] Tried in the bundled app (`scripts/bundle.sh`) — needed for notifications, login item and Explain PR in iTerm

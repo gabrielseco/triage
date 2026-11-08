@@ -61,8 +61,6 @@ public final class MockWorld: Sendable {
     }
 
     public func linear() -> any LinearSource { linearSource }
-
-    public func explainer() -> any Explainer { MockExplainer(answer: scenario.explanation) }
 }
 
 // MARK: - The fake forge
@@ -142,14 +140,6 @@ struct MockLinear: LinearSource {
     func notifications() async throws -> (notifications: [LinearNotification], warnings: [String]) {
         (notifications, [])
     }
-}
-
-struct MockExplainer: Explainer {
-    let answer: String?
-
-    static let fallback = "This is a mock answer. In the real app, Claude explains the item here."
-
-    func complete(system: String, prompt: String) async throws -> String { answer ?? Self.fallback }
 }
 
 // MARK: - Scenario → app types
