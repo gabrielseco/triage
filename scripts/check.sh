@@ -2,6 +2,7 @@
 # Everything CI runs, in the same order. Run before pushing: scripts/check.sh  (add --fix to auto-format first)
 set -euo pipefail
 cd "$(dirname "$0")/.."
+. scripts/use-xcode.sh  # build with the Xcode in .xcode-version, as CI does
 
 if [[ "${1:-}" == "--fix" ]]; then
   echo "→ formatting"

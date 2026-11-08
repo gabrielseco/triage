@@ -6,7 +6,7 @@ Native macOS inbox for open PRs (SwiftUI, Swift 6, macOS 14+). Architecture: `RE
 ## Commands
 
 ```bash
-scripts/check.sh         # what CI runs: swift-format, SwiftLint, Swift 6 build, tests, TriageCore coverage gate
+scripts/check.sh         # what CI runs: swift-format, SwiftLint, Swift 6 build, tests, TriageCore coverage gate  (builds with the Xcode in .xcode-version)
 scripts/check.sh --fix   # auto-format first
 scripts/bundle.sh        # build ~/Applications/Triage.app (needed for notifications, login item, Fix in iTerm)
 scripts/snap.sh out.png  # screenshot the Triage window (out.mov 10 records 10s), used by /verify

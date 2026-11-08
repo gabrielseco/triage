@@ -3,6 +3,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+. "$ROOT/scripts/use-xcode.sh"  # build with the Xcode in .xcode-version, as CI does
 APP="${TRIAGE_APP:-$HOME/Applications/Triage.app}"  # TRIAGE_APP: build elsewhere (/verify)
 BUNDLE_ID="dev.rogal.triage"
 
