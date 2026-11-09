@@ -177,10 +177,16 @@ struct ItemDetailView: View {
 struct EvidenceCard: View {
     let evidence: Evidence
 
+    private var isResolved: Bool {
+        if case .resolved = evidence.threadState { true } else { false }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(evidence.title).font(.subheadline.weight(.semibold))
+                    .foregroundStyle(isResolved ? .secondary : .primary)
+                if let state = evidence.threadState { ThreadStatePill(state: state) }
                 Spacer()
                 if let url = evidence.url { Link(destination: url) { Image(systemName: "arrow.up.right.square") } }
             }
@@ -194,6 +200,35 @@ struct EvidenceCard: View {
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+/// "Resolved" or "Fixed in 1a2b3c4" beside a review thread. An open thread shows nothing.
+struct ThreadStatePill: View {
+    let state: ThreadState
+
+    var body: some View {
+        if let label = state.label {
+            Label(label, systemImage: symbol)
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(color)
+                .padding(.horizontal, 6).padding(.vertical, 2)
+                .background(color.opacity(0.15), in: Capsule())
+        }
+    }
+
+    private var symbol: String {
+        switch state {
+        case .fixReported: "hammer.fill"
+        case .resolved, .open: "checkmark.circle.fill"
+        }
+    }
+
+    private var color: Color {
+        switch state {
+        case .fixReported: .green
+        case .resolved, .open: .secondary
+        }
     }
 }
 

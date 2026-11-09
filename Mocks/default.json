@@ -40,12 +40,28 @@
     {
       "repo": "acme/api", "number": 81, "title": "Raise the retry budget for the billing client", "author": "gabi",
       "createdHoursAgo": 10, "updatedHoursAgo": 3, "headRef": "gabi/retry-budget",
+      "commits": ["2d7a0c4e9b1f3a5c6d8e0f1a2b3c4d5e6f708192", "9f3c2e1a7b4d5e6f8091a2b3c4d5e6f708192a3b"],
       "reviewDecision": "REVIEW_REQUIRED",
       "checks": [{ "name": "test", "state": "success" }],
       "threads": [
         {
           "author": "cursor[bot]", "isBot": true, "path": "billing/client.go", "line": 118, "hoursAgo": 3,
           "body": "Possible nil dereference when the response body is empty. The error path returns before the retry count is read."
+        },
+        {
+          "author": "cursor[bot]", "isBot": true, "path": "billing/retry.go", "line": 54, "hoursAgo": 3,
+          "body": "The backoff has no upper bound, so a long outage can sleep for hours.",
+          "replies": [
+            {
+              "author": "gabi", "hoursAgo": 1,
+              "body": "Capped the backoff at 30s in https://github.com/acme/api/commit/9f3c2e1a7b4d5e6f8091a2b3c4d5e6f708192a3b"
+            }
+          ]
+        },
+        {
+          "author": "cursor[bot]", "isBot": true, "resolved": true, "resolvedBy": "gabi", "path": "billing/config.go",
+          "line": 12, "hoursAgo": 3,
+          "body": "The default budget is read from the environment on every call."
         }
       ]
     },

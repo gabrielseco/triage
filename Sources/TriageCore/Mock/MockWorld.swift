@@ -188,10 +188,11 @@ extension MockWorld {
                     author: t.author, isBot: t.isBot ?? false, body: t.body, createdAt: ago(t.hoursAgo))
                 let replies = (t.replies ?? []).map { comment($0, now: now) }
                 return ReviewThreadInfo(
-                    isResolved: t.resolved ?? false, isOutdated: t.outdated ?? false, path: t.path, line: t.line,
+                    isResolved: t.resolved ?? false, isOutdated: t.outdated ?? false, resolvedBy: t.resolvedBy,
+                    path: t.path, line: t.line,
                     firstComment: first, commentCount: 1 + replies.count, replies: replies)
             },
-            comments: (p.comments ?? []).map { comment($0, now: now) }, summary: p.summary,
+            comments: (p.comments ?? []).map { comment($0, now: now) }, commitShas: p.commits ?? [], summary: p.summary,
             mergeMethod: try pick(p.mergeMethod, .merge, "mergeMethod"),
             allowedMergeMethods: try p.mergeMethods.map { Set(try $0.map { try pick($0, .merge, "mergeMethods") }) }
                 ?? Set(MergeMethod.allCases),

@@ -218,3 +218,39 @@ private func decodePR() throws -> PullRequest {
         .replacingOccurrences(of: #""viewerDefaultMergeMethod": "SQUASH", "#, with: "")
     #expect(try decode(Data(missing.utf8)).repository?.viewerDefaultMergeMethod == nil)
 }
+
+@Test func reviewThreadStateFields() throws {
+    #expect(GitHubClient.prQuery.contains("resolvedBy { login }"))
+    #expect(
+        GitHubClient.prQuery.contains(
+            "comments(first: 30) { totalCount nodes { author { login __typename } body url createdAt } }"))
+    #expect(GitHubClient.prQuery.contains("allCommits: commits(last: 100) { nodes { commit { oid } } }"))
+
+    let json = String(decoding: truncated, as: UTF8.self)
+        .replacingOccurrences(
+            of: #""reviewThreads": {"totalCount": 80, "nodes": []},"#,
+            with: """
+                "allCommits": {"nodes": [{"commit": {"oid": "c1"}}, {"commit": {"oid": "abc"}}]},
+                "reviewThreads": {"totalCount": 1, "nodes": [
+                  {"isResolved": true, "isOutdated": false, "path": "a.go", "line": 3,
+                   "resolvedBy": {"login": "gabi", "__typename": "User"},
+                   "comments": {"totalCount": 2, "nodes": [
+                     {"author": {"login": "cursor[bot]", "__typename": "Bot"}, "body": "bug",
+                      "url": "https://github.com/o/r/pull/7#r1", "createdAt": "2026-09-25T11:00:00Z"},
+                     {"author": {"login": "gabi", "__typename": "User"}, "body": "fixed in c1",
+                      "url": "https://github.com/o/r/pull/7#r2", "createdAt": "2026-09-25T12:00:00Z"}]}}]},
+                """)
+    let pr = try #require(try decode(Data(json.utf8)).repository?.pullRequests.nodes.first).toModel(repo: repo)
+    let thread = try #require(pr.threads.first)
+    #expect(thread.resolvedBy == "gabi")
+    #expect(thread.comments.map(\.author) == ["cursor[bot]", "gabi"])
+    #expect(thread.comments.map(\.body) == ["bug", "fixed in c1"])
+    #expect(thread.comments.map(\.isBot) == [true, false])
+    #expect(thread.comments[1].createdAt == ISO8601DateFormatter().date(from: "2026-09-25T12:00:00Z"))
+    #expect(pr.commitShas == ["c1", "abc"])
+
+    // Without the field (an unresolved thread, or an older response) nothing is claimed.
+    let bare = try decodePR()
+    #expect(bare.threads[0].resolvedBy == nil)
+    #expect(bare.commitShas == ["abc123"])
+}

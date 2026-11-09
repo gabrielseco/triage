@@ -101,6 +101,9 @@ final class AppStore {
 
     var prs: [PullRequest] = []
     var items: [AttentionItem] = []
+    /// Bot findings that had something open at some refresh this session, so one whose threads all get resolved
+    /// stays listed as resolved until Triage quits.
+    private var sessionBotFindingIDs: Set<String> = []
     var stats: [String: PRStats] = [:]
     /// The GitHub login.
     var viewer: String?
@@ -251,7 +254,9 @@ final class AppStore {
         var newItems: [AttentionItem] = []
         var newStats: [String: PRStats] = [:]
         for pr in fetched {
-            let (i, s) = Classifier.classify(pr, viewer: viewer(for: pr.repo.forge), isNew: seen.isNew(pr))
+            let (i, s) = Classifier.classify(
+                pr, viewer: viewer(for: pr.repo.forge), isNew: seen.isNew(pr), retaining: sessionBotFindingIDs)
+            sessionBotFindingIDs.formUnion(i.filter { $0.kind == .botFinding && !$0.isResolved }.map(\.id))
             newItems += i
             newStats[pr.id] = s
         }
