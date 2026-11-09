@@ -232,8 +232,12 @@ struct GLUser: Decodable {
     let avatarUrl: String?
     let bot: Bool?
 
-    /// Project and group access-token users, which GitLab names `project_<id>_bot_<hash>`.
-    var isAccessToken: Bool { username.wholeMatch(of: /(project|group)_\d+_bot.*/) != nil }
+    /// Project and group access-token users, which GitLab names `project_<id>_bot_<hash>`, and service accounts,
+    /// `service_account_group_<id>_<hash>`.
+    var isAccessToken: Bool {
+        username.wholeMatch(of: /(project|group)_\d+_bot.*/) != nil
+            || username.wholeMatch(of: /service_account_.*/) != nil
+    }
     var isBot: Bool { bot == true || isAccessToken }
     /// Who a comment is from. An access-token user goes by its display name ("cursor" for Cursor Bugbot, as
     /// `cursor[bot]` on GitHub), so bot items read well and group with the same bot across projects.
