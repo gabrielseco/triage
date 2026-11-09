@@ -121,6 +121,8 @@ public struct CommentInfo: Hashable, Sendable {
 public struct ReviewThreadInfo: Hashable, Sendable {
     public var isResolved: Bool
     public var isOutdated: Bool
+    /// Login of whoever resolved the thread, when it is resolved and the forge says who.
+    public var resolvedBy: String?
     public var path: String?
     public var line: Int?
     public var firstComment: CommentInfo
@@ -129,11 +131,12 @@ public struct ReviewThreadInfo: Hashable, Sendable {
     public var comments: [CommentInfo]
 
     public init(
-        isResolved: Bool, isOutdated: Bool = false, path: String? = nil, line: Int? = nil,
+        isResolved: Bool, isOutdated: Bool = false, resolvedBy: String? = nil, path: String? = nil, line: Int? = nil,
         firstComment: CommentInfo, commentCount: Int = 1, replies: [CommentInfo] = []
     ) {
         self.isResolved = isResolved
         self.isOutdated = isOutdated
+        self.resolvedBy = resolvedBy
         self.path = path
         self.line = line
         self.firstComment = firstComment
@@ -171,6 +174,8 @@ public struct PullRequest: Identifiable, Hashable, Sendable {
     public var checks: [CheckInfo]
     public var threads: [ReviewThreadInfo]
     public var comments: [CommentInfo]
+    /// Full SHAs of the commits in the PR (the newest ones when it has more than the query reads).
+    public var commitShas: [String]
     /// What the PR is about, from its description (`PRSummary`). Nil when the description says nothing usable.
     public var summary: String?
     /// The method GitHub's merge button would use for the viewer: their last one, or the repo's default.
@@ -201,8 +206,9 @@ public struct PullRequest: Identifiable, Hashable, Sendable {
         updatedAt: Date = .now, headSha: String, headRef: String = "branch",
         mergeable: Mergeable = .mergeable, reviewDecision: ReviewDecision = .none,
         approvedBy: Set<String> = [], requestedReviewers: Set<String> = [], checks: [CheckInfo] = [],
-        threads: [ReviewThreadInfo] = [], comments: [CommentInfo] = [], summary: String? = nil,
-        mergeMethod: MergeMethod = .merge, allowedMergeMethods: Set<MergeMethod> = Set(MergeMethod.allCases),
+        threads: [ReviewThreadInfo] = [], comments: [CommentInfo] = [], commitShas: [String] = [],
+        summary: String? = nil, mergeMethod: MergeMethod = .merge,
+        allowedMergeMethods: Set<MergeMethod> = Set(MergeMethod.allCases),
         viewerCanMerge: Bool = true, mergeState: MergeState = .unknown, viewerCanMergeAsAdmin: Bool = false,
         detailedMergeStatus: DetailedMergeStatus? = nil
     ) {
@@ -224,6 +230,7 @@ public struct PullRequest: Identifiable, Hashable, Sendable {
         self.checks = checks
         self.threads = threads
         self.comments = comments
+        self.commitShas = commitShas
         self.summary = summary
         self.mergeMethod = mergeMethod
         self.allowedMergeMethods = allowedMergeMethods
@@ -301,12 +308,17 @@ public struct Evidence: Hashable, Sendable {
     public var url: URL?
     /// Set for failed checks so the prompt builder can pull logs.
     public var checkRunID: Int?
+    /// For a review thread: where it stands. Nil for anything else.
+    public var threadState: ThreadState?
 
-    public init(title: String, detail: String? = nil, url: URL? = nil, checkRunID: Int? = nil) {
+    public init(
+        title: String, detail: String? = nil, url: URL? = nil, checkRunID: Int? = nil, threadState: ThreadState? = nil
+    ) {
         self.title = title
         self.detail = detail
         self.url = url
         self.checkRunID = checkRunID
+        self.threadState = threadState
     }
 }
 
@@ -319,6 +331,11 @@ public struct AttentionItem: Identifiable, Hashable, Sendable {
     public var pr: PullRequest
     public var headline: String
     public var evidence: [Evidence]
+
+    /// Every thread in it is resolved: kept on screen for the session, nothing left to do.
+    public var isResolved: Bool {
+        !evidence.isEmpty && evidence.allSatisfy { if case .resolved = $0.threadState { true } else { false } }
+    }
 }
 
 extension [AttentionItem] {

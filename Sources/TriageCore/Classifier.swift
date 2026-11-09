@@ -18,8 +18,10 @@ public enum Classifier {
 
     /// `viewer` is the signed-in login: their own review comments don't count as something new. `isNew` says the
     /// PR was opened since Triage started watching its repo and hasn't been dismissed yet (`SeenPRs`).
+    /// `retaining` holds ids of bot findings that were open earlier in this session: when all their threads are
+    /// resolved they stay listed as resolved instead of disappearing.
     public static func classify(
-        _ pr: PullRequest, viewer: String? = nil, isNew: Bool = false
+        _ pr: PullRequest, viewer: String? = nil, isNew: Bool = false, retaining: Set<String> = []
     ) -> (items: [AttentionItem], stats: PRStats) {
         var stats = PRStats(pendingChecks: pr.checks.filter { $0.state == .pending }.count)
         let open = pr.threads.filter { !$0.isResolved && !$0.isOutdated }
@@ -28,7 +30,7 @@ public enum Classifier {
             ciFailure(pr), mergeConflict(pr), changesRequested(pr), reviewThreads(pr, open: open, viewer: viewer),
         ]
         .compactMap { $0 }
-        items += botFindings(pr, open: open, noise: &stats.noiseComments)
+        items += botFindings(pr, retaining: retaining, noise: &stats.noiseComments)
         let request = reviewRequested(pr, viewer: viewer)
         if items.isEmpty, request == nil, let quiet = readyToMerge(pr) ?? awaitingChecks(pr) ?? awaitingReview(pr) {
             items.append(quiet)
@@ -98,7 +100,7 @@ public enum Classifier {
             headline: human.count == 1
                 ? "\(first.firstComment.author) left an unresolved comment"
                 : "\(human.count) unresolved review threads",
-            evidence: human.map(threadEvidence)
+            evidence: human.map { threadEvidence($0, in: pr) }
         )
     }
 
@@ -118,10 +120,16 @@ public enum Classifier {
         let evidence: Evidence
         let body: String
         let url: URL?
+        /// False once the thread is resolved: still listed, but no longer a finding.
+        let isOpen: Bool
     }
 
-    /// Comments + open threads from bots that aren't noise, one item per bot. Noise is counted instead.
-    static func botFindings(_ pr: PullRequest, open: [ReviewThreadInfo], noise: inout Int) -> [AttentionItem] {
+    /// Comments + threads from bots that aren't noise, one item per bot. Noise is counted instead. Resolved threads
+    /// stay in the item, labelled, and the id comes from every entry (resolved included) so resolving one doesn't
+    /// change it. An item with nothing open left appears only when `retaining` has its id.
+    static func botFindings(
+        _ pr: PullRequest, retaining: Set<String> = [], noise: inout Int
+    ) -> [AttentionItem] {
         var byBot: [String: [BotEntry]] = [:]
         func add(_ author: String, _ entry: BotEntry) {
             let login = normalizedLogin(author)
@@ -129,23 +137,34 @@ public enum Classifier {
         }
         for c in pr.comments where c.isBot {
             let evidence = Evidence(title: "Comment by \(c.author)", detail: c.body, url: c.url)
-            add(c.author, BotEntry(date: c.createdAt, evidence: evidence, body: c.body, url: c.url))
+            add(c.author, BotEntry(date: c.createdAt, evidence: evidence, body: c.body, url: c.url, isOpen: true))
         }
-        for t in open where t.firstComment.isBot {
+        for t in pr.threads where t.firstComment.isBot && (t.isResolved || !t.isOutdated) {
             let c = t.firstComment
-            add(c.author, BotEntry(date: c.createdAt, evidence: threadEvidence(t), body: c.body, url: c.url))
+            add(
+                c.author,
+                BotEntry(
+                    date: c.createdAt, evidence: threadEvidence(t, in: pr), body: c.body, url: c.url,
+                    isOpen: !t.isResolved))
         }
-        return byBot.sorted { $0.key < $1.key }.map { login, entries in
+        return byBot.sorted { $0.key < $1.key }.compactMap { login, entries in
             let sorted = entries.sorted { $0.date > $1.date }
+            let id = "\(pr.id)|bot|\(login)|\(sorted[0].url?.absoluteString ?? "\(sorted.count)")"
+            let open = sorted.filter(\.isOpen)
+            guard !open.isEmpty || retaining.contains(id) else { return nil }
+            let headline: String
+            switch open.count {
+            case 0: headline = "\(login): all findings resolved"
+            case 1: headline = "\(login): \(findingTitle(open[0].body) ?? "flagged something")"
+            default: headline = "\(login) left \(open.count) findings"
+            }
             return AttentionItem(
-                id: "\(pr.id)|bot|\(login)|\(sorted[0].url?.absoluteString ?? "\(sorted.count)")",
+                id: id,
                 kind: .botFinding,
-                severity: sorted.map { botSeverity($0.body) }.max() ?? .low,
+                severity: open.isEmpty ? .info : open.map { botSeverity($0.body) }.max() ?? .low,
                 pr: pr,
-                headline: sorted.count == 1
-                    ? "\(login): \(findingTitle(sorted[0].body) ?? "flagged something")"
-                    : "\(login) left \(sorted.count) findings",
-                evidence: sorted.map(\.evidence)
+                headline: headline,
+                evidence: (open + sorted.filter { !$0.isOpen }).map(\.evidence)
             )
         }
     }
@@ -266,10 +285,11 @@ public enum Classifier {
         return cleaned.isEmpty ? nil : String(cleaned.prefix(90))
     }
 
-    static func threadEvidence(_ t: ReviewThreadInfo) -> Evidence {
+    static func threadEvidence(_ t: ReviewThreadInfo, in pr: PullRequest) -> Evidence {
         var title = t.firstComment.author
         if let path = t.path { title += " on \(path)\(t.line.map { ":\($0)" } ?? "")" }
         if t.commentCount > 1 { title += " (\(t.commentCount) comments)" }
-        return Evidence(title: title, detail: t.firstComment.body, url: t.firstComment.url)
+        return Evidence(
+            title: title, detail: t.firstComment.body, url: t.firstComment.url, threadState: pr.state(of: t))
     }
 }

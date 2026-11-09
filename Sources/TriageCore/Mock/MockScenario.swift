@@ -32,6 +32,8 @@ public struct MockScenario: Decodable, Sendable {
     public struct Thread: Decodable, Sendable {
         public var resolved: Bool?
         public var outdated: Bool?
+        /// Who resolved it, for a resolved thread.
+        public var resolvedBy: String?
         public var path: String?
         public var line: Int?
         public var author: String
@@ -53,6 +55,8 @@ public struct MockScenario: Decodable, Sendable {
         public var updatedHoursAgo: Double?
         public var headSha: String?
         public var headRef: String?
+        /// Full SHAs of the PR's commits, which a reply names to report a fix.
+        public var commits: [String]?
         public var mergeable: String?
         public var reviewDecision: String?
         public var approvedBy: [String]?
