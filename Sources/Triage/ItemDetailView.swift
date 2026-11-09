@@ -87,26 +87,13 @@ struct ItemDetailView: View {
                 .help("Approve \(item.pr.author)'s PR on \(forgeName) (⇧⌘A)")
             }
             if store.can(.checkout, item.pr) {
-                Menu {
-                    Button("Copy prompt for a chat") { Task { await store.copyExplainPRPrompt(for: item) } }
-                } label: {
-                    Label("Explain PR", systemImage: "text.magnifyingglass")
-                } primaryAction: {
-                    Task { await store.explainPRInTerminal(item) }
-                }
-                .fixedSize()
-                .help(
-                    "Open Claude in iTerm in this PR's worktree to walk you through it (arrow: copy the prompt instead)"
-                )
-                .keyboardShortcut("e", modifiers: [.command, .shift])
-            } else {
-                // No worktree without checkout: the prompt for a chat is what's left.
                 Button {
-                    Task { await store.copyExplainPRPrompt(for: item) }
+                    Task { await store.explainPR(item) }
                 } label: {
                     Label("Explain PR", systemImage: "text.magnifyingglass")
                 }
-                .help("Copy a prompt that walks you through this merge request, for a chat")
+                .disabled(store.explainStatus(item) == .running)
+                .help("Have Workbench write an explanation of this PR as a note and open it in Obsidian")
                 .keyboardShortcut("e", modifiers: [.command, .shift])
             }
             Spacer()
@@ -167,7 +154,40 @@ struct ItemDetailView: View {
     private var viewer: String? { store.viewer(for: item.pr.repo.forge) }
     private var forgeName: String { item.pr.repo.forge.name }
 
+    @ViewBuilder private var explainLine: some View {
+        switch store.explainStatus(item) {
+        case .none:
+            EmptyView()
+        case .running:
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.small)
+                Text("Explaining…").font(.caption).foregroundStyle(.secondary)
+            }
+        case .done(_, let at):
+            explainedButton(at: at, stale: false)
+        case .stale(_, let at):
+            explainedButton(at: at, stale: true)
+        }
+    }
+
+    private func explainedButton(at: Date, stale: Bool) -> some View {
+        let age = at.formatted(.relative(presentation: .named, unitsStyle: .abbreviated))
+        return Button {
+            store.openNote(for: item)
+        } label: {
+            Label(
+                stale ? "Explained · \(age) — older commit, run again" : "Explained · \(age)",
+                systemImage: stale ? "exclamationmark.circle" : "doc.text"
+            )
+            .font(.caption)
+        }
+        .buttonStyle(.link)
+        .foregroundStyle(stale ? Color.orange : Color.accentColor)
+        .help("Open the note")
+    }
+
     @ViewBuilder private var status: some View {
+        explainLine
         if let s = store.actionStatus[item.id] {
             Text(s).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
         }

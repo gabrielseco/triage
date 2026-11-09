@@ -20,6 +20,8 @@ extension AppStore {
         repos = mock.repos
         gitlabHost = mock.gitlabHost ?? ""
         linearEnabled = mock.hasLinear
+        explainRecords = mock.explainRecords
+        explaining = mock.explainRunning
         var seen = seenPRs
         seen.startWatching(mock.allRepos, now: mock.watchingSince)
         seenPRs = seen

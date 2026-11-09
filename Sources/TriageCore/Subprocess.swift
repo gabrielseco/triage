@@ -10,7 +10,10 @@ public enum Subprocess {
         public var trimmedStdout: String { stdout.trimmingCharacters(in: .whitespacesAndNewlines) }
     }
 
-    public static func run(_ executable: String, _ arguments: [String]) async throws -> Output {
+    /// `directory` is where the command runs (default: the app's own).
+    public static func run(
+        _ executable: String, _ arguments: [String], directory: String? = nil
+    ) async throws -> Output {
         try await withCheckedThrowingContinuation { cont in
             // Blocking reads and waitUntilExit run on GCD, not the cooperative pool: GCD adds threads when
             // these block, the pool doesn't, so concurrent calls (op on Touch ID, gh, git) can't starve it.
@@ -18,6 +21,7 @@ public enum Subprocess {
                 let p = Process()
                 p.executableURL = URL(fileURLWithPath: executable)
                 p.arguments = arguments
+                if let directory { p.currentDirectoryURL = URL(fileURLWithPath: directory) }
                 let out = Pipe(), err = Pipe()
                 p.standardOutput = out
                 p.standardError = err

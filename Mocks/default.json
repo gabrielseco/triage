@@ -129,5 +129,10 @@
     }
   ],
   "diff": "diff --git a/src/palette.ts b/src/palette.ts\n--- a/src/palette.ts\n+++ b/src/palette.ts\n@@ -10,3 +10,5 @@ export function open() {\n   show()\n+  bind('mod+k', open)\n+  bind('mod+p', openFiles)\n }\n",
+  "explains": [
+    { "repo": "acme/web", "number": 412, "state": "running" },
+    { "repo": "acme/web", "number": 398, "state": "done", "hoursAgo": 3 },
+    { "repo": "acme/api", "number": 77, "state": "stale", "hoursAgo": 26 }
+  ],
   "ciLog": "build\n> tsc --noEmit\nsrc/CommandPalette.tsx(4,10): error TS2305: Module './hooks' has no exported member 'useShortcut'.\nsrc/CommandPalette.tsx(31,5): error TS2304: Cannot find name 'bind'.\n"
 }

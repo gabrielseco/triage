@@ -10,23 +10,21 @@ struct SettingsView: View {
     @State private var gitlabStatus: String?
     @State private var gitlabFailed = false
 
-    static let harnessHelp = """
-        Runs in a worktree next to your checkout (e.g. ~/remote/remote-flows-pr-1392), in an \
-        interactive zsh so .zshrc functions work. {prompt_file} is the prompt. Examples: \
-        cursor-agent "$(cat {prompt_file})" · gemini "$(cat {prompt_file})"
+    static let explainHelp = """
+        Explain PR runs `workbench explain-pr` in your local clone and writes the note here as \
+        <folder>/<owner>-<repo>-<pr>-<head7>.md. Empty keeps notes in Triage's own folder and shows them in Finder.
         """
 
     var body: some View {
         @Bindable var store = store
         Form {
             Section {
-                TextField("Harness command", text: $store.harnessCommand)
-                    .font(.body.monospaced())
-                Button("Reset to Claude Code") { store.harnessCommand = Handoff.defaultHarnessCommand }
+                TextField("Obsidian vault folder", text: $store.vaultFolder, prompt: Text("~/Documents/Vault"))
+                TextField("Workbench", text: $store.workbenchPath, prompt: Text("Found automatically"))
             } header: {
-                Text("Explain PR in iTerm")
+                Text("Explain PR")
             } footer: {
-                Text(Self.harnessHelp)
+                Text(Self.explainHelp)
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Digest notifications") {
@@ -81,7 +79,7 @@ struct SettingsView: View {
 
     static let gitlabHelp = """
         Merge requests assigned to you or waiting for your review, across your projects. You can approve \
-        and merge them here; close them on GitLab, and Explain PR in iTerm isn't available for them yet. \
+        and merge them here; close them on GitLab, and Explain PR isn't available for them yet. \
         Watching needs the read_api scope; approving and merging need api. Token source is a 1Password \
         secret reference or a helper script that prints the token; it's read once per session, and the \
         Keychain isn't used, so rebuilds don't ask for your password. \

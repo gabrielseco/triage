@@ -40,7 +40,7 @@ requests that cannot show a boundary between "mine" and "others'"), private titl
 | Explain (Anthropic) | `AnthropicClient` | `Explainer`, `MockExplainer` |
 | Secrets (Keychain, 1Password, env, `gh`) | `GitHubAuth`, `GitLabAuth`, `LinearAuth`, `Keychain` | never called |
 | Notifications | `Notifier` | no-op |
-| Fix in iTerm, checkout search, folder picker | `AppStore+Handoff` | a status line only |
+| Explain PR (Workbench), checkout search, folder picker | `AppStore+Explain` | a status line only; the scenario's `explains` list seeds running, done and stale (docs/plans/EXPLAIN.md) |
 | Links | `openURL` | swallowed |
 | Settings and state | `UserDefaults.standard` | `dev.rogal.triage.mock-state`, emptied at start |
 | Network | `URLSession.shared` | a `URLProtocol` that fails every request |

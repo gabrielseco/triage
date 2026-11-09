@@ -15,6 +15,10 @@ public final class MockWorld: Sendable {
     public let allRepos: [RepoRef]
     public let watchingSince: Date
 
+    /// The pull requests (by id) whose Explain PR starts out running, and the finished ones' records.
+    public let explainRunning: Set<String>
+    public let explainRecords: [String: ExplainPR.Record]
+
     private let store: MockStore
     private let linearSource: MockLinear
     private let mentionList: [GitLabMention]
@@ -36,6 +40,25 @@ public final class MockWorld: Sendable {
             throw MockError.invalid("pull request \(dup) is listed twice")
         }
         store = MockStore(pullRequests)
+        var running: Set<String> = []
+        var records: [String: ExplainPR.Record] = [:]
+        for e in scenario.explains ?? [] {
+            let repo = e.repo
+            guard let pr = pullRequests.first(where: { $0.number == e.number && $0.repo.fullName == repo }) else {
+                throw MockError.invalid("explains: \(e.repo)#\(e.number) is not a pull request of the scenario")
+            }
+            switch e.state {
+            case "running": running.insert(pr.id)
+            case "done", "stale":
+                let head = e.state == "done" ? pr.headSha : String(repeating: "d", count: 40)
+                records[pr.id] = ExplainPR.Record(
+                    head: head, note: "/mock/\(ExplainPR.noteName(repo: pr.repo, number: pr.number, head: head))",
+                    at: now.addingTimeInterval(-(e.hoursAgo ?? 2) * 3600))
+            default: throw MockError.invalid("explains: state \"\(e.state)\" is not running, done or stale")
+            }
+        }
+        explainRunning = running
+        explainRecords = records
         allRepos = Array(Set(repos + pullRequests.map(\.repo))).sorted { $0.id < $1.id }
         watchingSince = now.addingTimeInterval(-(scenario.watchingHoursAgo ?? 24) * 3600)
         let pings = scenario.linear ?? []

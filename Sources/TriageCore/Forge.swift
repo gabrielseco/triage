@@ -62,9 +62,9 @@ public struct ForgeCapabilities: OptionSet, Hashable, Sendable {
 
     /// CI logs in fix prompts.
     public static let ciLogs = Self(rawValue: 1 << 0)
-    /// The diff in prompts and Explain PR.
+    /// The diff in prompts.
     public static let diff = Self(rawValue: 1 << 1)
-    /// Handoff checks the branch out into a worktree.
+    /// Explain PR: Workbench checks the branch out, so it needs a GitHub PR with a local clone.
     public static let checkout = Self(rawValue: 1 << 2)
     public static let approve = Self(rawValue: 1 << 3)
     public static let merge = Self(rawValue: 1 << 4)

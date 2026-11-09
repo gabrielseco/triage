@@ -144,30 +144,3 @@ enum LoginItem {
         if enabled { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
     }
 }
-
-enum ITerm {
-    struct ScriptError: LocalizedError {
-        let message: String
-        var errorDescription: String? { message }
-    }
-
-    /// Opens a new iTerm window running `path`. First use shows macOS's "Triage wants to control iTerm" prompt.
-    /// Runs through `osascript` rather than NSAppleScript, which is main-thread only and would freeze the UI
-    /// while iTerm launches or the permission prompt is up. Triage stays the responsible process for the prompt.
-    static func open(runningScript path: String) async throws {
-        let escaped = path.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
-        let source = """
-            tell application "iTerm"
-              activate
-              create window with default profile command "\(escaped)"
-            end tell
-            """
-        let out = try await Subprocess.run("/usr/bin/osascript", ["-e", source])
-        guard out.status == 0 else {
-            let msg = out.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
-            throw ScriptError(
-                message: "\(msg.isEmpty ? "AppleScript error" : msg) — allow Triage under System Settings → "
-                    + "Privacy & Security → Automation → iTerm.")
-        }
-    }
-}
