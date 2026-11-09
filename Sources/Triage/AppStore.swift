@@ -37,9 +37,15 @@ final class AppStore {
     var reviewRequestAlerts: ReviewRequestAlertState { didSet { save(reviewRequestAlerts, "reviewRequestAlerts") } }
     var openMainWindow: (() -> Void)?
 
-    // Explain PR in iTerm: repo full name → local clone, and the harness command template.
+    // Explain PR (docs/plans/EXPLAIN.md): repo id → local clone, where `workbench explain-pr` runs.
     var checkoutPaths: [String: String] { didSet { save(checkoutPaths, "checkoutPaths") } }
-    var harnessCommand: String { didSet { defaults.set(harnessCommand, forKey: "harnessCommand") } }
+    /// The Obsidian vault folder notes are written to; empty keeps them in Triage's folder and reveals them in Finder.
+    var vaultFolder: String { didSet { defaults.set(vaultFolder, forKey: "vaultFolder") } }
+    /// The `workbench` executable; empty looks in the usual places.
+    var workbenchPath: String { didSet { defaults.set(workbenchPath, forKey: "workbenchPath") } }
+    /// PR id → its last finished explanation, and the PRs being explained now.
+    var explainRecords: [String: ExplainPR.Record] { didSet { save(explainRecords, "explainRecords") } }
+    var explaining: Set<String> = []
     /// The GitLab instance whose merge requests (assigned to you or waiting on your review) are shown, e.g.
     /// gitlab.com. Empty means GitLab is off. The token lives in the Keychain, never here.
     var gitlabHost: String {
@@ -131,7 +137,9 @@ final class AppStore {
         seenPRs = Self.load("seenPRs") ?? SeenPRs()
         onlyMine = Self.defaults.bool(forKey: "onlyMine")
         checkoutPaths = Self.load("checkoutPaths") ?? [:]
-        harnessCommand = Self.defaults.string(forKey: "harnessCommand") ?? Handoff.defaultHarnessCommand
+        vaultFolder = Self.defaults.string(forKey: "vaultFolder") ?? ""
+        workbenchPath = Self.defaults.string(forKey: "workbenchPath") ?? ""
+        explainRecords = Self.load("explainRecords") ?? [:]
         gitlabHost = Self.defaults.string(forKey: "gitlabHost") ?? ""
         gitlabTokenRef = Self.defaults.string(forKey: "gitlabTokenRef") ?? ""
         linearKeyRef = Self.defaults.string(forKey: "linearKeyRef") ?? ""

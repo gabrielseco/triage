@@ -124,12 +124,6 @@ private func mr(_ path: String, _ number: Int, host: String = "gitlab.com") thro
     #expect(Forge.github.cli("view", 7) == "gh pr view 7")
 }
 
-@Test func gitlabExplainPromptUsesGlab() throws {
-    let pr = try mr("acme/web", 12)
-    let explain = PromptBuilder.explainPRPrompt(for: pr, diff: nil, inWorktree: true)
-    #expect(explain.contains("`glab mr view 12`"))
-}
-
 @Test func gitlabResultsGroupByProjectWithWarningsOnce() throws {
     let snap = RepoSnapshot(
         pullRequests: [try mr("acme/web", 1), try mr("acme/api", 2), try mr("acme/web", 3)],

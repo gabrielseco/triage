@@ -74,6 +74,15 @@ public struct MockScenario: Decodable, Sendable {
         public var mergeStateStatus: String?
     }
 
+    /// An explanation the app starts out with, since mock mode never runs Workbench: `running`, `done` (for the
+    /// PR's current head) or `stale` (for an older one).
+    public struct Explain: Decodable, Sendable {
+        public var repo: String
+        public var number: Int
+        public var state: String
+        public var hoursAgo: Double?
+    }
+
     public struct Ping: Decodable, Sendable {
         /// `mention` or `reply`.
         public var kind: String
@@ -108,6 +117,7 @@ public struct MockScenario: Decodable, Sendable {
     public var pullRequests: [PRSpec]
     public var linear: [Ping]?
     public var mentions: [Mention]?
+    public var explains: [Explain]?
     /// The diff and the failed check's log any PR returns.
     public var diff: String?
     public var ciLog: String?

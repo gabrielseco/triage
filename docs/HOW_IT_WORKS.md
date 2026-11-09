@@ -22,7 +22,7 @@ Classifier (plain rules, no AI)
         ▼
 ~13 attention items   ──►  you decide: dismiss / snooze / open / approve / merge / explain
         │
-        ├─► "Explain PR" → a walkthrough prompt for an agent in iTerm, or copied for a chat
+        ├─► "Explain PR" → Workbench writes a note, opened in Obsidian
         └─► 12:00 / 18:00 digest notification: "3 new since 12:00"
 ```
 
@@ -31,7 +31,7 @@ Two design rules drive everything:
 1. **The unit is the attention item, not the PR.** A PR is only a container. Five failing jobs on one
    commit are one item; ten comments from one bot are one item.
 2. **Deterministic, no AI inside.** Classification is plain `if` rules, so it's free, instant and
-   testable. Triage makes no AI calls: Explain PR only builds a prompt for your own agent or chat.
+   testable. Triage makes no AI calls: Explain PR runs Workbench, which runs your own agent.
 
 ---
 
@@ -95,12 +95,12 @@ triage/
 │   │   ├── LinearPings.swift      ← notifications → the mentions and replies still waiting on you
 │   │   ├── Classifier.swift       ← PR snapshot → attention items (the rules)
 │   │   ├── CommentText.swift      ← bots' HTML-in-Markdown → readable text
-│   │   ├── PromptBuilder.swift    ← Explain PR prompt: description + diff
+│   │   ├── ExplainPR.swift        ← Explain PR: the `workbench explain-pr` call, the note and its path
 │   │   ├── Keychain.swift         ← the Keychain wrapper for pasted tokens and keys
 │   │   ├── SecretSource.swift     ← keys from 1Password (`op://…`) or a helper script
 │   │   ├── Mock/                  ← mock mode: the scenario file, the fake forge and Linear (§10)
 │   │   ├── Subprocess.swift       ← runs processes off the main actor
-│   │   ├── Handoff.swift          ← Explain PR in iTerm: worktree + prompt + script
+│   │   ├── LocalCheckout.swift    ← finds the local clone Workbench runs in
 │   │   ├── Digest.swift           ← "what's new since last time" + schedule math
 │   │   └── …                      ← ReviewRequestAlerts, PingAlerts, SeenPRs, Merge, CIStatus, PRSummary
 │   └── Triage/                    ← the macOS app (UI + state)
@@ -198,12 +198,11 @@ This works like an Elixir umbrella where `core` doesn't depend on `web`.
  User clicks "Explain PR"
         │
         ▼
- AppStore.explainPRInTerminal(item)  (or copyExplainPRPrompt for a chat)
-   1. buildExplainPRPrompt(pr, inWorktree:)
-        - fetch the PR diff (REST)
-        - (GitLab MRs skip it for now: see docs/plans/GITLAB.md › Still missing)
-        - PromptBuilder.explainPRPrompt(...)  → one string
-   2. the prompt goes to iTerm (an agent in the PR's worktree) or to the clipboard
+ AppStore.explainPR(item)   (AppStore+Explain.swift)
+   1. find `workbench` and the repo's local clone
+   2. ExplainPR.run → `workbench explain-pr --pr <n>` in the clone, off the main actor (Subprocess)
+   3. read the file named on the last stdout line, add the front matter, write the note
+   4. notification, then open the note in Obsidian (or reveal it in Finder)
 ```
 
 ---
@@ -279,7 +278,7 @@ The JSON is decoded into private `Decodable` structs (`PRNode`, `ContextNode`, �
 `toModel()` then converts them into the clean `PullRequest` model. This works like a GraphQL response
 type plus a mapper function, so the rest of the app never sees GitHub's shape.
 
-**REST calls** are made only when building the Explain PR prompt:
+**REST calls** are made only for the diff and CI logs a fix prompt needs:
 
 | Call | Used for |
 |---|---|
@@ -391,22 +390,11 @@ The classifier doesn't know which forge a PR came from. It gets the viewer for t
 login or your GitLab username), and the forge-specific work (system notes, pipeline checks, review state) is
 done in the mapping, so the same rules and ids work for both.
 
-### 6.6 Prompt builder (`PromptBuilder.swift`)
+### 6.6 Explain PR (`ExplainPR.swift`)
 
-Builds the **Explain PR** prompt: one string, so whoever reads it (an agent or a chat) doesn't need to fetch
-anything. It's read-only, so it never asks for edits.
-
-```
-Explain PR #1392 in remoteoss/remote-flows to me: "chore(deps-dev): update dependency jsdom…"
-Author · branch · head sha · url
-
-## Description (summary)                     ← when the PR has one
-## PR diff (first 60000 of N characters)     ← labelled when clipped
-## Task                                      ← what it does, a walkthrough, risks, what to ask before approving
-```
-
-`inWorktree` changes the task: in iTerm the agent is already in the PR's worktree and may read the code and
-run `gh pr view`; for a chat it works from the description and diff only.
+Runs `workbench explain-pr --pr <n>` in the repo's local clone, adds front matter (`pr`, `head`, `generated`) to the
+Markdown it produced and writes `<vault>/<owner>-<repo>-<pr>-<head7>.md`. The contract with Workbench, the note
+and the Obsidian link are in `docs/plans/EXPLAIN.md`.
 
 ### 6.7 Digest (`Digest.swift`)
 
@@ -421,22 +409,11 @@ Two pure functions:
 
 ---
 
-### 6.8 Explain PR in iTerm (`Handoff.swift`)
+### 6.8 Local checkout (`LocalCheckout.swift`)
 
-Hands a PR to a coding agent (your "harness") in a terminal, in its **own git worktree per PR**. That way
-several agents can work on different PRs in parallel without touching your main checkout.
-
-1. **Find the local clone** by looking for `<root>/<repo name>` in `~/remote`, `~/rogal`, `~/code`, … whose
-   `origin` points at the repo. It's remembered per repo. Override it by right-clicking the repo in the
-   sidebar → *Set local checkout…*.
-2. **Write the prompt** (the Explain PR prompt, `inWorktree: true`) and a zsh script to `~/Library/Caches/dev.rogal.triage/handoffs/`.
-3. **Open iTerm** (AppleScript) running that script. The script:
-   - reuses `<checkout>-pr-<N>` (e.g. `~/remote/remote-flows-pr-1392`) if it exists;
-   - otherwise, if the branch is already checked out somewhere (e.g. your main checkout), uses that;
-   - otherwise runs `git fetch origin <branch>` + `git worktree add`; for forks, it uses `gh pr checkout`;
-   - runs `git pull --ff-only`, then your **harness command**, then leaves an interactive shell open.
-4. The script runs in an **interactive zsh**, so `.zshrc` functions work. In particular, your `claude` wrapper
-   switches to the *work* account automatically because the worktree is under `~/remote`.
+Workbench runs inside a clone of the repo. Triage finds it by looking for `<root>/<repo name>` in `~/remote`,
+`~/rogal`, `~/code`, … whose `origin` points at the repo, and remembers it per repo. Override it by right-clicking the
+repo in the sidebar → *Set local checkout…*.
 
 The harness command is a template in Settings, `claude "$(cat {prompt_file})"` by default. Swap it for
 `cursor-agent "$(cat {prompt_file})"`, `gemini "$(cat {prompt_file})"`, etc.
@@ -487,7 +464,7 @@ the environment. It holds:
     feed the sidebar counts and the menu bar's `@N`.
   - `viewer(for: forge)` and `can(capability, pr)`: who you are on a PR's forge, and what Triage may do.
 - **Actions**: `refresh`, `addRepo`, `removeRepo`, `dismiss`, `snooze`, `dismissPing` / `snoozePing` (a
-  Linear ping or GitLab mention, by id), `restoreHidden`, `explainPRInTerminal`, `copyExplainPRPrompt`, `sendDigestIfDue`,
+  Linear ping or GitLab mention, by id), `restoreHidden`, `explainPR`, `openNote`, `sendDigestIfDue`,
   `sendDigest`, `showMainWindow`, `saveGitLabToken`. PR actions (approve,
   merge, close) go through `forgeClient(_:repos:)` (`AppStore+Forge.swift`).
 
@@ -504,7 +481,7 @@ the environment. It holds:
   waiting on your reply", so they share views, Dismiss and Snooze.
 - **`ItemDetailView`**: header, action buttons with keyboard shortcuts, and evidence cards. Markdown in comments is rendered inline, comments after
   `CommentText.readable`. Buttons the PR's forge can't do are hidden: for a GitLab MR that's Close
-  (Approve and Merge work), and Explain PR copies a prompt instead of opening iTerm. **Merge**
+  (Approve and Merge work), and Explain PR is hidden. **Merge**
   isn't a button: it lives in the Open menu (and the Pull Request menu in the menu bar), on every PR in a repo
   you can write to, as one entry per method the repo allows (`pr.mergeMethods`), the default first: "Create a
   merge commit…", "Squash and merge…", "Rebase and merge…" on GitHub, "Merge…" and "Squash and merge…" on
@@ -643,7 +620,7 @@ project; SwiftPM + a shell script is enough for a personal tool.
 | Every 30 s, Linear on | 1 notifications query | Free |
 | Approve (GitLab) | 1 REST `POST …/approve` | Free |
 | Merge (GitLab) | 1 REST `PUT …/merge` | Free |
-| Explain PR | 1 diff fetch | Free; no AI call (prompt up to ~60KB of diff) |
+| Explain PR | None from Triage | Whatever Workbench's review agent costs |
 | Digest | Nothing extra (uses the latest refresh) | Free |
 
 ---
@@ -661,7 +638,7 @@ project; SwiftPM + a shell script is enough for a personal tool.
 - **Timing:** macOS may delay a sleeping app's timers (App Nap), so a digest can arrive a few minutes
   late.
 - **No in-app AI.** Triage makes no AI calls; "Fix it" (an agent that pushes a commit) doesn't exist yet.
-- **GitLab can only approve and merge.** No diff in the Explain PR prompt, no iTerm, no close, no
+- **GitLab can only approve and merge.** No Explain PR, no close, no
   auto-merge when the pipeline succeeds, no rebase-and-merge. Each is
   written up, with how to build it, in `docs/plans/GITLAB.md` › Still missing.
 - **A mention counts as answered only by a reply in its thread.** A reply elsewhere (another thread, Slack)

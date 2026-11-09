@@ -6,7 +6,7 @@ threads into a short list of things that actually need you, and lets you approve
 ```bash
 scripts/setup-signing.sh  # one-time: stable signing identity so Keychain "Always Allow" survives rebuilds
 scripts/bundle.sh    # build ~/Applications/Triage.app (the `triage` zsh function does this + launches)
-swift test           # classifier, prompt builder, digest
+swift test           # classifier, Explain PR, digest
 ```
 
 `swift run Triage` works for quick UI iteration, but notifications and "open at login" need the bundle.
@@ -45,8 +45,8 @@ Full walkthrough (with Swift ↔ React/TS/Elixir mappings): [docs/HOW_IT_WORKS.m
   checks on a head sha are one item, all findings from one bot are one item. Noise bots (coverage,
   deploy previews, dependabot…) are counted and muted. Item ids include the head sha / latest comment,
   so dismissing is sticky until something new happens.
-- **PromptBuilder** — assembles the PR description + diff into the Explain PR prompt, for an agent in iTerm
-  or a chat. Triage makes no AI calls itself.
+- **ExplainPR** — runs `workbench explain-pr`, writes the note and opens it in Obsidian (`docs/plans/EXPLAIN.md`).
+  Triage makes no AI calls itself.
 
 ## Next: Phoenix backend (multi-tenant)
 
