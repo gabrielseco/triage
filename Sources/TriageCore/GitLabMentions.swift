@@ -57,11 +57,11 @@ public enum GitLabMentions {
     /// Mentions older than this are dropped, as for Linear pings.
     public static let window: TimeInterval = 30 * 24 * 3600
 
-    /// The mentions still waiting on you, newest first: from a person, not yourself, on an open MR or issue,
-    /// within the window, and with no reply from you in the thread since.
+    /// The mentions still waiting on you, newest first: from a person or a bot (automation that cc's you is still
+    /// a ping), not yourself, on an open MR or issue, within the window, and with no reply from you in the thread since.
     public static func waiting(_ mentions: [GitLabMention], viewer: String, now: Date) -> [GitLabMention] {
         mentions.filter { m in
-            !m.isBot && m.author != viewer && m.targetOpen && now.timeIntervalSince(m.createdAt) < window
+            m.author != viewer && m.targetOpen && now.timeIntervalSince(m.createdAt) < window
                 && !m.thread.contains { $0.author == viewer && $0.createdAt > m.createdAt }
         }
         .sorted { $0.createdAt > $1.createdAt }
@@ -156,7 +156,7 @@ struct MentionsData: Decodable {
 
 // MARK: - Notifications
 
-/// A banner per new mention from a person; more than a few at once become one summary.
+/// A banner per new mention, from a person or a bot; more than a few at once become one summary.
 public enum MentionAlert: Hashable, Sendable {
     case new(GitLabMention)
     case summary(count: Int, newest: GitLabMention)
@@ -213,8 +213,8 @@ public enum MentionAlerts {
         next.started = true
         guard state.started else { return ([], next) }
 
-        // Bots (review bots quoting you) and your own mentions of yourself aren't pings.
-        let fresh = mentions.filter { !state.seen.contains($0.id) && !$0.isBot && $0.author != viewer }
+        // Bots that mention you are pings too; only your own mentions of yourself aren't.
+        let fresh = mentions.filter { !state.seen.contains($0.id) && $0.author != viewer }
         if fresh.count > summaryThreshold, let newest = fresh.max(by: { $0.createdAt < $1.createdAt }) {
             return ([.summary(count: fresh.count, newest: newest)], next)
         }

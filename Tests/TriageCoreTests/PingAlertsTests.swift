@@ -22,6 +22,23 @@ private var started: PingAlertState {
 }
 
 @Suite struct PingAlertsTests {
+    @Test func botMentionDeduplication() {
+        func bot(_ n: Int) -> GitLabMention {
+            GitLabMention(
+                id: "gitlab-mention:\(n)", author: "Voyager", isBot: true, target: "web !1", targetTitle: "T",
+                url: URL(string: "https://gitlab.com/x#note_\(n)")!, excerpt: "cc @me", createdAt: t0)
+        }
+        let (_, s1) = MentionAlerts.plan([], viewer: "me", state: MentionAlertState())
+        let first = MentionAlerts.plan([bot(1)], viewer: "me", state: s1)
+        #expect(first.alerts == [.new(bot(1))])
+        // Polling again, with or without a newer mention, never repeats it.
+        let again = MentionAlerts.plan([bot(1)], viewer: "me", state: first.state)
+        #expect(again.alerts.isEmpty)
+        let next = MentionAlerts.plan([bot(2), bot(1)], viewer: "me", state: again.state)
+        #expect(next.alerts == [.new(bot(2))])
+        #expect(MentionAlerts.plan([bot(2), bot(1)], viewer: "me", state: next.state).alerts.isEmpty)
+    }
+
     @Test func firstRunRecordsWhatIsThereWithoutBanners() {
         let (alerts, state) = PingAlerts.plan(
             open: [ping(1), ping(2)], active: [ping(1), ping(2)], state: .init(), now: t0)

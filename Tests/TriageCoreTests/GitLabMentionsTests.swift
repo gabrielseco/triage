@@ -88,11 +88,11 @@ private func mention(_ n: Int, by author: String = "rita", bot: Bool = false) ->
     #expect(MentionAlerts.plan([mention(2), mention(1)], viewer: "me", state: s2).alerts.isEmpty)
 }
 
-@Test func botsAndYourselfDontNotify() {
+@Test func yourselfDoesntNotify() {
     let (_, s1) = MentionAlerts.plan([], viewer: "me", state: MentionAlertState())
-    let (alerts, s2) = MentionAlerts.plan([mention(1, bot: true), mention(2, by: "me")], viewer: "me", state: s1)
+    let (alerts, s2) = MentionAlerts.plan([mention(2, by: "me")], viewer: "me", state: s1)
     #expect(alerts.isEmpty)
-    #expect(s2.seen == ["t1", "t2"])
+    #expect(s2.seen == ["t2"])
 }
 
 @Test func mentionsThatFellOffThePageAreForgotten() {
@@ -130,7 +130,7 @@ private func pinged(
 @Test func onlyMentionsWaitingOnMeAreListedNewestFirst() {
     let mentions = [
         pinged("old", daysAgo: 3), pinged("new", daysAgo: 1),
-        pinged("bot", bot: true), pinged("self", by: "me"), pinged("merged", open: false),
+        pinged("self", by: "me"), pinged("merged", open: false),
         pinged("stale", daysAgo: 31),
         pinged("answered", daysAgo: 2, thread: [.init(author: "me", createdAt: at(1))]),
     ]
@@ -138,6 +138,47 @@ private func pinged(
         GitLabMentions.waiting(mentions, viewer: "me", now: now).map(\.id) == [
             "gitlab-mention:new", "gitlab-mention:old",
         ])
+}
+
+/// A service account's cc, as in the report: GitLab's to-do for it, from a bot author.
+private let botTodoJSON = """
+    {"data": {"currentUser": {"todos": {"nodes": [
+      {"id": "gid://gitlab/Todo/9", "createdAt": "2026-09-29T19:43:05Z", "body": "cc @me",
+       "targetUrl": "https://gitlab.com/acme/web/-/merge_requests/5",
+       "author": {"username": "service_account_group_1_ab", "name": "Voyager", "bot": true},
+       "note": {"url": "https://gitlab.com/acme/web/-/merge_requests/5#note_7", "body": "Breaking change. cc @me"},
+       "target": {"__typename": "MergeRequest", "state": "opened", "reference": "acme/web!5", "title": "Schema"}}
+    ]}}}}
+    """
+
+@Suite struct GitLabMentionsTests {
+    @Test func botAuthoredMention() throws {
+        let d: MentionsData = try GitLabClient.decode(Data(botTodoJSON.utf8))
+        let all = d.mentions()
+        #expect(all.count == 1 && all[0].isBot && all[0].author == "Voyager")
+        let day = all[0].createdAt.addingTimeInterval(24 * 3600)
+        #expect(GitLabMentions.waiting(all, viewer: "me", now: day) == all)
+
+        let (_, s1) = MentionAlerts.plan([], viewer: "me", state: MentionAlertState())
+        let (alerts, _) = MentionAlerts.plan(all, viewer: "me", state: s1)
+        #expect(alerts == [.new(all[0])])
+        #expect(alerts[0].title == "Voyager mentioned you")
+    }
+
+    @Test func mentionFiltering() {
+        let (_, s1) = MentionAlerts.plan([], viewer: "me", state: MentionAlertState())
+        // Yourself is still no ping, bot or not; a person's mention still is one.
+        let mine = [mention(1, by: "me", bot: true), mention(2, by: "me")]
+        #expect(MentionAlerts.plan(mine, viewer: "me", state: s1).alerts.isEmpty)
+        #expect(MentionAlerts.plan([mention(3)], viewer: "me", state: s1).alerts == [.new(mention(3))])
+        // Closed or answered ones are not waiting, whoever wrote them.
+        let list = [
+            pinged("bot", bot: true), pinged("closed", open: false, bot: true),
+            pinged("answered", bot: true, thread: [.init(author: "me", createdAt: at(0.5))]),
+            pinged("self", by: "me", bot: true),
+        ]
+        #expect(GitLabMentions.waiting(list, viewer: "me", now: now).map(\.id) == ["gitlab-mention:bot"])
+    }
 }
 
 @Test func aReplyBeforeTheMentionDoesntAnswerIt() {
