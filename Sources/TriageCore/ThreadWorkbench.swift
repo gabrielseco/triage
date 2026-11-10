@@ -100,8 +100,9 @@ public enum ThreadWorkbenchError: LocalizedError, Equatable {
     }
 }
 
-/// The real thing: `workbench explain-thread --pr <n> --thread <id>`, run in the local clone. It prints one JSON object,
-/// `{"reasoning", "proposed_fix"}` and, when it knows, `"head"`: the commit it analysed.
+/// The real thing: `workbench explain-thread --pr <n> --thread <id>`, run in the local clone. It prints progress lines,
+/// then as its last line one JSON object, `{"reasoning", "proposed_fix"}` and, when it knows, `"head_sha"`: the commit
+/// it analysed (docs/plan/explain-thread.md in Workbench).
 public struct CLIThreadWorkbench: ThreadWorkbench {
     public var workbench: String
     public var checkout: String
@@ -142,9 +143,11 @@ public struct CLIThreadWorkbench: ThreadWorkbench {
             let reasoning: String
             let proposedFix: String
             let head: String?
-            enum CodingKeys: String, CodingKey { case reasoning, proposedFix = "proposed_fix", head }
+            enum CodingKeys: String, CodingKey { case reasoning, proposedFix = "proposed_fix", head = "head_sha" }
         }
-        guard let p = try? JSONDecoder().decode(Payload.self, from: Data(out.utf8)),
+        // The contract: the object is the last line, after any progress lines.
+        let last = out.split(whereSeparator: \.isNewline).last.map(String.init) ?? out
+        guard let p = try? JSONDecoder().decode(Payload.self, from: Data(last.utf8)),
             !p.reasoning.isEmpty, !p.proposedFix.isEmpty
         else { throw ThreadWorkbenchError.unreadable(out) }
         // `head` is optional; one that isn't a commit SHA is ignored rather than trusted.

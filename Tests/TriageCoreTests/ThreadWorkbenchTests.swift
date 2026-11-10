@@ -53,10 +53,17 @@ private func ref(_ pr: PullRequest, _ id: String) -> ThreadRef {
         let e = try CLIThreadWorkbench.parseExplanation(#"{"reasoning":"R","proposed_fix":"F"}"#)
         #expect(e == ThreadExplanation(reasoning: "R", proposedFix: "F"))
         let withHead = try CLIThreadWorkbench.parseExplanation(
-            #"{"reasoning":"R","proposed_fix":"F","head":"ABCDEF1234"}"#)
+            #"{"reasoning":"R","proposed_fix":"F","head_sha":"ABCDEF1234"}"#)
         #expect(withHead.head == "abcdef1234")
         #expect(
-            try CLIThreadWorkbench.parseExplanation(#"{"reasoning":"R","proposed_fix":"F","head":"nope"}"#).head == nil)
+            try CLIThreadWorkbench.parseExplanation(#"{"reasoning":"R","proposed_fix":"F","head_sha":"nope"}"#).head
+                == nil)
+        // Progress lines come first, the object is the last line.
+        let sha = String(repeating: "a", count: 40)
+        let afterProgress = try CLIThreadWorkbench.parseExplanation(
+            "asking Claude to explain a review thread (read-only)...\n"
+                + #"{"head_sha":"\#(sha)","pr":1,"proposed_fix":"F","reasoning":"R","thread":"PRRT_x"}"# + "\n")
+        #expect(afterProgress == ThreadExplanation(reasoning: "R", proposedFix: "F", head: sha))
         #expect(throws: ThreadWorkbenchError.self) { try CLIThreadWorkbench.parseExplanation("nope") }
         #expect(throws: ThreadWorkbenchError.self) {
             try CLIThreadWorkbench.parseExplanation(#"{"reasoning":"","proposed_fix":"F"}"#)
