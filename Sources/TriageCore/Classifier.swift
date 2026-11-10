@@ -290,6 +290,7 @@ public enum Classifier {
         if let path = t.path { title += " on \(path)\(t.line.map { ":\($0)" } ?? "")" }
         if t.commentCount > 1 { title += " (\(t.commentCount) comments)" }
         return Evidence(
-            title: title, detail: t.firstComment.body, url: t.firstComment.url, threadState: pr.state(of: t))
+            title: title, detail: t.firstComment.body, url: t.firstComment.url, threadState: pr.state(of: t),
+            threadID: t.id)
     }
 }

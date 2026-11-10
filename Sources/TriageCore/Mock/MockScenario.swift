@@ -30,6 +30,8 @@ public struct MockScenario: Decodable, Sendable {
     }
 
     public struct Thread: Decodable, Sendable {
+        /// Names the thread for `threadExplanations`; defaults to `<repo>#<number>/thread-<position>`.
+        public var id: String?
         public var resolved: Bool?
         public var outdated: Bool?
         /// Who resolved it, for a resolved thread.
@@ -83,6 +85,16 @@ public struct MockScenario: Decodable, Sendable {
         public var hoursAgo: Double?
     }
 
+    /// A thread explanation the app starts out with, since mock mode never runs the real Workbench: `done` (for the
+    /// PR's current head) or `stale` (for an older one).
+    public struct ThreadExplanation: Decodable, Sendable {
+        public var thread: String
+        public var state: String
+        public var reasoning: String
+        public var proposedFix: String
+        public var hoursAgo: Double?
+    }
+
     public struct Ping: Decodable, Sendable {
         /// `mention` or `reply`.
         public var kind: String
@@ -118,6 +130,7 @@ public struct MockScenario: Decodable, Sendable {
     public var linear: [Ping]?
     public var mentions: [Mention]?
     public var explains: [Explain]?
+    public var threadExplanations: [ThreadExplanation]?
     /// The diff and the failed check's log any PR returns.
     public var diff: String?
     public var ciLog: String?

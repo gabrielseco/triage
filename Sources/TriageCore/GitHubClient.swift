@@ -191,7 +191,7 @@ public struct GitHubClient: Sendable {
                 } } } } } }
                 allCommits: commits(last: 100) { nodes { commit { oid } } }
                 reviewThreads(last: 50) { totalCount nodes {
-                  isResolved isOutdated path line resolvedBy { login }
+                  id isResolved isOutdated path line resolvedBy { login }
                   comments(first: 30) { totalCount nodes { author { login __typename } body url createdAt } }
                 } }
                 comments(last: 20) { nodes { author { login __typename } body url createdAt } }
@@ -315,6 +315,7 @@ struct PRNode: Decodable {
     }
     struct ThreadNode: Decodable {
         struct Comments: Decodable { let totalCount: Int; let nodes: [CommentNode] }
+        let id: String?
         let isResolved: Bool, isOutdated: Bool, path: String?, line: Int?
         let resolvedBy: ActorNode?
         let comments: Comments
@@ -364,7 +365,7 @@ struct PRNode: Decodable {
                 isResolved: t.isResolved, isOutdated: t.isOutdated, resolvedBy: t.resolvedBy?.login, path: t.path,
                 line: t.line,
                 firstComment: first.model, commentCount: t.comments.totalCount,
-                replies: t.comments.nodes.dropFirst().map(\.model))
+                replies: t.comments.nodes.dropFirst().map(\.model), id: t.id)
         }
         return PullRequest(
             repo: repo, number: number, title: title, url: url, author: author?.login ?? "ghost",

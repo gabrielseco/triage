@@ -14,7 +14,7 @@ struct ItemDetailView: View {
                 status
                 Divider()
                 Text("Evidence").font(.headline)
-                ForEach(item.evidence, id: \.self) { EvidenceCard(evidence: $0) }
+                ForEach(item.evidence, id: \.self) { EvidenceCard(evidence: $0, item: item) }
             }
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -195,7 +195,9 @@ struct ItemDetailView: View {
 }
 
 struct EvidenceCard: View {
+    @Environment(AppStore.self) private var store
     let evidence: Evidence
+    let item: AttentionItem
 
     private var isResolved: Bool {
         if case .resolved = evidence.threadState { true } else { false }
@@ -215,6 +217,9 @@ struct EvidenceCard: View {
                 Text(markdown(String(CommentText.readable(d).prefix(1500)))).font(.callout).foregroundStyle(.secondary)
                     .textSelection(
                         .enabled)
+            }
+            if let id = evidence.threadID, let state = evidence.threadState, store.canWorkOnThreads(item.pr) {
+                ThreadActionsView(threadID: id, state: state, item: item)
             }
         }
         .padding(10)

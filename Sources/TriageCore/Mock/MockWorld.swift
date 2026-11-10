@@ -18,6 +18,8 @@ public final class MockWorld: Sendable {
     /// The pull requests (by id) whose Explain PR starts out running, and the finished ones' records.
     public let explainRunning: Set<String>
     public let explainRecords: [String: ExplainPR.Record]
+    /// The thread explanations the app starts out with.
+    public let threadTriage: ThreadTriage
 
     private let store: MockStore
     private let linearSource: MockLinear
@@ -57,6 +59,7 @@ public final class MockWorld: Sendable {
             default: throw MockError.invalid("explains: state \"\(e.state)\" is not running, done or stale")
             }
         }
+        threadTriage = try Self.threadTriage(scenario, pullRequests, now: now)
         explainRunning = running
         explainRecords = records
         allRepos = Array(Set(repos + pullRequests.map(\.repo))).sorted { $0.id < $1.id }
@@ -66,6 +69,25 @@ public final class MockWorld: Sendable {
         linearSource = MockLinear(
             notifications: try pings.enumerated().map { try Self.notification($1, index: $0, now: now) })
         mentionList = (scenario.mentions ?? []).map { Self.mention($0, now: now) }
+    }
+
+    /// The thread explanations the scenario starts the app with.
+    static func threadTriage(_ scenario: MockScenario, _ prs: [PullRequest], now: Date) throws -> ThreadTriage {
+        var triage = ThreadTriage()
+        for e in scenario.threadExplanations ?? [] {
+            guard let pr = prs.first(where: { $0.threads.contains { $0.id == e.thread } }) else {
+                throw MockError.invalid("threadExplanations: \(e.thread) is not a thread of the scenario")
+            }
+            guard e.state == "done" || e.state == "stale" else {
+                throw MockError.invalid("threadExplanations: state \"\(e.state)\" is not done or stale")
+            }
+            let head = e.state == "done" ? pr.headSha : String(repeating: "d", count: 40)
+            triage.store(
+                ThreadExplanation(reasoning: e.reasoning, proposedFix: e.proposedFix),
+                for: ThreadRef(repo: pr.repo, number: pr.number, threadID: e.thread, head: head),
+                at: now.addingTimeInterval(-(e.hoursAgo ?? 2) * 3600))
+        }
+        return triage
     }
 
     /// The client for `forge`. A forge the scenario does not describe is an error, never a real client.
@@ -84,6 +106,9 @@ public final class MockWorld: Sendable {
     }
 
     public func linear() -> any LinearSource { linearSource }
+
+    /// A Workbench that runs nothing: its explanations are made up.
+    public func threadWorkbench() -> any ThreadWorkbench { MockThreadWorkbench() }
 }
 
 // MARK: - The fake forge
@@ -206,14 +231,8 @@ extension MockWorld {
                     name: c.name, state: try pick(c.state, .neutral, "check state"),
                     checkRunID: c.checkRunID, summary: c.summary)
             },
-            threads: (p.threads ?? []).map { t in
-                let first = CommentInfo(
-                    author: t.author, isBot: t.isBot ?? false, body: t.body, createdAt: ago(t.hoursAgo))
-                let replies = (t.replies ?? []).map { comment($0, now: now) }
-                return ReviewThreadInfo(
-                    isResolved: t.resolved ?? false, isOutdated: t.outdated ?? false, resolvedBy: t.resolvedBy,
-                    path: t.path, line: t.line,
-                    firstComment: first, commentCount: 1 + replies.count, replies: replies)
+            threads: (p.threads ?? []).enumerated().map {
+                thread($1, id: $1.id ?? "\(repo.fullName)#\(p.number)/thread-\($0 + 1)", now: now)
             },
             comments: (p.comments ?? []).map { comment($0, now: now) }, commitShas: p.commits ?? [], summary: p.summary,
             mergeMethod: try pick(p.mergeMethod, .merge, "mergeMethod"),
@@ -221,6 +240,16 @@ extension MockWorld {
                 ?? Set(MergeMethod.allCases),
             viewerCanMerge: p.viewerCanMerge ?? true,
             mergeState: try pick(p.mergeStateStatus, .unknown, "mergeStateStatus"))
+    }
+
+    private static func thread(_ t: MockScenario.Thread, id: String, now: Date) -> ReviewThreadInfo {
+        let first = CommentInfo(
+            author: t.author, isBot: t.isBot ?? false, body: t.body,
+            createdAt: now.addingTimeInterval(-(t.hoursAgo ?? 0) * 3600))
+        let replies = (t.replies ?? []).map { comment($0, now: now) }
+        return ReviewThreadInfo(
+            isResolved: t.resolved ?? false, isOutdated: t.outdated ?? false, resolvedBy: t.resolvedBy,
+            path: t.path, line: t.line, firstComment: first, commentCount: 1 + replies.count, replies: replies, id: id)
     }
 
     private static func comment(_ c: MockScenario.Comment, now: Date) -> CommentInfo {
