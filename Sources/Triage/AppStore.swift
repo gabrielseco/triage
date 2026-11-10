@@ -46,6 +46,10 @@ final class AppStore {
     /// PR id → its last finished explanation, and the PRs being explained now.
     var explainRecords: [String: ExplainPR.Record] { didSet { save(explainRecords, "explainRecords") } }
     var explaining: Set<String> = []
+    /// Explanations of review threads (by thread id and head) and the threads dismissed as false positives.
+    var threadTriage: ThreadTriage { didSet { save(threadTriage, "threadTriage") } }
+    /// Thread ids with an explain, fix or resolve in flight, and what each last said.
+    var threadProgress = ThreadProgress()
     /// The GitLab instance whose merge requests (assigned to you or waiting on your review) are shown, e.g.
     /// gitlab.com. Empty means GitLab is off. The token lives in the Keychain, never here.
     var gitlabHost: String {
@@ -140,6 +144,7 @@ final class AppStore {
         vaultFolder = Self.defaults.string(forKey: "vaultFolder") ?? ""
         workbenchPath = Self.defaults.string(forKey: "workbenchPath") ?? ""
         explainRecords = Self.load("explainRecords") ?? [:]
+        threadTriage = Self.load("threadTriage") ?? ThreadTriage()
         gitlabHost = Self.defaults.string(forKey: "gitlabHost") ?? ""
         gitlabTokenRef = Self.defaults.string(forKey: "gitlabTokenRef") ?? ""
         linearKeyRef = Self.defaults.string(forKey: "linearKeyRef") ?? ""

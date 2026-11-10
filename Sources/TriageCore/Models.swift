@@ -119,6 +119,8 @@ public struct CommentInfo: Hashable, Sendable {
 }
 
 public struct ReviewThreadInfo: Hashable, Sendable {
+    /// The forge's id for the thread (GitHub's node id), which actions on it need. Nil when the forge gives none.
+    public var id: String?
     public var isResolved: Bool
     public var isOutdated: Bool
     /// Login of whoever resolved the thread, when it is resolved and the forge says who.
@@ -132,8 +134,9 @@ public struct ReviewThreadInfo: Hashable, Sendable {
 
     public init(
         isResolved: Bool, isOutdated: Bool = false, resolvedBy: String? = nil, path: String? = nil, line: Int? = nil,
-        firstComment: CommentInfo, commentCount: Int = 1, replies: [CommentInfo] = []
+        firstComment: CommentInfo, commentCount: Int = 1, replies: [CommentInfo] = [], id: String? = nil
     ) {
+        self.id = id
         self.isResolved = isResolved
         self.isOutdated = isOutdated
         self.resolvedBy = resolvedBy
@@ -310,10 +313,14 @@ public struct Evidence: Hashable, Sendable {
     public var checkRunID: Int?
     /// For a review thread: where it stands. Nil for anything else.
     public var threadState: ThreadState?
+    /// For a review thread: its forge id, so the thread can be explained, fixed or resolved.
+    public var threadID: String?
 
     public init(
-        title: String, detail: String? = nil, url: URL? = nil, checkRunID: Int? = nil, threadState: ThreadState? = nil
+        title: String, detail: String? = nil, url: URL? = nil, checkRunID: Int? = nil, threadState: ThreadState? = nil,
+        threadID: String? = nil
     ) {
+        self.threadID = threadID
         self.title = title
         self.detail = detail
         self.url = url

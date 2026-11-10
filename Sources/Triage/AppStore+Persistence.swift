@@ -22,6 +22,7 @@ extension AppStore {
         linearEnabled = mock.hasLinear
         explainRecords = mock.explainRecords
         explaining = mock.explainRunning
+        threadTriage = mock.threadTriage
         var seen = seenPRs
         seen.startWatching(mock.allRepos, now: mock.watchingSince)
         seenPRs = seen

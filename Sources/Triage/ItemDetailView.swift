@@ -14,7 +14,7 @@ struct ItemDetailView: View {
                 status
                 Divider()
                 Text("Evidence").font(.headline)
-                ForEach(item.evidence, id: \.self) { EvidenceCard(evidence: $0) }
+                ForEach(item.evidence, id: \.self) { EvidenceCard(evidence: $0, item: item) }
             }
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -195,10 +195,17 @@ struct ItemDetailView: View {
 }
 
 struct EvidenceCard: View {
+    @Environment(AppStore.self) private var store
     let evidence: Evidence
+    let item: AttentionItem
+
+    /// What the thread shows: the forge's state, or "False positive" for an open thread you dismissed.
+    private var state: ThreadState? {
+        evidence.threadID.flatMap { store.threadState($0, in: item) } ?? evidence.threadState
+    }
 
     private var isResolved: Bool {
-        if case .resolved = evidence.threadState { true } else { false }
+        if case .resolved = state { true } else { false }
     }
 
     var body: some View {
@@ -206,7 +213,7 @@ struct EvidenceCard: View {
             HStack {
                 Text(evidence.title).font(.subheadline.weight(.semibold))
                     .foregroundStyle(isResolved ? .secondary : .primary)
-                if let state = evidence.threadState { ThreadStatePill(state: state) }
+                if let state { ThreadStatePill(state: state) }
                 Spacer()
                 if let url = evidence.url { Link(destination: url) { Image(systemName: "arrow.up.right.square") } }
             }
@@ -215,6 +222,9 @@ struct EvidenceCard: View {
                 Text(markdown(String(CommentText.readable(d).prefix(1500)))).font(.callout).foregroundStyle(.secondary)
                     .textSelection(
                         .enabled)
+            }
+            if let id = evidence.threadID, let state, store.canWorkOnThreads(item.pr) {
+                ThreadActionsView(threadID: id, state: state, item: item)
             }
         }
         .padding(10)
@@ -240,6 +250,7 @@ struct ThreadStatePill: View {
     private var symbol: String {
         switch state {
         case .fixReported: "hammer.fill"
+        case .falsePositive: "hand.thumbsdown.fill"
         case .resolved, .open: "checkmark.circle.fill"
         }
     }
@@ -247,7 +258,7 @@ struct ThreadStatePill: View {
     private var color: Color {
         switch state {
         case .fixReported: .green
-        case .resolved, .open: .secondary
+        case .falsePositive, .resolved, .open: .secondary
         }
     }
 }
