@@ -223,7 +223,7 @@ private func decodePR() throws -> PullRequest {
     #expect(GitHubClient.prQuery.contains("resolvedBy { login }"))
     #expect(
         GitHubClient.prQuery.contains(
-            "comments(first: 30) { totalCount nodes { author { login __typename } body url createdAt } }"))
+            "comments(last: 30) { totalCount nodes { author { login __typename } body url createdAt } }"))
     #expect(GitHubClient.prQuery.contains("allCommits: commits(last: 100) { nodes { commit { oid } } }"))
 
     let json = String(decoding: truncated, as: UTF8.self)
@@ -248,6 +248,19 @@ private func decodePR() throws -> PullRequest {
     #expect(thread.comments.map(\.isBot) == [true, false])
     #expect(thread.comments[1].createdAt == ISO8601DateFormatter().date(from: "2026-09-25T12:00:00Z"))
     #expect(pr.commitShas == ["c1", "abc"])
+
+    // A long thread: `comments` holds only the newest replies, the opening comment comes from `opening`.
+    let long = json.replacingOccurrences(
+        of: #""comments": {"totalCount": 2, "nodes": ["#,
+        with: """
+            "opening": {"nodes": [
+              {"author": {"login": "cursor[bot]", "__typename": "Bot"}, "body": "opening",
+               "url": "https://github.com/o/r/pull/7#r0", "createdAt": "2026-09-25T10:00:00Z"}]},
+            "comments": {"totalCount": 40, "nodes": [
+            """)
+    let longThread = try #require(
+        try decode(Data(long.utf8)).repository?.pullRequests.nodes.first?.toModel(repo: repo).threads.first)
+    #expect(longThread.comments.map(\.body) == ["opening", "bug", "fixed in c1"])
 
     // Without the field (an unresolved thread, or an older response) nothing is claimed.
     let bare = try decodePR()
