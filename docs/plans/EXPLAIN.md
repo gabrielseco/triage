@@ -90,7 +90,8 @@ Thread-level explanations; posting an explanation anywhere; anything on the Work
 
 Each review thread (bot or human) of a GitHub PR with a local clone shows **Explain**. Triage runs
 `workbench explain-thread --pr <n> --thread <id>` in the clone; Workbench prints one JSON object,
-`{"reasoning": "...", "proposed_fix": "..."}`. Triage shows both and keeps them by thread id and head SHA; once the PR's
+`{"reasoning": "...", "proposed_fix": "..."}`, plus `"head"` (the commit it analysed) when it knows. Triage shows
+both and keeps them by thread id and head SHA, the one Workbench names or else the one Triage last saw; once the PR's
 head moves the explanation is marked as written for an older commit. Nothing is pushed, posted or resolved.
 
 The `Mocks/default.json` scenario starts with one explained thread; mock mode runs a fake Workbench

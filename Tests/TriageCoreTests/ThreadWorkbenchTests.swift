@@ -52,6 +52,11 @@ private func ref(_ pr: PullRequest, _ id: String) -> ThreadRef {
     @Test func parsesWorkbenchAnswers() throws {
         let e = try CLIThreadWorkbench.parseExplanation(#"{"reasoning":"R","proposed_fix":"F"}"#)
         #expect(e == ThreadExplanation(reasoning: "R", proposedFix: "F"))
+        let withHead = try CLIThreadWorkbench.parseExplanation(
+            #"{"reasoning":"R","proposed_fix":"F","head":"ABCDEF1234"}"#)
+        #expect(withHead.head == "abcdef1234")
+        #expect(
+            try CLIThreadWorkbench.parseExplanation(#"{"reasoning":"R","proposed_fix":"F","head":"nope"}"#).head == nil)
         #expect(throws: ThreadWorkbenchError.self) { try CLIThreadWorkbench.parseExplanation("nope") }
         #expect(throws: ThreadWorkbenchError.self) {
             try CLIThreadWorkbench.parseExplanation(#"{"reasoning":"","proposed_fix":"F"}"#)
@@ -80,6 +85,18 @@ private func ref(_ pr: PullRequest, _ id: String) -> ThreadRef {
         // Explaining again at the new head makes it current.
         triage.store(e, for: ThreadRef(repo: repo, number: 1, threadID: "t1", head: new), at: now)
         #expect(triage.status(of: "t1", head: new) == .current(e, at: now))
+    }
+
+    @Test func explanationKeepsTheHeadWorkbenchAnalysed() {
+        let repo = RepoRef(owner: "acme", name: "api")
+        let seen = "1111111aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        let analysed = "2222222bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        var triage = ThreadTriage()
+        let e = ThreadExplanation(reasoning: "R", proposedFix: "F", head: analysed)
+        triage.store(e, for: ThreadRef(repo: repo, number: 1, threadID: "t1", head: seen), at: now)
+        // The PR moved to the analysed head after the explain started: the explanation is current there.
+        #expect(triage.status(of: "t1", head: analysed) == .current(e, at: now))
+        #expect(triage.status(of: "t1", head: seen) == .stale(e, at: now))
     }
 
     @Test func triagePersists() throws {

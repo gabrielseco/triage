@@ -22,10 +22,14 @@ public struct ThreadRef: Hashable, Sendable {
 public struct ThreadExplanation: Codable, Hashable, Sendable {
     public var reasoning: String
     public var proposedFix: String
+    /// The commit Workbench says it analysed, when it says. The PR may have moved since Triage last refreshed, and
+    /// the explanation belongs to the head it was written for.
+    public var head: String?
 
-    public init(reasoning: String, proposedFix: String) {
+    public init(reasoning: String, proposedFix: String, head: String? = nil) {
         self.reasoning = reasoning
         self.proposedFix = proposedFix
+        self.head = head
     }
 }
 
@@ -66,7 +70,8 @@ public struct ThreadTriage: Codable, Equatable, Sendable {
     public init() {}
 
     public mutating func store(_ explanation: ThreadExplanation, for thread: ThreadRef, at: Date = Date()) {
-        explanations[thread.threadID] = ThreadExplanationRecord(head: thread.head, explanation: explanation, at: at)
+        explanations[thread.threadID] = ThreadExplanationRecord(
+            head: explanation.head ?? thread.head, explanation: explanation, at: at)
     }
 
     /// The explanation for a thread, stale once the PR's head is not the one it was written for.
@@ -96,7 +101,7 @@ public enum ThreadWorkbenchError: LocalizedError, Equatable {
 }
 
 /// The real thing: `workbench explain-thread --pr <n> --thread <id>`, run in the local clone. It prints one JSON object,
-/// `{"reasoning", "proposed_fix"}`.
+/// `{"reasoning", "proposed_fix"}` and, when it knows, `"head"`: the commit it analysed.
 public struct CLIThreadWorkbench: ThreadWorkbench {
     public var workbench: String
     public var checkout: String
@@ -132,12 +137,15 @@ public struct CLIThreadWorkbench: ThreadWorkbench {
         struct Payload: Decodable {
             let reasoning: String
             let proposedFix: String
-            enum CodingKeys: String, CodingKey { case reasoning, proposedFix = "proposed_fix" }
+            let head: String?
+            enum CodingKeys: String, CodingKey { case reasoning, proposedFix = "proposed_fix", head }
         }
         guard let p = try? JSONDecoder().decode(Payload.self, from: Data(out.utf8)),
             !p.reasoning.isEmpty, !p.proposedFix.isEmpty
         else { throw ThreadWorkbenchError.unreadable(out) }
-        return ThreadExplanation(reasoning: p.reasoning, proposedFix: p.proposedFix)
+        // `head` is optional; one that isn't a commit SHA is ignored rather than trusted.
+        let head = p.head.flatMap { (7...40).contains($0.count) && $0.allSatisfy(\.isHexDigit) ? $0.lowercased() : nil }
+        return ThreadExplanation(reasoning: p.reasoning, proposedFix: p.proposedFix, head: head)
     }
 }
 
