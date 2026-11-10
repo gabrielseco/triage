@@ -12,7 +12,9 @@ struct SettingsView: View {
 
     static let explainHelp = """
         Explain PR runs `workbench explain-pr` in your local clone and writes the note here as \
-        <folder>/<owner>-<repo>-<pr>-<head7>.md. Empty keeps notes in Triage's own folder and shows them in Finder.
+        <folder>/<owner>-<repo>-<pr>-<head7>.md. Empty keeps notes in Triage's own folder and shows them in Finder. \
+        A clone under "Personal checkouts under" runs Claude Code with the ~/.claude-personal account; \
+        any other clone uses the default one.
         """
 
     var body: some View {
@@ -21,6 +23,7 @@ struct SettingsView: View {
             Section {
                 TextField("Obsidian vault folder", text: $store.vaultFolder, prompt: Text("~/Documents/Vault"))
                 TextField("Workbench", text: $store.workbenchPath, prompt: Text("Found automatically"))
+                TextField("Personal checkouts under", text: $store.personalRoot, prompt: Text("~/rogal"))
             } header: {
                 Text("Explain PR")
             } footer: {

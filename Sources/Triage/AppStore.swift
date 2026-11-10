@@ -12,8 +12,9 @@ enum SidebarFilter: Hashable {
     case gitlabMentions
 }
 
+// The settings are stored properties because @Observable can't track them from extensions; two more tipped it over.
 @MainActor @Observable
-final class AppStore {
+final class AppStore {  // swiftlint:disable:this type_body_length
     private let defaults = AppStore.defaults
 
     var repos: [RepoRef] { didSet { save(repos, "repos") } }
@@ -43,6 +44,8 @@ final class AppStore {
     var vaultFolder: String { didSet { defaults.set(vaultFolder, forKey: "vaultFolder") } }
     /// The `workbench` executable; empty looks in the usual places.
     var workbenchPath: String { didSet { defaults.set(workbenchPath, forKey: "workbenchPath") } }
+    /// Checkouts under this folder run Claude Code with the personal account; others use the default. Empty: no switch.
+    var personalRoot: String { didSet { defaults.set(personalRoot, forKey: "personalRoot") } }
     /// PR id → its last finished explanation, and the PRs being explained now.
     var explainRecords: [String: ExplainPR.Record] { didSet { save(explainRecords, "explainRecords") } }
     var explaining: Set<String> = []
@@ -143,6 +146,7 @@ final class AppStore {
         checkoutPaths = Self.load("checkoutPaths") ?? [:]
         vaultFolder = Self.defaults.string(forKey: "vaultFolder") ?? ""
         workbenchPath = Self.defaults.string(forKey: "workbenchPath") ?? ""
+        personalRoot = Self.defaults.string(forKey: "personalRoot") ?? "~/rogal"
         explainRecords = Self.load("explainRecords") ?? [:]
         threadTriage = Self.load("threadTriage") ?? ThreadTriage()
         gitlabHost = Self.defaults.string(forKey: "gitlabHost") ?? ""
