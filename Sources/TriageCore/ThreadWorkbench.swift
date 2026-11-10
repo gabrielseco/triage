@@ -105,8 +105,10 @@ public enum ThreadWorkbenchError: LocalizedError, Equatable {
 public struct CLIThreadWorkbench: ThreadWorkbench {
     public var workbench: String
     public var checkout: String
+    public var personalRoot: String
 
-    public init(workbench: String, checkout: String) {
+    public init(workbench: String, checkout: String, personalRoot: String = "") {
+        self.personalRoot = personalRoot
         self.workbench = workbench
         self.checkout = checkout
     }
@@ -118,7 +120,9 @@ public struct CLIThreadWorkbench: ThreadWorkbench {
     func run(_ arguments: [String]) async throws -> String {
         let result: Subprocess.Output
         do {
-            result = try await Subprocess.run(workbench, arguments, directory: checkout)
+            result = try await Subprocess.run(
+                workbench, arguments, directory: checkout,
+                environment: ExplainPR.workbenchEnvironment(checkout: checkout, personalRoot: personalRoot))
         } catch {
             throw ThreadWorkbenchError.failed("Couldn't start Workbench: \(error.localizedDescription)")
         }

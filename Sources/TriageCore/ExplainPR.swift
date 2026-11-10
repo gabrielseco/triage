@@ -52,11 +52,13 @@ public enum ExplainPR {
         public var head: String
         public var vault: String
         public var fallbackFolder: String
+        public var personalRoot: String
 
         public init(
             workbench: String, checkout: String, repo: RepoRef, number: Int, head: String, vault: String,
-            fallbackFolder: String
+            fallbackFolder: String, personalRoot: String = ""
         ) {
+            self.personalRoot = personalRoot
             self.workbench = workbench
             self.checkout = checkout
             self.repo = repo
@@ -153,6 +155,36 @@ public enum ExplainPR {
             + ["/opt/homebrew/bin/workbench", "/usr/local/bin/workbench"]
     }
 
+    /// The app's environment with the usual tool folders on PATH. A GUI app starts with `/usr/bin:/bin:...`, so
+    /// Workbench, a child of it, couldn't find `claude` (`~/.local/bin`) or `gh` and `git` (Homebrew).
+    /// A checkout under `personalRoot` runs Claude Code with the personal account (`~/.claude-personal`); any other
+    /// checkout uses the default one, as the shell does. An empty `personalRoot` leaves the account alone.
+    public static func workbenchEnvironment(
+        base: [String: String] = ProcessInfo.processInfo.environment, home: String = NSHomeDirectory(),
+        checkout: String = "", personalRoot: String = ""
+    ) -> [String: String] {
+        let extra = ["\(home)/.local/bin", "/opt/homebrew/bin", "/usr/local/bin", "\(home)/.claude/local"]
+        let current = (base["PATH"] ?? "").split(separator: ":").map(String.init)
+        var env = base
+        env["PATH"] = (extra.filter { !current.contains($0) } + current).joined(separator: ":")
+        if let root = normalizedRoot(personalRoot, home: home) {
+            let dir = (checkout as NSString).standardizingPath
+            if dir == root || dir.hasPrefix(root + "/") {
+                env["CLAUDE_CONFIG_DIR"] = "\(home)/.claude-personal"
+            } else {
+                env["CLAUDE_CONFIG_DIR"] = nil
+            }
+        }
+        return env
+    }
+
+    private static func normalizedRoot(_ root: String, home: String) -> String? {
+        var path = root.trimmingCharacters(in: .whitespaces)
+        guard !path.isEmpty else { return nil }
+        if path == "~" || path.hasPrefix("~/") { path = home + path.dropFirst() }
+        return (path as NSString).standardizingPath
+    }
+
     public static func findWorkbench(setting: String, home: String = NSHomeDirectory()) -> String? {
         let set = (setting.trimmingCharacters(in: .whitespaces) as NSString).expandingTildeInPath
         let candidates = set.isEmpty ? workbenchCandidates(home: home) : [set]
@@ -192,7 +224,9 @@ public enum ExplainPR {
         let (head, vault, fallbackFolder) = (job.head, job.vault, job.fallbackFolder)
         let result: Subprocess.Output
         do {
-            result = try await Subprocess.run(workbench, arguments(number: number), directory: checkout)
+            result = try await Subprocess.run(
+                workbench, arguments(number: number), directory: checkout,
+                environment: workbenchEnvironment(checkout: checkout, personalRoot: job.personalRoot))
         } catch {
             throw Failure.failed("Couldn't start Workbench: \(error.localizedDescription)")
         }

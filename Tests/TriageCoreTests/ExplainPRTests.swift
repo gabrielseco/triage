@@ -207,3 +207,43 @@ private let head = "0123456789abcdef0123456789abcdef01234567"
         }
     }
 }
+
+@Suite struct WorkbenchEnvironmentTests {
+    @Test func putsTheToolFoldersAheadOfAGuiAppsMinimalPath() {
+        let env = ExplainPR.workbenchEnvironment(base: ["PATH": "/usr/bin:/bin", "HOME": "/h"], home: "/h")
+        let parts = (env["PATH"] ?? "").split(separator: ":").map(String.init)
+        #expect(parts.starts(with: ["/h/.local/bin", "/opt/homebrew/bin", "/usr/local/bin"]))
+        #expect(parts.suffix(2) == ["/usr/bin", "/bin"])
+        #expect(env["HOME"] == "/h")
+    }
+
+    @Test func doesNotRepeatAFolderAlreadyOnPath() {
+        let env = ExplainPR.workbenchEnvironment(base: ["PATH": "/opt/homebrew/bin:/usr/bin"], home: "/h")
+        let parts = (env["PATH"] ?? "").split(separator: ":").map(String.init)
+        #expect(parts.filter { $0 == "/opt/homebrew/bin" }.count == 1)
+    }
+
+    @Test func buildsAPathWhenThereIsNone() {
+        #expect(ExplainPR.workbenchEnvironment(base: [:], home: "/h")["PATH"]?.hasPrefix("/h/.local/bin") == true)
+    }
+}
+
+@Suite struct WorkbenchClaudeAccountTests {
+    private func env(_ checkout: String, root: String = "~/rogal", base: [String: String] = [:]) -> [String: String] {
+        ExplainPR.workbenchEnvironment(base: base, home: "/h", checkout: checkout, personalRoot: root)
+    }
+
+    @Test func aCheckoutUnderTheRootUsesThePersonalAccount() {
+        #expect(env("/h/rogal/triage")["CLAUDE_CONFIG_DIR"] == "/h/.claude-personal")
+        #expect(env("/h/rogal")["CLAUDE_CONFIG_DIR"] == "/h/.claude-personal")
+    }
+
+    @Test func anotherCheckoutUsesTheDefaultAccount() {
+        #expect(env("/h/work/app", base: ["CLAUDE_CONFIG_DIR": "/x"])["CLAUDE_CONFIG_DIR"] == nil)
+        #expect(env("/h/rogal-other/app")["CLAUDE_CONFIG_DIR"] == nil)
+    }
+
+    @Test func anEmptyRootLeavesTheAccountAlone() {
+        #expect(env("/h/rogal/x", root: "", base: ["CLAUDE_CONFIG_DIR": "/x"])["CLAUDE_CONFIG_DIR"] == "/x")
+    }
+}

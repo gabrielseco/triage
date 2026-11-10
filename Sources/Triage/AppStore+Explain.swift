@@ -57,7 +57,7 @@ extension AppStore {
             let out = try await ExplainPR.run(
                 ExplainPR.Job(
                     workbench: workbench, checkout: checkout, repo: pr.repo, number: pr.number, head: pr.headSha,
-                    vault: vaultFolder, fallbackFolder: ExplainPR.defaultFolder()))
+                    vault: vaultFolder, fallbackFolder: ExplainPR.defaultFolder(), personalRoot: personalRoot))
             explainRecords[pr.id] = ExplainPR.Record(head: out.head, note: out.note, at: Date())
             actionStatus[item.id] = nil
             _ = await Notifier.send(title: "Explained \(pr.ref)", body: "\(pr.repo.fullName): \(pr.title)")
