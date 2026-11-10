@@ -153,6 +153,18 @@ public enum ExplainPR {
             + ["/opt/homebrew/bin/workbench", "/usr/local/bin/workbench"]
     }
 
+    /// The app's environment with the usual tool folders on PATH. A GUI app starts with `/usr/bin:/bin:...`, so
+    /// Workbench, a child of it, couldn't find `claude` (`~/.local/bin`) or `gh` and `git` (Homebrew).
+    public static func workbenchEnvironment(
+        base: [String: String] = ProcessInfo.processInfo.environment, home: String = NSHomeDirectory()
+    ) -> [String: String] {
+        let extra = ["\(home)/.local/bin", "/opt/homebrew/bin", "/usr/local/bin", "\(home)/.claude/local"]
+        let current = (base["PATH"] ?? "").split(separator: ":").map(String.init)
+        var env = base
+        env["PATH"] = (extra.filter { !current.contains($0) } + current).joined(separator: ":")
+        return env
+    }
+
     public static func findWorkbench(setting: String, home: String = NSHomeDirectory()) -> String? {
         let set = (setting.trimmingCharacters(in: .whitespaces) as NSString).expandingTildeInPath
         let candidates = set.isEmpty ? workbenchCandidates(home: home) : [set]
@@ -192,7 +204,8 @@ public enum ExplainPR {
         let (head, vault, fallbackFolder) = (job.head, job.vault, job.fallbackFolder)
         let result: Subprocess.Output
         do {
-            result = try await Subprocess.run(workbench, arguments(number: number), directory: checkout)
+            result = try await Subprocess.run(
+                workbench, arguments(number: number), directory: checkout, environment: workbenchEnvironment())
         } catch {
             throw Failure.failed("Couldn't start Workbench: \(error.localizedDescription)")
         }

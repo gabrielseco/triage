@@ -118,7 +118,8 @@ public struct CLIThreadWorkbench: ThreadWorkbench {
     func run(_ arguments: [String]) async throws -> String {
         let result: Subprocess.Output
         do {
-            result = try await Subprocess.run(workbench, arguments, directory: checkout)
+            result = try await Subprocess.run(
+                workbench, arguments, directory: checkout, environment: ExplainPR.workbenchEnvironment())
         } catch {
             throw ThreadWorkbenchError.failed("Couldn't start Workbench: \(error.localizedDescription)")
         }

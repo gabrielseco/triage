@@ -207,3 +207,23 @@ private let head = "0123456789abcdef0123456789abcdef01234567"
         }
     }
 }
+
+@Suite struct WorkbenchEnvironmentTests {
+    @Test func putsTheToolFoldersAheadOfAGuiAppsMinimalPath() {
+        let env = ExplainPR.workbenchEnvironment(base: ["PATH": "/usr/bin:/bin", "HOME": "/h"], home: "/h")
+        let parts = (env["PATH"] ?? "").split(separator: ":").map(String.init)
+        #expect(parts.starts(with: ["/h/.local/bin", "/opt/homebrew/bin", "/usr/local/bin"]))
+        #expect(parts.suffix(2) == ["/usr/bin", "/bin"])
+        #expect(env["HOME"] == "/h")
+    }
+
+    @Test func doesNotRepeatAFolderAlreadyOnPath() {
+        let env = ExplainPR.workbenchEnvironment(base: ["PATH": "/opt/homebrew/bin:/usr/bin"], home: "/h")
+        let parts = (env["PATH"] ?? "").split(separator: ":").map(String.init)
+        #expect(parts.filter { $0 == "/opt/homebrew/bin" }.count == 1)
+    }
+
+    @Test func buildsAPathWhenThereIsNone() {
+        #expect(ExplainPR.workbenchEnvironment(base: [:], home: "/h")["PATH"]?.hasPrefix("/h/.local/bin") == true)
+    }
+}
