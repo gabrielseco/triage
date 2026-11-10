@@ -42,7 +42,7 @@ extension AppStore {
             threadStatus[id] = "No local checkout of \(pr.repo.fullName): right-click the repo in the sidebar."
             return nil
         }
-        return CLIThreadWorkbench(workbench: workbench, checkout: checkout)
+        return CLIThreadWorkbench(workbench: workbench, checkout: checkout, personalRoot: personalRoot)
     }
 
     func explainThread(_ threadID: String, in item: AttentionItem) async {
