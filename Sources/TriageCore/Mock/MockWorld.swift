@@ -107,9 +107,8 @@ public final class MockWorld: Sendable {
 
     public func linear() -> any LinearSource { linearSource }
 
-    /// A Workbench that runs nothing: its explanations are made up, and a fix lands as a commit and a reply in the
-    /// mock's own pull requests, so the next refresh reads them as the real one's would.
-    public func threadWorkbench() -> any ThreadWorkbench { MockThreadWorkbench(store: store, viewer: githubViewer) }
+    /// A Workbench that runs nothing: its explanations are made up.
+    public func threadWorkbench() -> any ThreadWorkbench { MockThreadWorkbench() }
 }
 
 // MARK: - The fake forge
@@ -125,41 +124,6 @@ final class MockStore: @unchecked Sendable {
     func all() -> [PullRequest] { lock.withLock { pullRequests } }
 
     func remove(_ pr: PullRequest) { lock.withLock { pullRequests.removeAll { $0.id == pr.id } } }
-
-    private func mutateThread(_ id: String, _ change: (inout PullRequest, Int) -> Void) -> Bool {
-        lock.withLock {
-            for p in pullRequests.indices {
-                if let t = pullRequests[p].threads.firstIndex(where: { $0.id == id }) {
-                    change(&pullRequests[p], t)
-                    return true
-                }
-            }
-            return false
-        }
-    }
-
-    /// A push: the commit joins the PR and becomes its head.
-    func push(_ commit: String, to threadID: String) -> Bool {
-        mutateThread(threadID) { pr, _ in
-            pr.commitShas.append(commit)
-            pr.headSha = commit
-        }
-    }
-
-    func reply(to threadID: String, as author: String, body: String) -> Bool {
-        mutateThread(threadID) { pr, t in
-            let comment = CommentInfo(author: author, isBot: false, body: body, createdAt: Date())
-            pr.threads[t].comments.append(comment)
-            pr.threads[t].commentCount += 1
-        }
-    }
-
-    func resolve(threadID: String, by viewer: String) -> Bool {
-        mutateThread(threadID) { pr, t in
-            pr.threads[t].isResolved = true
-            pr.threads[t].resolvedBy = viewer
-        }
-    }
 
     func approve(_ pr: PullRequest, as viewer: String) {
         lock.withLock {
@@ -215,13 +179,6 @@ struct MockForge: ForgeClient, MentionsSource {
     func close(_ pr: PullRequest) async throws {
         guard forge.capabilities.contains(.close) else { throw ForgeError.unsupported(forge) }
         store.remove(pr)
-    }
-
-    func resolveThread(_ pr: PullRequest, threadID: String) async throws {
-        guard forge.capabilities.contains(.threads) else { throw ForgeError.unsupported(forge) }
-        guard store.resolve(threadID: threadID, by: viewerLogin) else {
-            throw MockError.invalid("no thread \(threadID)")
-        }
     }
 }
 

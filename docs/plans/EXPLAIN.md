@@ -86,22 +86,14 @@ Opening a note does nothing in mock mode.
 
 Thread-level explanations; posting an explanation anywhere; anything on the Workbench side.
 
-## Review threads: explain, fix, report
+## Review threads: explain
 
 Each review thread (bot or human) of a GitHub PR with a local clone shows **Explain**. Triage runs
 `workbench explain-thread --pr <n> --thread <id>` in the clone; Workbench prints one JSON object,
 `{"reasoning": "...", "proposed_fix": "..."}`. Triage shows both and keeps them by thread id and head SHA; once the PR's
-head moves the explanation is marked as written for an older commit.
-
-With an explanation on screen the thread offers **Fix** and **False positive**:
-
-- **Fix** runs only when pressed: `workbench fix-thread --pr <n> --thread <id>` applies and pushes the fix and prints
-  `{"commit": "<sha>"}`, then `workbench reply-thread --pr <n> --thread <id> --body "Fixed in <short sha>"` posts the reply.
-  The reply text is shown in the thread's status before it is posted. After a refresh the thread reads the reply and
-  shows "Fix reported" (see `ThreadStates`).
-- **False positive** hides the thread's actions on this Mac only; nothing is sent to the forge. **Undo** brings them back.
-- **Resolve** is a separate button that resolves the thread on the forge (GitHub's `resolveReviewThread`). Fixing or
-  dismissing never resolves a thread.
+head moves the explanation is marked as written for an older commit. Nothing is pushed, posted or resolved.
 
 The `Mocks/default.json` scenario starts with one explained thread; mock mode runs a fake Workbench
-(`MockWorld.threadWorkbench()`) whose fix lands as a commit and a reply in the mock's own PR.
+(`MockWorld.threadWorkbench()`) that answers with made-up text.
+
+Fixing a thread, replying on it and resolving it are not built yet.

@@ -153,16 +153,6 @@ public struct GitHubClient: Sendable {
         return req
     }
 
-    /// Resolves a review thread by its GraphQL node id. Nothing else resolves one: replying or fixing never does.
-    public func resolveReviewThread(id: String) async throws {
-        let _: Resolved = try await graphql(Self.resolveMutation, variables: ["id": id])
-    }
-
-    struct Resolved: Decodable {}
-
-    static let resolveMutation =
-        "mutation($id: ID!) { resolveReviewThread(input: { threadId: $id }) { thread { id isResolved } } }"
-
     // MARK: - Plumbing
 
     func request(_ url: URL) -> URLRequest {
@@ -202,8 +192,7 @@ public struct GitHubClient: Sendable {
                 allCommits: commits(last: 100) { nodes { commit { oid } } }
                 reviewThreads(last: 50) { totalCount nodes {
                   id isResolved isOutdated path line resolvedBy { login }
-                  opening: comments(first: 1) { nodes { author { login __typename } body url createdAt } }
-                  comments(last: 30) { totalCount nodes { author { login __typename } body url createdAt } }
+                  comments(first: 30) { totalCount nodes { author { login __typename } body url createdAt } }
                 } }
                 comments(last: 20) { nodes { author { login __typename } body url createdAt } }
               }
@@ -330,7 +319,6 @@ struct PRNode: Decodable {
         let isResolved: Bool, isOutdated: Bool, path: String?, line: Int?
         let resolvedBy: ActorNode?
         let comments: Comments
-        let opening: Conn<CommentNode>?
     }
 
     /// Each reviewer's latest approval or change request (comment-only reviews don't count).
@@ -371,7 +359,14 @@ struct PRNode: Decodable {
 
     func toModel(repo: RepoRef, mergeMethod: MergeMethod = .merge) -> PullRequest {
         let head = commits.nodes.last?.commit
-        let threads: [ReviewThreadInfo] = reviewThreads.nodes.compactMap(\.info)
+        let threads: [ReviewThreadInfo] = reviewThreads.nodes.compactMap { t in
+            guard let first = t.comments.nodes.first else { return nil }
+            return ReviewThreadInfo(
+                isResolved: t.isResolved, isOutdated: t.isOutdated, resolvedBy: t.resolvedBy?.login, path: t.path,
+                line: t.line,
+                firstComment: first.model, commentCount: t.comments.totalCount,
+                replies: t.comments.nodes.dropFirst().map(\.model), id: t.id)
+        }
         return PullRequest(
             repo: repo, number: number, title: title, url: url, author: author?.login ?? "ghost",
             authorAvatar: author?.avatarUrl,

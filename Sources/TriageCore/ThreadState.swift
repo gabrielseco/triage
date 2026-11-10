@@ -6,16 +6,13 @@ public enum ThreadState: Hashable, Sendable {
     /// Someone said which commit of the PR fixes it. `commit` is that commit's full SHA.
     case fixReported(commit: String)
     case resolved(by: String?)
-    /// You judged the bot or reviewer wrong. Kept on this Mac only: the forge still has the thread open.
-    case falsePositive
 
     /// The text a row shows; nil for an open thread, which needs no label.
     public var label: String? {
         switch self {
         case .open: nil
-        case .fixReported(let commit): "Fix reported · \(Self.shortSha(commit))"
+        case .fixReported(let commit): "Fixed in \(Self.shortSha(commit))"
         case .resolved: "Resolved"
-        case .falsePositive: "False positive"
         }
     }
 

@@ -119,7 +119,7 @@ public struct CommentInfo: Hashable, Sendable {
 }
 
 public struct ReviewThreadInfo: Hashable, Sendable {
-    /// The forge's id for the thread (GitHub's node id), which actions on it need. Nil when the forge gives none.
+    /// The forge's id for the thread (GitHub's node id), which explaining it needs. Nil when the forge gives none.
     public var id: String?
     public var isResolved: Bool
     public var isOutdated: Bool
@@ -313,7 +313,7 @@ public struct Evidence: Hashable, Sendable {
     public var checkRunID: Int?
     /// For a review thread: where it stands. Nil for anything else.
     public var threadState: ThreadState?
-    /// For a review thread: its forge id, so the thread can be explained, fixed or resolved.
+    /// For a review thread: its forge id, so the thread can be explained.
     public var threadID: String?
 
     public init(

@@ -1,8 +1,7 @@
 import SwiftUI
 import TriageCore
 
-/// Under a review thread: Explain, then the reasoning and proposed fix with Fix and False positive, and a separate
-/// Resolve. Fix is never run for you and nothing resolves a thread but its own button.
+/// Under a review thread: Explain, then the reasoning and proposed fix. Nothing is changed on the forge.
 struct ThreadActionsView: View {
     @Environment(AppStore.self) private var store
     let threadID: String
@@ -54,21 +53,7 @@ struct ThreadActionsView: View {
                 Button("Explain") { Task { await store.explainThread(threadID, in: item) } }
                     .help("Have Workbench explain this thread and propose a fix")
             }
-            if explanation.explanation != nil, state == .open {
-                Button("Fix") { Task { await store.fixThread(threadID, in: item) } }
-                    .buttonStyle(.borderedProminent)
-                    .help("Have Workbench apply the fix, push it and reply with the commit on this thread")
-            }
-            if state == .open, explanation.explanation != nil {
-                Button("False positive") { store.dismissThreadAsFalsePositive(threadID) }
-                    .help("Dismiss this thread here only; it stays open on \(item.pr.repo.forge.name)")
-            }
-            if state == .falsePositive {
-                Button("Undo") { store.restoreThread(threadID) }
-            }
             Spacer()
-            Button("Resolve") { Task { await store.resolveThread(threadID, in: item) } }
-                .help("Resolve this thread on \(item.pr.repo.forge.name)")
         }
         .controlSize(.small)
         .disabled(busy)

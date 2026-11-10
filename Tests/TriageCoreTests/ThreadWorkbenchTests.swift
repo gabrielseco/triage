@@ -30,50 +30,15 @@ private func ref(_ pr: PullRequest, _ id: String) -> ThreadRef {
     ThreadRef(repo: pr.repo, number: pr.number, threadID: id, head: pr.headSha)
 }
 
-/// A Workbench that records every call, in order, and answers with fixed text.
-private final class RecordingWorkbench: ThreadWorkbench, @unchecked Sendable {
-    private let lock = NSLock()
-    private var log: [String] = []
-    var calls: [String] { lock.withLock { log } }
-    var failReply = false
-
-    private func record(_ call: String) { lock.withLock { log.append(call) } }
-
-    func explain(_ thread: ThreadRef) async throws -> ThreadExplanation {
-        record("explain \(thread.threadID)")
-        return ThreadExplanation(reasoning: "Because.", proposedFix: "Guard it.")
-    }
-
-    func fix(_ thread: ThreadRef) async throws -> String {
-        record("fix \(thread.threadID)")
-        return "9f3c2e1a7b4d5e6f8091a2b3c4d5e6f708192a3b"
-    }
-
-    func reply(_ thread: ThreadRef, body: String) async throws {
-        record("reply \(thread.threadID): \(body)")
-        if failReply { throw ThreadWorkbenchError.failed("offline") }
-    }
-}
-
 @Suite struct ThreadWorkbenchTests {
-    @Test func explainFixAndReply() async throws {
+    @Test func mockExplains() async throws {
         let world = try makeWorld()
         let pr = try await fetchPR(world)
-        let workbench = world.threadWorkbench()
-        let thread = ref(pr, "t1")
-
-        let explanation = try await workbench.explain(thread)
+        let explanation = try await world.threadWorkbench().explain(ref(pr, "t1"))
         #expect(!explanation.reasoning.isEmpty)
         #expect(!explanation.proposedFix.isEmpty)
-
-        let commit = try await workbench.fix(thread)
-        #expect(commit.count == 40)
-        try await workbench.reply(thread, body: "Fixed in \(commit.prefix(7))")
-
-        let after = try await fetchPR(world)
-        #expect(after.commitShas.contains(commit))
-        let replies = try #require(after.threads.first { $0.id == "t1" }).comments.dropFirst().map(\.body)
-        #expect(replies == ["Fixed in \(commit.prefix(7))"])
+        // Explaining changes nothing in the forge.
+        #expect(try await fetchPR(world) == pr)
     }
 
     @Test func commandLineArguments() {
@@ -82,9 +47,6 @@ private final class RecordingWorkbench: ThreadWorkbench, @unchecked Sendable {
         #expect(
             CLIThreadWorkbench.arguments("explain-thread", thread)
                 == ["explain-thread", "--pr", "81", "--thread", "PRRT_x"])
-        #expect(
-            CLIThreadWorkbench.arguments("reply-thread", thread, extra: ["--body", "Fixed in abc1234"])
-                == ["reply-thread", "--pr", "81", "--thread", "PRRT_x", "--body", "Fixed in abc1234"])
     }
 
     @Test func parsesWorkbenchAnswers() throws {
@@ -94,54 +56,9 @@ private final class RecordingWorkbench: ThreadWorkbench, @unchecked Sendable {
         #expect(throws: ThreadWorkbenchError.self) {
             try CLIThreadWorkbench.parseExplanation(#"{"reasoning":"","proposed_fix":"F"}"#)
         }
-        #expect(try CLIThreadWorkbench.parseCommit(#"{"commit":"9F3C2E1"}"#) == "9f3c2e1")
-        #expect(throws: ThreadWorkbenchError.self) { try CLIThreadWorkbench.parseCommit(#"{"commit":"zzz"}"#) }
-        #expect(throws: ThreadWorkbenchError.self) { try CLIThreadWorkbench.parseCommit("pushed") }
         #expect(ThreadWorkbenchError.failed("x").errorDescription == "x")
         #expect(ThreadWorkbenchError.unreadable("y").errorDescription?.contains("y") == true)
     }
-}
-
-@Suite struct ThreadFixTests {
-    @Test func userInitiatedFixReportsCommit() async throws {
-        let world = try makeWorld()
-        let pr = try await fetchPR(world)
-        let workbench = RecordingWorkbench()
-        let actions = ThreadActions(workbench: workbench, forge: try world.forgeClient(.github))
-        let thread = ref(pr, "t1")
-
-        // Explaining changes nothing: no fix, no reply.
-        _ = try await actions.explain(thread)
-        #expect(workbench.calls == ["explain t1"])
-
-        let shown = ShownText()
-        let out = try await actions.fix(thread) { shown.set($0) }
-        #expect(out.commit == "9f3c2e1a7b4d5e6f8091a2b3c4d5e6f708192a3b")
-        #expect(out.reply == "Fixed in 9f3c2e1")
-        // The reply text was shown before it was posted, and the push came first.
-        #expect(shown.value == "Fixed in 9f3c2e1")
-        #expect(workbench.calls == ["explain t1", "fix t1", "reply t1: Fixed in 9f3c2e1"])
-    }
-
-    @Test func failedReplyNamesThePushedCommit() async throws {
-        let world = try makeWorld()
-        let pr = try await fetchPR(world)
-        let workbench = RecordingWorkbench()
-        workbench.failReply = true
-        let actions = ThreadActions(workbench: workbench, forge: try world.forgeClient(.github))
-        await #expect {
-            try await actions.fix(ref(pr, "t1"))
-        } throws: { error in
-            (error as? ThreadWorkbenchError)?.errorDescription?.contains("Pushed 9f3c2e1") == true
-        }
-    }
-}
-
-private final class ShownText: @unchecked Sendable {
-    private let lock = NSLock()
-    private var text: String?
-    var value: String? { lock.withLock { text } }
-    func set(_ s: String) { lock.withLock { text = s } }
 }
 
 @Suite struct ThreadExplanationTests {
@@ -167,7 +84,6 @@ private final class ShownText: @unchecked Sendable {
 
     @Test func triagePersists() throws {
         var triage = ThreadTriage()
-        triage.dismissAsFalsePositive("t1")
         triage.store(
             ThreadExplanation(reasoning: "R", proposedFix: "F"),
             for: ThreadRef(repo: RepoRef(owner: "a", name: "b"), number: 1, threadID: "t1", head: "abc"), at: now)

@@ -70,10 +70,7 @@ public struct ForgeCapabilities: OptionSet, Hashable, Sendable {
     public static let merge = Self(rawValue: 1 << 4)
     public static let close = Self(rawValue: 1 << 5)
 
-    /// Resolving review threads.
-    public static let threads = Self(rawValue: 1 << 6)
-
-    public static let all: Self = [.ciLogs, .diff, .checkout, .approve, .merge, .close, .threads]
+    public static let all: Self = [.ciLogs, .diff, .checkout, .approve, .merge, .close]
 }
 
 /// One forge's API, as the app uses it. Everything above it sees only `PullRequest` and `RepoSnapshot`.
@@ -96,8 +93,6 @@ public protocol ForgeClient: Sendable {
     func merge(_ pr: PullRequest, method: MergeMethod) async throws
     /// Closes without merging.
     func close(_ pr: PullRequest) async throws
-    /// Marks one review thread resolved. Only an explicit request does this.
-    func resolveThread(_ pr: PullRequest, threadID: String) async throws
 }
 
 /// One repo's fetch, tagged so results for a repo removed mid-fetch can be dropped.
@@ -187,10 +182,6 @@ public struct GitHubForge: ForgeClient {
     public func close(_ pr: PullRequest) async throws {
         try await client.closePullRequest(pr.repo, number: pr.number)
     }
-
-    public func resolveThread(_ pr: PullRequest, threadID: String) async throws {
-        try await client.resolveReviewThread(id: threadID)
-    }
 }
 
 /// GitLab behind `ForgeClient`: the merge requests assigned to the viewer or waiting on their review, across
@@ -227,7 +218,4 @@ public struct GitLabForge: ForgeClient {
         try await client.merge(pr, method: method)
     }
     public func close(_ pr: PullRequest) async throws { throw ForgeError.unsupported(forge) }
-    public func resolveThread(_ pr: PullRequest, threadID: String) async throws {
-        throw ForgeError.unsupported(forge)
-    }
 }
