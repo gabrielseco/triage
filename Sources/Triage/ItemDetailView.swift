@@ -14,10 +14,26 @@ struct ItemDetailView: View {
                 status
                 Divider()
                 Text("Evidence").font(.headline)
-                ForEach(item.evidence, id: \.self) { EvidenceCard(evidence: $0, item: item) }
+                evidenceList
             }
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    @State private var showResolved = false
+
+    /// Resolved threads are collapsed behind a toggle while something is still open. With nothing open they are all
+    /// there is, so they show.
+    @ViewBuilder private var evidenceList: some View {
+        let resolved = item.evidence.filter { if case .resolved = $0.threadState { true } else { false } }
+        let hidden = resolved.count < item.evidence.count && !showResolved
+        ForEach(item.evidence.filter { !(hidden && resolved.contains($0)) }, id: \.self) {
+            EvidenceCard(evidence: $0, item: item)
+        }
+        if resolved.count < item.evidence.count, !resolved.isEmpty {
+            Button(showResolved ? "Hide resolved" : "Show \(resolved.count) resolved") { showResolved.toggle() }
+                .buttonStyle(.link).font(.caption)
         }
     }
 
