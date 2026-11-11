@@ -64,6 +64,10 @@
           "line": 12, "hoursAgo": 3,
           "body": "The default budget is read from the environment on every call."
         }
+      ],
+      "comments": [
+        { "author": "codecov[bot]", "isBot": true, "hoursAgo": 3, "body": "Coverage is 81.2% (+0.1%) compared to main." },
+        { "author": "cursor[bot]", "isBot": true, "hoursAgo": 3, "body": "Review complete." }
       ]
     },
     {

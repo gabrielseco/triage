@@ -366,11 +366,31 @@ extension [AttentionItem] {
     }
 }
 
+/// A bot comment that Triage left out of the inbox, and why, so the filtering can be checked.
+public struct MutedComment: Sendable, Hashable {
+    public enum Reason: String, Sendable, Hashable {
+        case noiseBot = "Noise bot"
+        case status = "Status line"
+        case report = "Run summary"
+    }
+    public var author: String
+    public var body: String
+    public var url: URL?
+    public var reason: Reason
+    public init(author: String, body: String, url: URL?, reason: Reason) {
+        self.author = author
+        self.body = body
+        self.url = url
+        self.reason = reason
+    }
+}
+
 public struct PRStats: Sendable, Hashable {
-    public var noiseComments = 0
+    public var muted: [MutedComment] = []
     public var pendingChecks = 0
-    public init(noiseComments: Int = 0, pendingChecks: Int = 0) {
-        self.noiseComments = noiseComments
+    public var noiseComments: Int { muted.count }
+    public init(muted: [MutedComment] = [], pendingChecks: Int = 0) {
+        self.muted = muted
         self.pendingChecks = pendingChecks
     }
 }

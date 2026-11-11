@@ -15,6 +15,7 @@ struct ItemDetailView: View {
                 Divider()
                 Text("Evidence").font(.headline)
                 evidenceList
+                mutedList
             }
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -34,6 +35,27 @@ struct ItemDetailView: View {
         if resolved.count < item.evidence.count, !resolved.isEmpty {
             Button(showResolved ? "Hide resolved" : "Show \(resolved.count) resolved") { showResolved.toggle() }
                 .buttonStyle(.link).font(.caption)
+        }
+    }
+
+    @State private var showMuted = false
+
+    /// What Triage left out for this PR, with the reason, so the filtering can be checked.
+    @ViewBuilder private var mutedList: some View {
+        let muted = store.stats[item.pr.id]?.muted ?? []
+        if !muted.isEmpty {
+            Divider()
+            Button(showMuted ? "Hide \(muted.count) muted bot comments" : "Show \(muted.count) muted bot comments") {
+                showMuted.toggle()
+            }
+            .buttonStyle(.link).font(.caption)
+            if showMuted {
+                ForEach(muted, id: \.self) { m in
+                    EvidenceCard(
+                        evidence: Evidence(title: "\(m.author) · \(m.reason.rawValue)", detail: m.body, url: m.url),
+                        item: item)
+                }
+            }
         }
     }
 

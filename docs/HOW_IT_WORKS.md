@@ -348,7 +348,7 @@ the piece most likely to move to the backend later.
 | You're a reviewer who hasn't reviewed yet (GitHub review request for your login, GitLab reviewer `UNREVIEWED`/`REVIEW_STARTED`) on someone else's PR | Review requested (next to any problem; replaces the quiet item and New PR). Shown even with "Only mine" | medium | `pr\|review-requested` |
 | Opened by someone else after the repo was first fetched, not dismissed yet (`SeenPRs`) | New PR (next to any other item) | low | `pr\|new` |
 
-**Noise bots** are counted in `PRStats.noiseComments` and never become items: `codecov`, `vercel`,
+**Noise bots** are kept in `PRStats.muted` (counted by `noiseComments`; the item detail lists them with the reason) and never become items: `codecov`, `vercel`,
 `netlify`, `github-actions`, `changeset-bot`, `dependabot`, `renovate`, `sonarcloud`, `linear`,
 `cla-assistant`, `height`, `graphite-app`. On `remote-flows` this mutes ~107 coverage-report comments.
 
