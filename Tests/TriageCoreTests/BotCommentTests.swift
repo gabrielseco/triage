@@ -63,6 +63,7 @@ private func mr(threads: [ReviewThreadInfo], comments: [CommentInfo] = []) -> Pu
     #expect(bot?.severity == .medium)
     #expect(bot?.evidence.count == 2)  // the open finding and the resolved one; no status, no summary
     #expect(stats.noiseComments == 2)  // status + summary
+    #expect(Set(stats.muted.map(\.reason)) == [.status, .report])
 }
 
 @Test func aBotWithOnlyStatusAndReportsMakesNoItem() {

@@ -30,7 +30,7 @@ public enum Classifier {
             ciFailure(pr), mergeConflict(pr), changesRequested(pr), reviewThreads(pr, open: open, viewer: viewer),
         ]
         .compactMap { $0 }
-        items += botFindings(pr, retaining: retaining, noise: &stats.noiseComments)
+        items += botFindings(pr, retaining: retaining, muted: &stats.muted)
         let request = reviewRequested(pr, viewer: viewer)
         if items.isEmpty, request == nil, let quiet = readyToMerge(pr) ?? awaitingChecks(pr) ?? awaitingReview(pr) {
             items.append(quiet)
@@ -129,14 +129,17 @@ public enum Classifier {
     /// stay in the item, labelled, and the id comes from every entry (resolved included) so resolving one doesn't
     /// change it. An item with nothing open left appears only when `retaining` has its id.
     static func botFindings(
-        _ pr: PullRequest, retaining: Set<String> = [], noise: inout Int
+        _ pr: PullRequest, retaining: Set<String> = [], muted: inout [MutedComment]
     ) -> [AttentionItem] {
         var byBot: [String: [BotEntry]] = [:]
         func add(_ author: String, _ entry: BotEntry) {
             let login = normalizedLogin(author)
             // Status lines and run reports aren't findings: muted like the noise bots.
-            if noiseBots.contains(login) || entry.kind != .finding {
-                noise += 1
+            let reason: MutedComment.Reason? =
+                noiseBots.contains(login)
+                ? .noiseBot : entry.kind == .status ? .status : entry.kind == .report ? .report : nil
+            if let reason {
+                muted.append(MutedComment(author: author, body: entry.body, url: entry.url, reason: reason))
             } else {
                 byBot[login, default: []].append(entry)
             }

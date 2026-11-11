@@ -50,6 +50,9 @@ private func comment(_ author: String, bot: Bool, _ body: String = "hi", url: St
         ]))
     #expect(items.map(\.kind) == [.awaitingReview])  // no bot finding: the PR is just waiting
     #expect(stats.noiseComments == 2)
+    // Kept with who said it and why, so the filtering can be audited.
+    #expect(stats.muted.map(\.author) == ["codecov[bot]", "vercel"])
+    #expect(stats.muted.allSatisfy { $0.reason == .noiseBot })
 }
 
 @Test func actionableBotCommentsGroupPerBotAndEscalateOnAlarmWords() {
