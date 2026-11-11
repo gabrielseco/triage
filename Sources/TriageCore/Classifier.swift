@@ -120,6 +120,7 @@ public enum Classifier {
         let evidence: Evidence
         let body: String
         let url: URL?
+        var kind: BotCommentKind = .finding
         /// False once the thread is resolved: still listed, but no longer a finding.
         let isOpen: Bool
     }
@@ -133,11 +134,20 @@ public enum Classifier {
         var byBot: [String: [BotEntry]] = [:]
         func add(_ author: String, _ entry: BotEntry) {
             let login = normalizedLogin(author)
-            if noiseBots.contains(login) { noise += 1 } else { byBot[login, default: []].append(entry) }
+            // Status lines and run reports aren't findings: muted like the noise bots.
+            if noiseBots.contains(login) || entry.kind != .finding {
+                noise += 1
+            } else {
+                byBot[login, default: []].append(entry)
+            }
         }
         for c in pr.comments where c.isBot {
             let evidence = Evidence(title: "Comment by \(c.author)", detail: c.body, url: c.url)
-            add(c.author, BotEntry(date: c.createdAt, evidence: evidence, body: c.body, url: c.url, isOpen: true))
+            add(
+                c.author,
+                BotEntry(
+                    date: c.createdAt, evidence: evidence, body: c.body, url: c.url,
+                    kind: BotCommentKind.of(c.body, resolvable: false), isOpen: true))
         }
         for t in pr.threads where t.firstComment.isBot && (t.isResolved || !t.isOutdated) {
             let c = t.firstComment
@@ -145,7 +155,7 @@ public enum Classifier {
                 c.author,
                 BotEntry(
                     date: c.createdAt, evidence: threadEvidence(t, in: pr), body: c.body, url: c.url,
-                    isOpen: !t.isResolved))
+                    kind: BotCommentKind.of(c.body), isOpen: !t.isResolved))
         }
         return byBot.sorted { $0.key < $1.key }.compactMap { login, entries in
             let sorted = entries.sorted { $0.date > $1.date }
@@ -263,6 +273,7 @@ public enum Classifier {
     /// Review bots (Cursor Bugbot, CodeRabbit, …) often label findings "High Severity" etc.; trust
     /// that when present, otherwise fall back to keyword sniffing.
     static func botSeverity(_ body: String) -> Severity {
+        if let tagged = BotCommentKind.taggedSeverity(body) { return tagged }
         let b = body.lowercased()
         if b.contains("critical severity") || b.contains("high severity") { return .high }
         if b.contains("medium severity") { return .medium }
@@ -276,6 +287,8 @@ public enum Classifier {
         // A line of only symbols (a table's lone ⚠️ cell) says nothing on its own.
         let lines = CommentText.readable(body).split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { $0.unicodeScalars.contains { $0.properties.isAlphabetic || $0.properties.numericType != nil } }
+            // A line that is only the bot's `**[test · medium]**` tag says nothing either.
+            .filter { $0.wholeMatch(of: /\**\[[^\]]*·[^\]]*\]\**/) == nil }
         let line = lines.first { $0.hasPrefix("#") } ?? lines.first
         guard let line else { return nil }
         // Headlines are plain text: Markdown's code ticks, bold and link syntax would show as written.

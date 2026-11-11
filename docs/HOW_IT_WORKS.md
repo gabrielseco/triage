@@ -352,7 +352,13 @@ the piece most likely to move to the backend later.
 `netlify`, `github-actions`, `changeset-bot`, `dependabot`, `renovate`, `sonarcloud`, `linear`,
 `cla-assistant`, `height`, `graphite-app`. On `remote-flows` this mutes ~107 coverage-report comments.
 
-**Bot severity:** if the comment says "High/Critical Severity", "Medium Severity" or "Low Severity"
+**Bot comment kinds (`BotCommentKind`):** only *findings* make the item. A bot's hidden marker
+(`<!-- name:status|finding|summary -->`) says which a comment is; `status` and `summary`/`report` are counted in
+`noiseComments` (🔇) instead. Without a marker, a short note outside a thread that only announces progress
+("complete", "in progress", "passed") is a status, unless it mentions an alarm word. Anything else is a finding:
+when unsure, show it. Resolved findings stay in the item, labelled.
+
+**Bot severity:** a `[category · severity]` tag (Open Code Review) wins; else, if the comment says "High/Critical Severity", "Medium Severity" or "Low Severity"
 (as Cursor Bugbot does), that label is used. Otherwise it's *medium* if the text mentions
 error/fail/vulnerability/critical/security/breaking/bug, else *low*. The headline uses the finding's
 first line with a letter or digit in it, from the readable text (below) and without Markdown's backticks,
