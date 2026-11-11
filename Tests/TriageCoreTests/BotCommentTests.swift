@@ -36,6 +36,7 @@ private func mr(threads: [ReviewThreadInfo], comments: [CommentInfo] = []) -> Pu
     #expect(BotCommentKind.of("Preview build complete", resolvable: false) == .status)
     // inside a thread, or about a problem, or long: still a finding
     #expect(BotCommentKind.of("Preview build complete") == .finding)
+    #expect(BotCommentKind.of("Tests passed but coverage dropped 5%", resolvable: false) == .finding)
     #expect(BotCommentKind.of("Scan completed: 3 vulnerabilities", resolvable: false) == .finding)
     #expect(BotCommentKind.of(String(repeating: "review complete ", count: 20), resolvable: false) == .finding)
 }
@@ -71,4 +72,13 @@ private func mr(threads: [ReviewThreadInfo], comments: [CommentInfo] = []) -> Pu
     let (items, stats) = Classifier.classify(pr)
     #expect(!items.contains { $0.kind == .botFinding })
     #expect(stats.noiseComments == 2)
+}
+
+@Test func aNewStatusCommentKeepsTheItemId() {
+    let finding = thread(ocrFinding, resolved: false, n: 2)
+    let before = Classifier.classify(mr(threads: [finding])).items.first { $0.kind == .botFinding }
+    let after = Classifier.classify(mr(threads: [finding, thread(ocrStatus, resolved: true, n: 9)])).items
+        .first { $0.kind == .botFinding }
+    #expect(before != nil)
+    #expect(before?.id == after?.id)
 }

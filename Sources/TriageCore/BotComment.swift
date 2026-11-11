@@ -19,7 +19,7 @@ public enum BotCommentKind: Sendable, Equatable {
         // Without a marker only a short, non-thread note that just announces progress is a status.
         // "Scan completed: 3 vulnerabilities" is a finding, so alarm words keep it out.
         let alarming = Classifier.alarmWords.contains { body.lowercased().contains($0) }
-        let progress = #"\b(complete|completed|finished|in progress|started|passed|queued)\b"#
+        let progress = #"\b(complete|completed|finished|in progress)\b"#
         let announces = body.range(of: progress, options: [.regularExpression, .caseInsensitive]) != nil
         if !resolvable, body.count < 200, !alarming, announces {
             return .status
