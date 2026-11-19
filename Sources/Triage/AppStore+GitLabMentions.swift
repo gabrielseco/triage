@@ -61,6 +61,7 @@ extension AppStore {
         snoozed = snoozed.filter { !GitLabMention.isMentionID($0.key) || (live.contains($0.key) && $0.value > now) }
         if filter == .gitlabMentions, selectedMention == nil { selectFirstVisible() }
 
+        guard inNotificationHours(now) else { return }  // not recorded: still-waiting mentions are announced later
         let active = Set(activeMentions.map(\.id))
         let (alerts, state) = MentionAlerts.plan(
             waiting.filter { active.contains($0.id) }, viewer: me, state: mentionAlerts)

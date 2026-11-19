@@ -27,6 +27,11 @@ final class AppStore {  // swiftlint:disable:this type_body_length
     // Digest: at each scheduled hour, notify what's new since the previous digest.
     var digestHours: [Int] { didSet { save(digestHours, "digestHours") } }
     var digestWeekdaysOnly: Bool { didSet { defaults.set(digestWeekdaysOnly, forKey: "digestWeekdaysOnly") } }
+    /// Automatic notifications (digest, review requests, mentions, pings) only fire inside this window; what
+    /// arrives outside it is announced on the first refresh after it opens. Buttons you press still notify.
+    var notifyHoursOnly: Bool { didSet { defaults.set(notifyHoursOnly, forKey: "notifyHoursOnly") } }
+    var notifyStartHour: Int { didSet { defaults.set(notifyStartHour, forKey: "notifyStartHour") } }
+    var notifyEndHour: Int { didSet { defaults.set(notifyEndHour, forKey: "notifyEndHour") } }
     /// Item ids open at the last digest — the baseline "new" is measured against.
     var digestBaseline: Set<String>? { didSet { save(digestBaseline, "digestBaseline") } }
     /// Item ids the last digest reported as new — what a notification click shows.
@@ -159,6 +164,9 @@ final class AppStore {  // swiftlint:disable:this type_body_length
         mentionAlerts = Self.load("gitlabMentionAlerts") ?? MentionAlertState()
         digestHours = Self.load("digestHours") ?? [12, 18]
         digestWeekdaysOnly = Self.defaults.object(forKey: "digestWeekdaysOnly") as? Bool ?? true
+        notifyHoursOnly = Self.defaults.object(forKey: "notifyHoursOnly") as? Bool ?? true
+        notifyStartHour = Self.defaults.object(forKey: "notifyStartHour") as? Int ?? 8
+        notifyEndHour = Self.defaults.object(forKey: "notifyEndHour") as? Int ?? 17
         digestBaseline = Self.load("digestBaseline")
         lastDigestItemIDs = Self.load("lastDigestItemIDs") ?? []
         lastDigestAt = Self.load("lastDigestAt")
