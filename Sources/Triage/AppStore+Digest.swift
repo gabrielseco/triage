@@ -6,6 +6,13 @@ import TriageCore
 extension AppStore {
     // MARK: - Digest
 
+    /// Whether automatic notifications may fire now.
+    func inNotificationHours(_ now: Date = Date()) -> Bool {
+        !notifyHoursOnly
+            || WorkingHours(startHour: notifyStartHour, endHour: notifyEndHour, weekdaysOnly: digestWeekdaysOnly)
+                .contains(now)
+    }
+
     /// Called after every refresh. Sends at most one digest per scheduled slot; if the Mac was asleep
     /// or the app closed at 12:00, the 12:00 digest goes out on the next refresh after that.
     func sendDigestIfDue(now: Date = Date()) async {
@@ -16,6 +23,7 @@ extension AppStore {
             lastDigestAt = now
             return
         }
+        guard inNotificationHours(now) else { return }
         guard
             let slot = DigestBuilder.latestSlot(atOrBefore: now, hours: digestHours, weekdaysOnly: digestWeekdaysOnly),
             (lastDigestAt ?? .distantPast) < slot
@@ -40,6 +48,8 @@ extension AppStore {
     func notifyReviewRequests(complete: Bool) async {
         // Without my login no request can be matched to me; that must not read as "all reviewed".
         guard prs.allSatisfy({ viewer(for: $0.repo.forge) != nil }) else { return }
+        // Outside working hours nothing is recorded, so a request that's still open when they start is announced then.
+        guard inNotificationHours() else { return }
         let open = items.filter { $0.kind == .reviewRequested }
         let active = activeItems.filter { $0.kind == .reviewRequested }
         let refresh = ReviewRequestAlerts.Refresh(

@@ -147,6 +147,7 @@ extension AppStore {
     /// can't make the next poll notify the same ping again. With notifications off it's still recorded, so
     /// turning them on doesn't announce everything that's already waiting.
     private func notifyPingAlerts(now: Date) async {
+        guard inNotificationHours(now) else { return }  // not recorded: still-open pings are announced when hours start
         let (alerts, state) = PingAlerts.plan(open: linear.pings, active: activePings, state: pingAlerts, now: now)
         if state != pingAlerts { pingAlerts = state }
         guard notifyPings else { return }

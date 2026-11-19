@@ -42,6 +42,11 @@ struct SettingsView: View {
                         }
                     ))
                 Toggle("Weekdays only", isOn: $store.digestWeekdaysOnly)
+                Toggle("Only notify during working hours", isOn: $store.notifyHoursOnly)
+                if store.notifyHoursOnly {
+                    Stepper("From \(store.notifyStartHour):00", value: $store.notifyStartHour, in: 0...23)
+                    Stepper("Until \(store.notifyEndHour):00", value: $store.notifyEndHour, in: 1...24)
+                }
                 Toggle("Notify as soon as my review is requested", isOn: $store.notifyReviewRequests)
                 Toggle(
                     "Open Triage at login",
